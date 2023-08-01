@@ -1,24 +1,31 @@
+import { BigNumber } from "@ethersproject/bignumber";
+import { AddressZero } from "@ethersproject/constants";
+import { Contract } from "@ethersproject/contracts";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import axios from "axios";
-import { Contract } from "ethers";
+import { expect } from "chai";
 import { ethers } from "hardhat";
 
 describe("Memswap", async () => {
   let chainId: number;
 
-  let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
+  let carol: SignerWithAddress;
 
   let memswap: Contract;
+  let zeroExFiller: Contract;
 
   beforeEach(async () => {
     chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
 
-    [deployer, alice, bob] = await ethers.getSigners();
+    [alice, bob, carol] = await ethers.getSigners();
 
     memswap = await ethers
       .getContractFactory("Memswap")
+      .then((factory) => factory.deploy());
+    zeroExFiller = await ethers
+      .getContractFactory("ZeroExFiller")
       .then((factory) => factory.deploy());
   });
 
@@ -50,14 +57,18 @@ describe("Memswap", async () => {
 
     const order = {
       maker: alice.address,
+      filler: AddressZero,
       tokenIn: weth.address,
       tokenOut: usdc.address,
-      amountIn: ethers.utils.parseEther("0.5"),
-      startAmountOut: ethers.utils.parseUnits("500", 6),
-      endAmountOut: ethers.utils.parseUnits("500", 6),
+      referrer: carol.address,
+      referrerFeeBps: 0,
+      referrerSlippageBps: 10,
       deadline: await ethers.provider
         .getBlock("latest")
         .then((b) => b!.timestamp + 60),
+      amountIn: ethers.utils.parseEther("0.5"),
+      startAmountOut: ethers.utils.parseUnits("500", 6),
+      endAmountOut: ethers.utils.parseUnits("500", 6),
     };
     (order as any).signature = await alice._signTypedData(
       {
@@ -73,6 +84,10 @@ describe("Memswap", async () => {
             type: "address",
           },
           {
+            name: "filler",
+            type: "address",
+          },
+          {
             name: "tokenIn",
             type: "address",
           },
@@ -81,20 +96,32 @@ describe("Memswap", async () => {
             type: "address",
           },
           {
-            name: "amountIn",
-            type: "uint256",
+            name: "referrer",
+            type: "address",
           },
           {
-            name: "startAmountOut",
-            type: "uint256",
+            name: "referrerFeeBps",
+            type: "uint32",
           },
           {
-            name: "endAmountOut",
-            type: "uint256",
+            name: "referrerSlippageBps",
+            type: "uint32",
           },
           {
             name: "deadline",
-            type: "uint256",
+            type: "uint32",
+          },
+          {
+            name: "amountIn",
+            type: "uint128",
+          },
+          {
+            name: "startAmountOut",
+            type: "uint128",
+          },
+          {
+            name: "endAmountOut",
+            type: "uint128",
           },
         ],
       },
@@ -117,10 +144,26 @@ describe("Memswap", async () => {
 
     console.log(JSON.stringify(swapData, null, 2));
 
-    await (memswap.connect(bob) as any).executeIntent(
-      order,
-      swapData.to,
-      swapData.data
-    );
+    const makerBalanceBefore = await usdc.balanceOf(order.maker);
+    const referrerBalanceBefore = await usdc.balanceOf(order.referrer);
+
+    await memswap
+      .connect(bob)
+      .execute(
+        order,
+        zeroExFiller.address,
+        zeroExFiller.interface.encodeFunctionData("fill", [
+          swapData.to,
+          swapData.data,
+          order.tokenIn,
+          order.tokenOut,
+        ])
+      );
+
+    const makerBalanceAfter = await usdc.balanceOf(order.maker);
+    const referrerBalanceAfter = await usdc.balanceOf(order.referrer);
+
+    console.log(makerBalanceAfter.sub(makerBalanceBefore));
+    console.log(referrerBalanceAfter.sub(referrerBalanceBefore));
   });
 });

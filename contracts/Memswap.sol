@@ -3,19 +3,23 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import "hardhat/console.sol";
+import {EthEscrow} from "./EthEscrow.sol";
 
 contract Memswap {
     // --- Structs ---
 
     struct Intent {
         address maker;
+        address filler;
         IERC20 tokenIn;
         IERC20 tokenOut;
-        uint256 amountIn;
-        uint256 startAmountOut;
-        uint256 endAmountOut;
-        uint256 deadline;
+        address referrer;
+        uint32 referrerFeeBps;
+        uint32 referrerSlippageBps;
+        uint32 deadline;
+        uint128 amountIn;
+        uint128 startAmountOut;
+        uint128 endAmountOut;
         bytes signature;
     }
 
@@ -25,6 +29,7 @@ contract Memswap {
     error IntentExpired();
     error IntentNotFulfilled();
     error InvalidSignature();
+    error UnauthorizedFiller();
     error UnsuccessfullCall();
 
     // --- Fields ---
@@ -32,11 +37,16 @@ contract Memswap {
     bytes32 public immutable DOMAIN_SEPARATOR;
     bytes32 public immutable ORDER_TYPEHASH;
 
+    IERC20 public immutable ethEscrow;
+
+    mapping(bytes32 => bool) public isDelegated;
     mapping(bytes32 => bool) public isFulfilled;
 
     // --- Constructor ---
 
     constructor() {
+        ethEscrow = IERC20(address(new EthEscrow()));
+
         uint256 chainId;
         assembly {
             chainId := chainid()
@@ -65,38 +75,34 @@ contract Memswap {
             abi.encodePacked(
                 "Intent(",
                 "address maker,",
+                "address filler,",
                 "address tokenIn,",
                 "address tokenOut,",
-                "uint256 amountIn,",
-                "uint256 startAmountOut,",
-                "uint256 endAmountOut,",
-                "uint256 deadline",
+                "address referrer,",
+                "uint32 referrerFeeBps,",
+                "uint32 referrerSlippageBps,",
+                "uint32 deadline,",
+                "uint128 amountIn,",
+                "uint128 startAmountOut,",
+                "uint128 endAmountOut",
                 ")"
             )
         );
     }
 
+    // Fallback
+
+    receive() external payable {}
+
     // Public methods
 
-    function getIntentHash(
-        Intent memory intent
-    ) public view returns (bytes32 orderHash) {
-        // TODO: Optimize by using assembly
-        orderHash = keccak256(
-            abi.encode(
-                ORDER_TYPEHASH,
-                intent.maker,
-                intent.tokenIn,
-                intent.tokenOut,
-                intent.amountIn,
-                intent.startAmountOut,
-                intent.endAmountOut,
-                intent.deadline
-            )
-        );
+    function delegate(address filler, bytes32 intentHash) external {
+        isDelegated[
+            keccak256(abi.encodePacked(msg.sender, filler, intentHash))
+        ] = true;
     }
 
-    function executeIntent(
+    function execute(
         Intent calldata intent,
         address fillContract,
         bytes calldata fillData
@@ -104,6 +110,19 @@ contract Memswap {
         bytes32 intentHash = getIntentHash(intent);
         bytes32 eip712Hash = _getEIP712Hash(intentHash);
         _verifySignature(intent.maker, eip712Hash, intent.signature);
+
+        if (intent.filler != address(0)) {
+            if (
+                msg.sender != intent.filler &&
+                !isDelegated[
+                    keccak256(
+                        abi.encodePacked(intent.filler, msg.sender, intentHash)
+                    )
+                ]
+            ) {
+                revert UnauthorizedFiller();
+            }
+        }
 
         if (isFulfilled[intentHash]) {
             revert IntentAlreadyFulfilled();
@@ -114,40 +133,119 @@ contract Memswap {
             revert IntentExpired();
         }
 
-        // Pull funds
-        intent.tokenIn.transferFrom(
+        // Pull input tokens into filler's wallet
+        _transferToken(
             intent.maker,
-            address(this),
+            fillContract,
+            address(intent.tokenIn) == address(0) ? ethEscrow : intent.tokenIn,
             intent.amountIn
         );
-
-        // Give approval
-        intent.tokenIn.approve(fillContract, intent.amountIn);
 
         (bool result, ) = fillContract.call(fillData);
         if (!result) {
             revert UnsuccessfullCall();
         }
 
-        // Revoke approval
-        intent.tokenIn.approve(fillContract, 0);
-
         // Check
 
-        uint256 amountOut = intent.startAmountOut -
+        uint128 amountOut = intent.startAmountOut -
             (intent.startAmountOut - intent.endAmountOut) /
-            (intent.deadline - block.timestamp);
+            (intent.deadline - uint128(block.timestamp));
 
-        uint256 tokenOutBalance = intent.tokenOut.balanceOf(intent.maker);
+        uint256 tokenOutBalance = address(intent.tokenOut) == address(0)
+            ? address(this).balance
+            : intent.tokenOut.balanceOf(fillContract);
+
         if (tokenOutBalance < amountOut) {
-            revert IntentAlreadyFulfilled();
+            revert IntentNotFulfilled();
         }
 
-        // Push funds
-        intent.tokenOut.transfer(intent.maker, tokenOutBalance);
+        if (intent.referrer != address(0)) {
+            if (intent.referrerSlippageBps > 0) {
+                uint256 positiveSlippage = tokenOutBalance > amountOut
+                    ? tokenOutBalance - amountOut
+                    : 0;
+
+                uint256 amount = (intent.referrerSlippageBps *
+                    positiveSlippage) / 10000;
+                if (amount > 0) {
+                    _transferToken(
+                        fillContract,
+                        intent.referrer,
+                        intent.tokenOut,
+                        amount
+                    );
+
+                    tokenOutBalance -= amount;
+                }
+            }
+
+            if (intent.referrerFeeBps > 0) {
+                uint256 amount = ((intent.referrerFeeBps * amountOut) / 10000);
+                if (amount > 0) {
+                    _transferToken(
+                        fillContract,
+                        intent.referrer,
+                        intent.tokenOut,
+                        amount
+                    );
+
+                    tokenOutBalance -= amount;
+                }
+            }
+        }
+
+        _transferToken(
+            fillContract,
+            intent.maker,
+            intent.tokenOut,
+            tokenOutBalance
+        );
+    }
+
+    // Views
+
+    function getIntentHash(
+        Intent memory intent
+    ) public view returns (bytes32 intentHash) {
+        // TODO: Optimize by using assembly
+        intentHash = keccak256(
+            abi.encode(
+                ORDER_TYPEHASH,
+                intent.maker,
+                intent.filler,
+                intent.tokenIn,
+                intent.tokenOut,
+                intent.referrer,
+                intent.referrerFeeBps,
+                intent.referrerSlippageBps,
+                intent.deadline,
+                intent.amountIn,
+                intent.startAmountOut,
+                intent.endAmountOut
+            )
+        );
     }
 
     // Internal methods
+
+    function _transferToken(
+        address from,
+        address to,
+        IERC20 token,
+        uint256 amount
+    ) internal {
+        bool success;
+        if (address(token) == address(0)) {
+            (success, ) = to.call{value: amount}("");
+        } else {
+            success = token.transferFrom(from, to, amount);
+        }
+
+        if (!success) {
+            revert UnsuccessfullCall();
+        }
+    }
 
     function _getEIP712Hash(
         bytes32 structHash
