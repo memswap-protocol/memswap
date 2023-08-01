@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {EthEscrow} from "./EthEscrow.sol";
 
-contract Memswap {
+contract Memswap is ReentrancyGuard {
     // --- Structs ---
 
     struct Intent {
@@ -29,7 +30,7 @@ contract Memswap {
     error IntentExpired();
     error IntentNotFulfilled();
     error InvalidSignature();
-    error UnauthorizedFiller();
+    error Unauthorized();
     error UnsuccessfullCall();
 
     // --- Fields ---
@@ -106,10 +107,14 @@ contract Memswap {
         Intent calldata intent,
         address fillContract,
         bytes calldata fillData
-    ) external {
+    ) external nonReentrant {
         bytes32 intentHash = getIntentHash(intent);
         bytes32 eip712Hash = _getEIP712Hash(intentHash);
         _verifySignature(intent.maker, eip712Hash, intent.signature);
+
+        if (fillContract == address(ethEscrow)) {
+            revert Unauthorized();
+        }
 
         if (intent.filler != address(0)) {
             if (
@@ -120,7 +125,7 @@ contract Memswap {
                     )
                 ]
             ) {
-                revert UnauthorizedFiller();
+                revert Unauthorized();
             }
         }
 
