@@ -1,0 +1,12 @@
+# Dependencies
+node_modules
+
+# Secrets
+.env
+
+# Misc
+artifacts
+cache
+tenderly.yaml
+yarn-error.log
+
