@@ -177,16 +177,32 @@ describe("Memswap", async () => {
     const positiveSlippage = ethers.utils.parseEther(
       getRandomFloat(0.001, 0.1)
     );
-    await memswap
-      .connect(bob)
-      .execute(
-        intent,
-        filler.address,
-        filler.interface.encodeFunctionData("fill", [
-          intent.tokenOut,
-          amount.add(positiveSlippage),
-        ])
-      );
+    if (intent.deadline < startTime) {
+      await expect(
+        memswap
+          .connect(bob)
+          .execute(
+            intent,
+            filler.address,
+            filler.interface.encodeFunctionData("fill", [
+              intent.tokenOut,
+              amount.add(positiveSlippage),
+            ])
+          )
+      ).to.be.revertedWith("IntentExpired");
+      return;
+    } else {
+      await memswap
+        .connect(bob)
+        .execute(
+          intent,
+          filler.address,
+          filler.interface.encodeFunctionData("fill", [
+            intent.tokenOut,
+            amount.add(positiveSlippage),
+          ])
+        );
+    }
 
     const makerBalanceAfter = await token1.balanceOf(intent.maker);
     const referrerBalanceAfter = await token1.balanceOf(intent.referrer);
@@ -217,4 +233,53 @@ describe("Memswap", async () => {
   for (let i = 0; i < RUNS; i++) {
     it(`Basic filling with random values (run ${i})`, async () => test());
   }
+
+  it("Exclusive filler", async () => {
+    const intent = {
+      maker: alice.address,
+      filler: bob.address,
+      tokenIn: token0.address,
+      tokenOut: token1.address,
+      referrer: AddressZero,
+      referrerFeeBps: 0,
+      referrerSlippageBps: 0,
+      deadline: (await getCurrentTimestamp()) + 60,
+      amountIn: ethers.utils.parseEther("0.5"),
+      startAmountOut: ethers.utils.parseEther("0.3"),
+      endAmountOut: ethers.utils.parseEther("0.3"),
+    };
+    (intent as any).signature = await signIntent(alice, intent);
+
+    await token0.connect(alice).mint(intent.amountIn);
+    await token0.connect(alice).approve(memswap.address, intent.amountIn);
+
+    await expect(
+      memswap
+        .connect(carol)
+        .execute(
+          intent,
+          filler.address,
+          filler.interface.encodeFunctionData("fill", [
+            intent.tokenOut,
+            intent.startAmountOut,
+          ])
+        )
+    ).to.be.revertedWith("Unauthorized");
+
+    // Delegate
+    await memswap
+      .connect(bob)
+      .delegate(carol.address, await memswap.getIntentHash(intent));
+
+    await memswap
+      .connect(carol)
+      .execute(
+        intent,
+        filler.address,
+        filler.interface.encodeFunctionData("fill", [
+          intent.tokenOut,
+          intent.startAmountOut,
+        ])
+      );
+  });
 });
