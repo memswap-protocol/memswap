@@ -24,6 +24,10 @@ contract Memswap is ReentrancyGuard {
         bytes signature;
     }
 
+    // --- Events ---
+
+    event IntentFulfilled(bytes32 intentHash, Intent intent);
+
     // --- Errors ---
 
     error IntentAlreadyFulfilled();
@@ -209,6 +213,8 @@ contract Memswap is ReentrancyGuard {
             intent.tokenOut,
             tokenOutBalance
         );
+
+        emit IntentFulfilled(intentHash, intent);
     }
 
     // Views
