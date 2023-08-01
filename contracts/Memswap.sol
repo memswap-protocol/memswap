@@ -148,9 +148,12 @@ contract Memswap {
 
         // Check
 
+        uint128 amountDiff = intent.startAmountOut - intent.endAmountOut;
+        uint128 timeDiff = intent.deadline - uint128(block.timestamp);
+
         uint128 amountOut = intent.startAmountOut -
-            (intent.startAmountOut - intent.endAmountOut) /
-            (intent.deadline - uint128(block.timestamp));
+            amountDiff /
+            (timeDiff > 0 ? timeDiff : 1);
 
         uint256 tokenOutBalance = address(intent.tokenOut) == address(0)
             ? address(this).balance

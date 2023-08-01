@@ -1,76 +1,71 @@
-import { BigNumber } from "@ethersproject/bignumber";
+import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import axios from "axios";
 import { expect } from "chai";
 import { ethers } from "hardhat";
+
+// Utilities
+
+const bn = (value: BigNumberish) => BigNumber.from(value);
+
+const getCurrentTimestamp = async () =>
+  ethers.provider.getBlock("latest").then((b) => b!.timestamp);
+
+const getRandomBoolean = () => Math.random() < 0.5;
+
+const getRandomInteger = (min: number, max: number) => {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+
+const getRandomFloat = (min: number, max: number) =>
+  (Math.random() * (max - min) + min).toFixed(6);
+
+// Tests
 
 describe("Memswap", async () => {
   let chainId: number;
 
+  let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
   let carol: SignerWithAddress;
 
   let memswap: Contract;
-  let zeroExFiller: Contract;
+  let filler: Contract;
+  let token0: Contract;
+  let token1: Contract;
 
   beforeEach(async () => {
     chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
 
-    [alice, bob, carol] = await ethers.getSigners();
+    [deployer, alice, bob, carol] = await ethers.getSigners();
 
     memswap = await ethers
       .getContractFactory("Memswap")
       .then((factory) => factory.deploy());
-    zeroExFiller = await ethers
-      .getContractFactory("ZeroExFiller")
+    filler = await ethers
+      .getContractFactory("MockFiller")
       .then((factory) => factory.deploy());
+    token0 = await ethers
+      .getContractFactory("MockERC20")
+      .then((factory) => factory.deploy());
+    token1 = await ethers
+      .getContractFactory("MockERC20")
+      .then((factory) => factory.deploy());
+
+    // Send some ETH to filler contract for the tests where `tokenOut` is ETH
+    await deployer.sendTransaction({
+      to: filler.address,
+      value: ethers.utils.parseEther("10"),
+    });
   });
 
-  it("Basic filling", async () => {
-    const weth = new Contract(
-      "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6",
-      new ethers.utils.Interface([
-        "function deposit() payable",
-        "function approve(address, uint256)",
-        "function balanceOf(address) view returns (uint256)",
-      ]),
-      ethers.provider
-    );
-    const usdc = new Contract(
-      "0x07865c6e87b9f70255377e024ace6630c1eaa37f",
-      new ethers.utils.Interface([
-        "function balanceOf(address) view returns (uint256)",
-      ]),
-      ethers.provider
-    );
-
-    await (weth.connect(alice) as any).deposit({
-      value: ethers.utils.parseEther("0.5"),
-    });
-    await (weth.connect(alice) as any).approve(
-      memswap.address,
-      ethers.utils.parseEther("0.5")
-    );
-
-    const order = {
-      maker: alice.address,
-      filler: AddressZero,
-      tokenIn: weth.address,
-      tokenOut: usdc.address,
-      referrer: carol.address,
-      referrerFeeBps: 0,
-      referrerSlippageBps: 10,
-      deadline: await ethers.provider
-        .getBlock("latest")
-        .then((b) => b!.timestamp + 60),
-      amountIn: ethers.utils.parseEther("0.5"),
-      startAmountOut: ethers.utils.parseUnits("500", 6),
-      endAmountOut: ethers.utils.parseUnits("500", 6),
-    };
-    (order as any).signature = await alice._signTypedData(
+  const signIntent = async (signer: SignerWithAddress, intent: any) => {
+    return signer._signTypedData(
       {
         name: "Memswap",
         version: "1.0",
@@ -125,45 +120,101 @@ describe("Memswap", async () => {
           },
         ],
       },
-      order
+      intent
+    );
+  };
+
+  const test = async () => {
+    // Generate an intent with random values
+    const intent = {
+      maker: alice.address,
+      filler: AddressZero,
+      tokenIn: getRandomBoolean() ? AddressZero : token0.address,
+      tokenOut: getRandomBoolean() ? AddressZero : token1.address,
+      referrer: getRandomBoolean() ? AddressZero : carol.address,
+      referrerFeeBps: getRandomInteger(0, 1000),
+      referrerSlippageBps: getRandomInteger(0, 1000),
+      deadline: (await getCurrentTimestamp()) + getRandomInteger(1, 1000),
+      amountIn: ethers.utils.parseEther(getRandomFloat(0.01, 1)),
+      startAmountOut: ethers.utils.parseEther(getRandomFloat(0.5, 1)),
+      endAmountOut: ethers.utils.parseEther(getRandomFloat(0.01, 0.5)),
+    };
+
+    if (intent.tokenIn === AddressZero) {
+      // Deposit to escrow
+      await alice.sendTransaction({
+        to: await memswap.ethEscrow(),
+        value: intent.amountIn,
+      });
+    } else {
+      // Mint and approve
+      await token0.connect(alice).mint(intent.amountIn);
+      await token0.connect(alice).approve(memswap.address, intent.amountIn);
+    }
+
+    // Sign the intent
+    (intent as any).signature = await signIntent(alice, intent);
+
+    const makerBalanceBefore = await token1.balanceOf(intent.maker);
+    const referrerBalanceBefore = await token1.balanceOf(intent.referrer);
+
+    // Move to a known block timestamp
+    const startTime = Math.max(
+      (await getCurrentTimestamp()) + 1,
+      intent.deadline - getRandomInteger(1, 100)
+    );
+    const endTime = intent.deadline;
+    await time.increaseTo(startTime);
+
+    // Compute the intent amount at above timestamp
+    const amount = bn(intent.startAmountOut).sub(
+      bn(intent.startAmountOut)
+        .sub(intent.endAmountOut)
+        .div(endTime - startTime)
     );
 
-    const { data: swapData } = await axios.get(
-      "https://goerli.api.0x.org/swap/v1/quote",
-      {
-        params: {
-          buyToken: order.tokenOut,
-          sellToken: order.tokenIn,
-          sellAmount: order.amountIn,
-        },
-        headers: {
-          "0x-Api-Key": "e519f152-3749-49ea-a8f3-2964bb0f90ac",
-        },
-      }
+    // Optionally have some positive slippage (eg. on top of amount required by intent)
+    const positiveSlippage = ethers.utils.parseEther(
+      getRandomFloat(0.001, 0.1)
     );
-
-    console.log(JSON.stringify(swapData, null, 2));
-
-    const makerBalanceBefore = await usdc.balanceOf(order.maker);
-    const referrerBalanceBefore = await usdc.balanceOf(order.referrer);
-
     await memswap
       .connect(bob)
       .execute(
-        order,
-        zeroExFiller.address,
-        zeroExFiller.interface.encodeFunctionData("fill", [
-          swapData.to,
-          swapData.data,
-          order.tokenIn,
-          order.tokenOut,
+        intent,
+        filler.address,
+        filler.interface.encodeFunctionData("fill", [
+          intent.tokenOut,
+          amount.add(positiveSlippage),
         ])
       );
 
-    const makerBalanceAfter = await usdc.balanceOf(order.maker);
-    const referrerBalanceAfter = await usdc.balanceOf(order.referrer);
+    const makerBalanceAfter = await token1.balanceOf(intent.maker);
+    const referrerBalanceAfter = await token1.balanceOf(intent.referrer);
 
-    console.log(makerBalanceAfter.sub(makerBalanceBefore));
-    console.log(referrerBalanceAfter.sub(referrerBalanceBefore));
-  });
+    const referrerFee =
+      intent.referrer === AddressZero
+        ? bn(0)
+        : amount.mul(intent.referrerFeeBps).div(10000);
+    const referrerSlippage =
+      intent.referrer === AddressZero
+        ? bn(0)
+        : positiveSlippage.mul(intent.referrerSlippageBps).div(10000);
+
+    // Make sure the maker and the referrer got the right amounts
+    expect(
+      makerBalanceAfter
+        .sub(makerBalanceBefore)
+        .eq(amount.add(positiveSlippage).sub(referrerFee).sub(referrerSlippage))
+    );
+    expect(
+      referrerBalanceAfter
+        .sub(referrerBalanceBefore)
+        .eq(referrerFee.add(referrerSlippage))
+    );
+  };
+
+  const RUNS = 30;
+  for (let i = 0; i < RUNS; i++) {
+    it(`Basic filling with random values (run ${i})`, async () => test());
+  }
 });
