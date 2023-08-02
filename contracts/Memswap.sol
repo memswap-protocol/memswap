@@ -4,7 +4,9 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {EthEscrow} from "./EthEscrow.sol";
+import {WETH2} from "./WETH2.sol";
+
+import "hardhat/console.sol";
 
 contract Memswap is ReentrancyGuard {
     // --- Structs ---
@@ -16,10 +18,11 @@ contract Memswap is ReentrancyGuard {
         IERC20 tokenOut;
         address referrer;
         uint32 referrerFeeBps;
-        uint32 referrerSlippageBps;
+        uint32 referrerSurplusBps;
         uint32 deadline;
         uint128 amountIn;
         uint128 startAmountOut;
+        uint128 expectedAmountOut;
         uint128 endAmountOut;
         bytes signature;
     }
@@ -39,10 +42,9 @@ contract Memswap is ReentrancyGuard {
 
     // --- Fields ---
 
+    IERC20 public immutable WETH;
     bytes32 public immutable DOMAIN_SEPARATOR;
     bytes32 public immutable ORDER_TYPEHASH;
-
-    IERC20 public immutable ethEscrow;
 
     mapping(bytes32 => bool) public isDelegated;
     mapping(bytes32 => bool) public isFulfilled;
@@ -50,7 +52,7 @@ contract Memswap is ReentrancyGuard {
     // --- Constructor ---
 
     constructor() {
-        ethEscrow = IERC20(address(new EthEscrow()));
+        WETH = IERC20(address(new WETH2()));
 
         uint256 chainId;
         assembly {
@@ -85,10 +87,11 @@ contract Memswap is ReentrancyGuard {
                 "address tokenOut,",
                 "address referrer,",
                 "uint32 referrerFeeBps,",
-                "uint32 referrerSlippageBps,",
+                "uint32 referrerSurplusBps,",
                 "uint32 deadline,",
                 "uint128 amountIn,",
                 "uint128 startAmountOut,",
+                "uint128 expectedAmountOut,",
                 "uint128 endAmountOut",
                 ")"
             )
@@ -116,10 +119,6 @@ contract Memswap is ReentrancyGuard {
         bytes32 eip712Hash = _getEIP712Hash(intentHash);
         _verifySignature(intent.maker, eip712Hash, intent.signature);
 
-        if (fillContract == address(ethEscrow)) {
-            revert Unauthorized();
-        }
-
         if (intent.filler != address(0)) {
             if (
                 msg.sender != intent.filler &&
@@ -146,7 +145,7 @@ contract Memswap is ReentrancyGuard {
         _transferToken(
             intent.maker,
             fillContract,
-            address(intent.tokenIn) == address(0) ? ethEscrow : intent.tokenIn,
+            intent.tokenIn,
             intent.amountIn
         );
 
@@ -173,13 +172,13 @@ contract Memswap is ReentrancyGuard {
         }
 
         if (intent.referrer != address(0)) {
-            if (intent.referrerSlippageBps > 0) {
-                uint256 positiveSlippage = tokenOutBalance > amountOut
-                    ? tokenOutBalance - amountOut
-                    : 0;
-
-                uint256 amount = (intent.referrerSlippageBps *
-                    positiveSlippage) / 10000;
+            if (
+                intent.referrerSurplusBps > 0 &&
+                intent.expectedAmountOut > amountOut &&
+                tokenOutBalance > intent.expectedAmountOut
+            ) {
+                uint256 surplus = tokenOutBalance - intent.expectedAmountOut;
+                uint256 amount = (intent.referrerSurplusBps * surplus) / 10000;
                 if (amount > 0) {
                     _transferToken(
                         fillContract,
@@ -193,7 +192,7 @@ contract Memswap is ReentrancyGuard {
             }
 
             if (intent.referrerFeeBps > 0) {
-                uint256 amount = ((intent.referrerFeeBps * amountOut) / 10000);
+                uint256 amount = (intent.referrerFeeBps * amountOut) / 10000;
                 if (amount > 0) {
                     _transferToken(
                         fillContract,
@@ -232,10 +231,11 @@ contract Memswap is ReentrancyGuard {
                 intent.tokenOut,
                 intent.referrer,
                 intent.referrerFeeBps,
-                intent.referrerSlippageBps,
+                intent.referrerSurplusBps,
                 intent.deadline,
                 intent.amountIn,
                 intent.startAmountOut,
+                intent.expectedAmountOut,
                 intent.endAmountOut
             )
         );

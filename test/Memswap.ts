@@ -1,3 +1,4 @@
+import { Interface } from "@ethersproject/abi";
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
@@ -99,7 +100,7 @@ describe("Memswap", async () => {
             type: "uint32",
           },
           {
-            name: "referrerSlippageBps",
+            name: "referrerSurplusBps",
             type: "uint32",
           },
           {
@@ -115,6 +116,10 @@ describe("Memswap", async () => {
             type: "uint128",
           },
           {
+            name: "expectedAmountOut",
+            type: "uint128",
+          },
+          {
             name: "endAmountOut",
             type: "uint128",
           },
@@ -125,25 +130,34 @@ describe("Memswap", async () => {
   };
 
   const test = async () => {
+    const WETH = await memswap.WETH().then((a: string) => a.toLowerCase());
+
     // Generate an intent with random values
     const intent = {
       maker: alice.address,
       filler: AddressZero,
-      tokenIn: getRandomBoolean() ? AddressZero : token0.address,
+      tokenIn: getRandomBoolean() ? WETH : token0.address,
       tokenOut: getRandomBoolean() ? AddressZero : token1.address,
       referrer: getRandomBoolean() ? AddressZero : carol.address,
       referrerFeeBps: getRandomInteger(0, 1000),
-      referrerSlippageBps: getRandomInteger(0, 1000),
+      referrerSurplusBps: getRandomInteger(0, 1000),
       deadline: (await getCurrentTimestamp()) + getRandomInteger(1, 1000),
       amountIn: ethers.utils.parseEther(getRandomFloat(0.01, 1)),
       startAmountOut: ethers.utils.parseEther(getRandomFloat(0.5, 1)),
-      endAmountOut: ethers.utils.parseEther(getRandomFloat(0.01, 0.5)),
+      expectedAmountOut: ethers.utils.parseEther(getRandomFloat(0.5, 0.7)),
+      endAmountOut: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
     };
 
-    if (intent.tokenIn === AddressZero) {
-      // Deposit to escrow
+    if (intent.tokenIn === WETH) {
+      // Deposit and approve
       await alice.sendTransaction({
-        to: await memswap.ethEscrow(),
+        to: WETH,
+        data: new Interface([
+          "function depositAndApprove(address spender, uint256 amount)",
+        ]).encodeFunctionData("depositAndApprove", [
+          memswap.address,
+          intent.amountIn,
+        ]),
         value: intent.amountIn,
       });
     } else {
@@ -214,18 +228,19 @@ describe("Memswap", async () => {
     const referrerSlippage =
       intent.referrer === AddressZero
         ? bn(0)
-        : positiveSlippage.mul(intent.referrerSlippageBps).div(10000);
+        : amount.gt(intent.expectedAmountOut)
+        ? amount
+            .sub(intent.expectedAmountOut)
+            .mul(intent.referrerSurplusBps)
+            .div(10000)
+        : bn(0);
 
     // Make sure the maker and the referrer got the right amounts
-    expect(
-      makerBalanceAfter
-        .sub(makerBalanceBefore)
-        .eq(amount.add(positiveSlippage).sub(referrerFee).sub(referrerSlippage))
+    expect(makerBalanceAfter.sub(makerBalanceBefore)).to.eq(
+      amount.add(positiveSlippage).sub(referrerFee).sub(referrerSlippage)
     );
-    expect(
-      referrerBalanceAfter
-        .sub(referrerBalanceBefore)
-        .eq(referrerFee.add(referrerSlippage))
+    expect(referrerBalanceAfter.sub(referrerBalanceBefore)).to.eq(
+      referrerFee.add(referrerSlippage)
     );
   };
 
@@ -242,10 +257,11 @@ describe("Memswap", async () => {
       tokenOut: token1.address,
       referrer: AddressZero,
       referrerFeeBps: 0,
-      referrerSlippageBps: 0,
+      referrerSurplusBps: 0,
       deadline: (await getCurrentTimestamp()) + 60,
       amountIn: ethers.utils.parseEther("0.5"),
       startAmountOut: ethers.utils.parseEther("0.3"),
+      expectedAmountOut: ethers.utils.parseEther("0.3"),
       endAmountOut: ethers.utils.parseEther("0.3"),
     };
     (intent as any).signature = await signIntent(alice, intent);
