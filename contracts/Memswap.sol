@@ -6,8 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {WETH2} from "./WETH2.sol";
 
-import "hardhat/console.sol";
-
 contract Memswap is ReentrancyGuard {
     // --- Structs ---
 
@@ -142,12 +140,14 @@ contract Memswap is ReentrancyGuard {
         }
 
         // Pull input tokens into filler's wallet
-        _transferToken(
-            intent.maker,
-            fillContract,
-            intent.tokenIn,
-            intent.amountIn
-        );
+        if (intent.amountIn > 0) {
+            _transferToken(
+                intent.maker,
+                fillContract,
+                intent.tokenIn,
+                intent.amountIn
+            );
+        }
 
         (bool result, ) = fillContract.call(fillData);
         if (!result) {
@@ -174,8 +174,8 @@ contract Memswap is ReentrancyGuard {
         if (intent.referrer != address(0)) {
             if (
                 intent.referrerSurplusBps > 0 &&
-                intent.expectedAmountOut > amountOut &&
-                tokenOutBalance > intent.expectedAmountOut
+                tokenOutBalance > intent.expectedAmountOut &&
+                intent.expectedAmountOut > amountOut
             ) {
                 uint256 surplus = tokenOutBalance - intent.expectedAmountOut;
                 uint256 amount = (intent.referrerSurplusBps * surplus) / 10000;
@@ -206,12 +206,14 @@ contract Memswap is ReentrancyGuard {
             }
         }
 
-        _transferToken(
-            fillContract,
-            intent.maker,
-            intent.tokenOut,
-            tokenOutBalance
-        );
+        if (tokenOutBalance > 0) {
+            _transferToken(
+                fillContract,
+                intent.maker,
+                intent.tokenOut,
+                tokenOutBalance
+            );
+        }
 
         emit IntentFulfilled(intentHash, intent);
     }

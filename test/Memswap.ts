@@ -169,16 +169,13 @@ describe("Memswap", async () => {
     // Sign the intent
     (intent as any).signature = await signIntent(alice, intent);
 
-    const makerBalanceBefore = await token1.balanceOf(intent.maker);
-    const referrerBalanceBefore = await token1.balanceOf(intent.referrer);
-
     // Move to a known block timestamp
     const startTime = Math.max(
       (await getCurrentTimestamp()) + 1,
       intent.deadline - getRandomInteger(1, 100)
     );
     const endTime = intent.deadline;
-    await time.increaseTo(startTime);
+    await time.setNextBlockTimestamp(startTime);
 
     // Compute the intent amount at above timestamp
     const amount = bn(intent.startAmountOut).sub(
@@ -186,6 +183,15 @@ describe("Memswap", async () => {
         .sub(intent.endAmountOut)
         .div(endTime - startTime)
     );
+
+    const makerBalanceBefore =
+      intent.tokenOut === AddressZero
+        ? await ethers.provider.getBalance(intent.maker)
+        : await token1.balanceOf(intent.maker);
+    const referrerBalanceBefore =
+      intent.tokenOut === AddressZero
+        ? await ethers.provider.getBalance(intent.referrer)
+        : await token1.balanceOf(intent.referrer);
 
     // Optionally have some positive slippage (eg. on top of amount required by intent)
     const positiveSlippage = ethers.utils.parseEther(
@@ -218,8 +224,14 @@ describe("Memswap", async () => {
         );
     }
 
-    const makerBalanceAfter = await token1.balanceOf(intent.maker);
-    const referrerBalanceAfter = await token1.balanceOf(intent.referrer);
+    const makerBalanceAfter =
+      intent.tokenOut === AddressZero
+        ? await ethers.provider.getBalance(intent.maker)
+        : await token1.balanceOf(intent.maker);
+    const referrerBalanceAfter =
+      intent.tokenOut === AddressZero
+        ? await ethers.provider.getBalance(intent.referrer)
+        : await token1.balanceOf(intent.referrer);
 
     const referrerFee =
       intent.referrer === AddressZero
@@ -228,8 +240,10 @@ describe("Memswap", async () => {
     const referrerSlippage =
       intent.referrer === AddressZero
         ? bn(0)
-        : amount.gt(intent.expectedAmountOut)
+        : amount.add(positiveSlippage).gt(intent.expectedAmountOut) &&
+          amount.lt(intent.expectedAmountOut)
         ? amount
+            .add(positiveSlippage)
             .sub(intent.expectedAmountOut)
             .mul(intent.referrerSurplusBps)
             .div(10000)

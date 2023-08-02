@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
+// Fork of `WETH9` that supports `depositAndApprove`
 contract WETH2 {
-    string public name = "Wrapped Ether";
-    string public symbol = "WETH";
+    string public name = "Wrapped Ether 2";
+    string public symbol = "WETH2";
     uint8 public decimals = 18;
 
     event Approval(address indexed src, address indexed guy, uint256 wad);
