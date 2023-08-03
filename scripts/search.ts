@@ -3,7 +3,7 @@ import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
 import { TransactionResponse } from "@ethersproject/abstract-provider";
 import { JsonRpcProvider, WebSocketProvider } from "@ethersproject/providers";
 import { serialize } from "@ethersproject/transactions";
-import { parseUnits } from "@ethersproject/units";
+import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import {
   FlashbotsBundleProvider,
@@ -23,18 +23,20 @@ type Intent = {
   tokenOut: string;
   referrer: string;
   referrerFeeBps: number;
-  referrerSlippageBps: number;
+  referrerSurplusBps: number;
   deadline: number;
   amountIn: string;
   startAmountOut: string;
+  expectedAmountOut: string;
   endAmountOut: string;
   signature: string;
 };
 
 const bn = (value: BigNumberish) => BigNumber.from(value);
 
-const MEMSWAP = "";
-const ETH_ESCROW = "";
+const MEMSWAP = "0xb04cc34baa7af3a3466fcc442e302b7666e64e9a";
+const WETH2 = "0x32b7e3a5bf8977a7f9923ab02743108bdff2ca52";
+const ZEROEX_FILLER = "0xcc2dad8af1d1e98a54c88d47faca30dc1a1c4fa8";
 
 // Listen to pending mempool transactions
 const wsProvider = new WebSocketProvider(process.env.WS_URL!);
@@ -55,13 +57,21 @@ wsProvider.on("pending", (tx) =>
         .decodeFunctionData("approve", tx.data)
         .spender.toLowerCase();
       if (spender === MEMSWAP) {
-        restOfCalldata = "0x" + tx.data.slice(2 + 4 * 2 + 32 * 2 + 32 * 2);
+        restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
       }
     } else if (
-      tx.data.startsWith("0xd0e30db0") &&
-      tx.to?.toLowerCase() === ETH_ESCROW
+      tx.data.startsWith("0x28026ace") &&
+      tx.to?.toLowerCase() === WETH2
     ) {
-      restOfCalldata = "0x" + tx.data.slice(2 + 4 * 2);
+      const iface = new Interface([
+        "function depositAndApprove(address spender, uint256 amount)",
+      ]);
+      const spender = iface
+        .decodeFunctionData("depositAndApprove", tx.data)
+        .spender.toLowerCase();
+      if (spender === MEMSWAP) {
+        restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
+      }
     }
 
     let intent: Intent | undefined;
@@ -80,6 +90,7 @@ wsProvider.on("pending", (tx) =>
             "uint128",
             "uint128",
             "uint128",
+            "uint128",
             "bytes",
           ],
           restOfCalldata
@@ -91,13 +102,14 @@ wsProvider.on("pending", (tx) =>
           tokenIn: result[2].toLowerCase(),
           tokenOut: result[3].toLowerCase(),
           referrer: result[4].toLowerCase(),
-          referrerFeeBps: result[5].toNumber(),
-          referrerSlippageBps: result[6].toNumber(),
-          deadline: result[7].toNumber(),
+          referrerFeeBps: result[5],
+          referrerSurplusBps: result[6],
+          deadline: result[7],
           amountIn: result[8].toString(),
           startAmountOut: result[9].toString(),
-          endAmountOut: result[10].toString(),
-          signature: result[11].toLowerCase(),
+          expectedAmountOut: result[10].toString(),
+          endAmountOut: result[11].toString(),
+          signature: result[12].toLowerCase(),
         };
       } catch {
         // Skip errors
@@ -137,14 +149,21 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
     }
   );
 
-  const currentBaseFee = await provider
-    .getBlock("pending")
-    .then((b) => b!.baseFeePerGas!);
-  // TODO: Compute dynamically
-  const maxPriorityFeePerGas = parseUnits("10", "gwei");
+  const latestBlock = await provider.getBlock("latest");
+  const chainId = await provider.getNetwork().then((n) => n.chainId);
+  for (let i = 1; i <= 10; i++) {
+    const blockNumber = latestBlock.number + i;
+    const blockTimestamp = latestBlock.timestamp + i * 14;
 
-  const signedBundle = await flashbotsProvider.signBundle([
-    {
+    const currentBaseFee = await provider
+      .getBlock("pending")
+      .then((b) => b!.baseFeePerGas!);
+
+    // TODO: Compute both of these dynamically
+    const maxPriorityFeePerGas = parseUnits("10", "gwei");
+    const gasLimit = 500000;
+
+    const makerTx = {
       signedTransaction: serialize(
         {
           to: tx.to,
@@ -164,12 +183,13 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
           s: tx.s!,
         }
       ),
-    },
-    {
+    };
+    const fillerTx = {
       signer: filler,
       transaction: {
         from: filler.address,
         to: MEMSWAP,
+        value: 0,
         data: new Interface([
           `
             function execute(
@@ -179,11 +199,12 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
                 address tokenIn,
                 address tokenOut,
                 address referrer,
-                uint32 referredFeeBps,
-                uint32 referrerSlippageBps,
+                uint32 referrerFeeBps,
+                uint32 referrerSurplusBps,
                 uint32 deadline,
                 uint128 amountIn,
                 uint128 startAmountOut,
+                uint128 expectedAmountOut,
                 uint128 endAmountOut,
                 bytes signature
               ) intent,
@@ -191,32 +212,56 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
               bytes fillData
             )
           `,
-        ]).encodeFunctionData("execute", [intent, swapData.to, swapData.data]),
+        ]).encodeFunctionData("execute", [
+          intent,
+          ZEROEX_FILLER,
+          new Interface([
+            "function fill(address to, bytes data, address tokenIn, address tokenOut)",
+          ]).encodeFunctionData("fill", [
+            swapData.to,
+            swapData.data,
+            intent.tokenIn,
+            intent.tokenOut,
+          ]),
+        ]),
         type: 2,
-        // TODO: Estimate dynamically
-        gasLimit: 1000000,
-        chainId: await provider.getNetwork().then((n) => n.chainId),
+        gasLimit,
+        chainId,
         maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas).toString(),
         maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
       },
-    },
-  ]);
+    };
 
-  const latestBlock = await provider.getBlock("latest");
-  for (let i = 1; i <= 10; i++) {
-    const blockNumber = latestBlock.number + i;
-    const blockTimestamp = latestBlock.timestamp + i * 14;
+    const makerTxAlreadyIncluded = await provider
+      .getTransactionReceipt(tx.hash)
+      .then((tx) => tx.status === 1);
+    const signedBundle = await flashbotsProvider.signBundle(
+      makerTxAlreadyIncluded ? [fillerTx] : [makerTx, fillerTx]
+    );
+
+    const simulationResult = await flashbotsProvider.simulate(
+      signedBundle,
+      blockNumber
+    );
+    // TODO: Stop if the simulation failed
 
     const minimumAmountOut = bn(intent.startAmountOut).sub(
       bn(intent.startAmountOut)
         .sub(intent.endAmountOut)
         .div(intent.deadline - blockTimestamp)
     );
-    const actualAmountOut = swapData.amountOut;
-    const fillerProfitInETH = bn(actualAmountOut)
+    const actualAmountOut = swapData.buyAmount;
+
+    const fillerGrossProfitInETH = bn(actualAmountOut)
       .sub(minimumAmountOut)
-      .mul(swapData.buyTokenToEthRate);
-    // const fillerProfit;
+      .mul(parseEther(swapData.buyTokenToEthRate))
+      .div(parseEther("1"));
+    const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
+      currentBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
+    );
+    if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
+      break;
+    }
 
     console.log(`Trying to send bundle for block ${blockNumber}`);
 
@@ -234,6 +279,7 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
       waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
     ) {
       console.log(`Bundle ${hash} included in block ${blockNumber}`);
+      break;
     } else {
       console.log(
         `Bundle ${hash} not included in block ${blockNumber} (${waitResponse})`
@@ -242,109 +288,6 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
   }
 };
 
-const main = async () => {
-  // const tokenIn = "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6";
-  // const tokenOut = "0x07865c6e87b9f70255377e024ace6630c1eaa37f";
-  // const amountIn = ethers.utils.parseEther("0.001");
-  // const amountOut = ethers.utils.parseUnits("0.1", 6);
-  // // Create intent
-  // const intent = {
-  //   maker: maker.address,
-  //   tokenIn,
-  //   tokenOut,
-  //   amountIn,
-  //   startAmountOut: amountOut,
-  //   endAmountOut: amountOut,
-  //   deadline: await ethers.provider
-  //     .getBlock("latest")
-  //     .then((b) => b!.timestamp + 3600 * 24),
-  // };
-  // (intent as any).signature = await maker._signTypedData(
-  //   {
-  //     name: "Memswap",
-  //     version: "1.0",
-  //     chainId,
-  //     verifyingContract: MEMSWAP,
-  //   },
-  //   {
-  //     Intent: [
-  //       {
-  //         name: "maker",
-  //         type: "address",
-  //       },
-  //       {
-  //         name: "tokenIn",
-  //         type: "address",
-  //       },
-  //       {
-  //         name: "tokenOut",
-  //         type: "address",
-  //       },
-  //       {
-  //         name: "amountIn",
-  //         type: "uint256",
-  //       },
-  //       {
-  //         name: "startAmountOut",
-  //         type: "uint256",
-  //       },
-  //       {
-  //         name: "endAmountOut",
-  //         type: "uint256",
-  //       },
-  //       {
-  //         name: "deadline",
-  //         type: "uint256",
-  //       },
-  //     ],
-  //   },
-  //   intent
-  // );
-  // // Generate approval transaction
-  // const data =
-  //   new ethers.utils.Interface([
-  //     "function approve(address spender, uint256 amount)",
-  //   ]).encodeFunctionData("approve", [MEMSWAP, amountIn]) +
-  //   new ethers.utils.AbiCoder()
-  //     .encode(
-  //       [
-  //         "address",
-  //         "address",
-  //         "address",
-  //         "uint256",
-  //         "uint256",
-  //         "uint256",
-  //         "uint256",
-  //         "bytes",
-  //       ],
-  //       [
-  //         intent.maker,
-  //         intent.tokenIn,
-  //         intent.tokenOut,
-  //         intent.amountIn,
-  //         intent.startAmountOut,
-  //         intent.endAmountOut,
-  //         intent.deadline,
-  //         (intent as any).signature,
-  //       ]
-  //     )
-  //     .slice(2);
-  // const tx = {
-  //   from: maker.address,
-  //   to: tokenIn,
-  //   data,
-  //   nonce: await ethers.provider.getTransactionCount(maker.address),
-  //   type: 2,
-  //   chainId,
-  //   gasLimit: 100000,
-  //   maxFeePerGas: await ethers.provider
-  //     .getBlock("pending")
-  //     .then((b) => b!.baseFeePerGas!),
-  //   maxPriorityFeePerGas: ethers.utils.parseUnits("1", "wei"),
-  // };
-  // const rawTx = await maker.signTransaction(tx as any);
-  // await ethers.provider.send("eth_sendRawTransaction", [rawTx]);
-  // console.log("Transaction relayed");
-};
-
-main();
+setTimeout(() => {
+  console.log("Still running...");
+}, 24 * 60 * 1000);

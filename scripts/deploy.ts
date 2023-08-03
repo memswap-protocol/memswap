@@ -6,9 +6,9 @@ const main = async () => {
   const contract = await ethers
     .getContractFactory("Memswap", deployer)
     .then((factory) => factory.deploy());
-  await contract.waitForDeployment();
+  await new Promise((resolve) => setTimeout(resolve, 60 * 1000));
   await hre.run("verify:verify", {
-    address: await contract.getAddress(),
+    address: contract.address,
     constructorArguments: [],
   });
 };
