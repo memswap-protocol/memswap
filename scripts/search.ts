@@ -157,7 +157,7 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
 
     const latestBlock = await provider.getBlock("latest");
     const chainId = await provider.getNetwork().then((n) => n.chainId);
-    for (let i = 1; i <= 15; i++) {
+    for (let i = 1; i <= 30; i++) {
       const blockNumber = latestBlock.number + i;
       const blockTimestamp = latestBlock.timestamp + i * 14;
 
@@ -272,7 +272,7 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
 
       console.log(
         `Trying to send bundle (${
-          makerTxAlreadyIncluded ? "fill" : "approval-and-fill"
+          makerTxAlreadyIncluded ? "fill" : "approve-and-fill"
         }) for block ${blockNumber}`
       );
 
