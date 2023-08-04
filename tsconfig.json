@@ -6,6 +6,10 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
-  }
+    "resolveJsonModule": true,
+    "rootDir": "scripts",
+    "outDir": "dist",
+    "baseUrl": "scripts"
+  },
+  "include": ["scripts/search.ts"]
 }

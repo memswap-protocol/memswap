@@ -10,6 +10,7 @@ import {
   FlashbotsBundleResolution,
 } from "@flashbots/ethers-provider-bundle";
 import axios from "axios";
+import express from "express";
 
 // Required env variables:
 // - WS_URL: url for the websocket provider
@@ -298,6 +299,8 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
   }
 };
 
-setTimeout(() => {
-  console.log("Still running...");
-}, 24 * 60 * 1000);
+const app = express();
+app.listen(3000);
+app.get("/lives", (_, res) => {
+  return res.json({ message: "yes" });
+});
