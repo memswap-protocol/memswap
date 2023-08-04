@@ -157,7 +157,7 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
 
     const latestBlock = await provider.getBlock("latest");
     const chainId = await provider.getNetwork().then((n) => n.chainId);
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= 15; i++) {
       const blockNumber = latestBlock.number + i;
       const blockTimestamp = latestBlock.timestamp + i * 14;
 
@@ -240,10 +240,7 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
 
       const makerTxAlreadyIncluded = await provider
         .getTransactionReceipt(tx.hash)
-        .then((tx) => {
-          console.log(JSON.stringify(tx, null, 2));
-          return tx && tx.blockNumber;
-        });
+        .then((tx) => tx && tx.status === 1);
       const signedBundle = await flashbotsProvider.signBundle(
         makerTxAlreadyIncluded ? [fillerTx] : [makerTx, fillerTx]
       );
@@ -252,6 +249,7 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
         signedBundle,
         blockNumber
       );
+      console.log(JSON.stringify(simulationResult, null, 2));
       // TODO: Stop if the simulation failed
 
       const minimumAmountOut = bn(intent.startAmountOut).sub(
@@ -272,7 +270,11 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
         break;
       }
 
-      console.log(`Trying to send bundle for block ${blockNumber}`);
+      console.log(
+        `Trying to send bundle (${
+          makerTxAlreadyIncluded ? "fill" : "approval-and-fill"
+        }) for block ${blockNumber}`
+      );
 
       const receipt = await flashbotsProvider.sendRawBundle(
         signedBundle,
