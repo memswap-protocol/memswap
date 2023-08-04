@@ -289,11 +289,17 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
         waitResponse === FlashbotsBundleResolution.BundleIncluded ||
         waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
       ) {
-        console.log(`Bundle ${hash} included in block ${blockNumber}`);
+        console.log(
+          `Bundle ${hash} included in block ${blockNumber} (${
+            waitResponse === FlashbotsBundleResolution.BundleIncluded
+              ? "BundleIncluded"
+              : "AccountNonceTooHigh"
+          })`
+        );
         break;
       } else {
         console.log(
-          `Bundle ${hash} not included in block ${blockNumber} (${waitResponse})`
+          `Bundle ${hash} not included in block ${blockNumber} (BlockPassedWithoutInclusion)`
         );
       }
     }
