@@ -300,7 +300,7 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
 };
 
 const app = express();
-app.listen(3000);
+app.listen(Number(process.env.PORT));
 app.get("/lives", (_, res) => {
   return res.json({ message: "yes" });
 });
