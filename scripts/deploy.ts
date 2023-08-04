@@ -18,7 +18,7 @@ const deployContract = async (deployer: SignerWithAddress, name: string) => {
 const main = async () => {
   const [deployer] = await ethers.getSigners();
 
-  //await deployContract(deployer, "Memswap");
+  await deployContract(deployer, "Memswap");
   await deployContract(deployer, "WETH2");
   await deployContract(deployer, "ZeroExFiller");
 };
