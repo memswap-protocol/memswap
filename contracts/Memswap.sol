@@ -4,8 +4,6 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {WETH2} from "./WETH2.sol";
-
 contract Memswap is ReentrancyGuard {
     // --- Structs ---
 
@@ -40,7 +38,6 @@ contract Memswap is ReentrancyGuard {
 
     // --- Fields ---
 
-    IERC20 public immutable WETH;
     bytes32 public immutable DOMAIN_SEPARATOR;
     bytes32 public immutable ORDER_TYPEHASH;
 
@@ -50,8 +47,6 @@ contract Memswap is ReentrancyGuard {
     // --- Constructor ---
 
     constructor() {
-        WETH = IERC20(address(new WETH2()));
-
         uint256 chainId;
         assembly {
             chainId := chainid()

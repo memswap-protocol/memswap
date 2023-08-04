@@ -8,7 +8,7 @@ import { Wallet } from "@ethersproject/wallet";
 // - JSON_URL: url for the http provider
 // - MAKER_PK: private key of the maker
 
-const MEMSWAP = "0xb04cc34baa7af3a3466fcc442e302b7666e64e9a";
+const MEMSWAP = "0x69f2888491ea07bb10936aa110a5e0481122efd3";
 
 const main = async () => {
   const provider = new JsonRpcProvider(process.env.JSON_URL!);

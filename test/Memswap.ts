@@ -36,6 +36,7 @@ describe("Memswap", async () => {
   let carol: SignerWithAddress;
 
   let memswap: Contract;
+  let weth: Contract;
   let filler: Contract;
   let token0: Contract;
   let token1: Contract;
@@ -47,6 +48,9 @@ describe("Memswap", async () => {
 
     memswap = await ethers
       .getContractFactory("Memswap")
+      .then((factory) => factory.deploy());
+    weth = await ethers
+      .getContractFactory("WETH2")
       .then((factory) => factory.deploy());
     filler = await ethers
       .getContractFactory("MockFiller")
@@ -130,13 +134,11 @@ describe("Memswap", async () => {
   };
 
   const test = async () => {
-    const WETH = await memswap.WETH().then((a: string) => a.toLowerCase());
-
     // Generate an intent with random values
     const intent = {
       maker: alice.address,
       filler: AddressZero,
-      tokenIn: getRandomBoolean() ? WETH : token0.address,
+      tokenIn: getRandomBoolean() ? weth.address : token0.address,
       tokenOut: getRandomBoolean() ? AddressZero : token1.address,
       referrer: getRandomBoolean() ? AddressZero : carol.address,
       referrerFeeBps: getRandomInteger(0, 1000),
@@ -148,10 +150,10 @@ describe("Memswap", async () => {
       endAmountOut: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
     };
 
-    if (intent.tokenIn === WETH) {
+    if (intent.tokenIn === weth.address) {
       // Deposit and approve
       await alice.sendTransaction({
-        to: WETH,
+        to: weth.address,
         data: new Interface([
           "function depositAndApprove(address spender, uint256 amount)",
         ]).encodeFunctionData("depositAndApprove", [

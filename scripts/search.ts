@@ -34,257 +34,267 @@ type Intent = {
 
 const bn = (value: BigNumberish) => BigNumber.from(value);
 
-const MEMSWAP = "0xb04cc34baa7af3a3466fcc442e302b7666e64e9a";
-const WETH2 = "0x32b7e3a5bf8977a7f9923ab02743108bdff2ca52";
-const ZEROEX_FILLER = "0xcc2dad8af1d1e98a54c88d47faca30dc1a1c4fa8";
+const MEMSWAP = "0x69f2888491ea07bb10936aa110a5e0481122efd3";
+const WETH2 = "0xe6ea2a148c13893a8eedd57c75043055a8924c5f";
+const ZEROEX_FILLER = "0xd04d42429b36ae07dE931beDa07bCAEfA5B31070";
 
 // Listen to pending mempool transactions
 const wsProvider = new WebSocketProvider(process.env.WS_URL!);
 wsProvider.on("pending", (tx) =>
   wsProvider.getTransaction(tx).then(async (tx) => {
-    if (!tx || !tx.data || !tx.from) {
-      return;
-    }
-
-    // Try to decode any intent appended at the end of the calldata
-
-    let restOfCalldata: string | undefined;
-    if (tx.data.startsWith("0x095ea7b3")) {
-      const iface = new Interface([
-        "function approve(address spender, uint256 amount)",
-      ]);
-      const spender = iface
-        .decodeFunctionData("approve", tx.data)
-        .spender.toLowerCase();
-      if (spender === MEMSWAP) {
-        restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
+    try {
+      if (!tx || !tx.data || !tx.from) {
+        return;
       }
-    } else if (
-      tx.data.startsWith("0x28026ace") &&
-      tx.to?.toLowerCase() === WETH2
-    ) {
-      const iface = new Interface([
-        "function depositAndApprove(address spender, uint256 amount)",
-      ]);
-      const spender = iface
-        .decodeFunctionData("depositAndApprove", tx.data)
-        .spender.toLowerCase();
-      if (spender === MEMSWAP) {
-        restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
+
+      // Try to decode any intent appended at the end of the calldata
+
+      let restOfCalldata: string | undefined;
+      if (tx.data.startsWith("0x095ea7b3")) {
+        const iface = new Interface([
+          "function approve(address spender, uint256 amount)",
+        ]);
+        const spender = iface
+          .decodeFunctionData("approve", tx.data)
+          .spender.toLowerCase();
+        if (spender === MEMSWAP) {
+          restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
+        }
+      } else if (
+        tx.data.startsWith("0x28026ace") &&
+        tx.to?.toLowerCase() === WETH2
+      ) {
+        const iface = new Interface([
+          "function depositAndApprove(address spender, uint256 amount)",
+        ]);
+        const spender = iface
+          .decodeFunctionData("depositAndApprove", tx.data)
+          .spender.toLowerCase();
+        if (spender === MEMSWAP) {
+          restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
+        }
       }
-    }
 
-    let intent: Intent | undefined;
-    if (restOfCalldata && restOfCalldata.length > 2) {
-      try {
-        const result = defaultAbiCoder.decode(
-          [
-            "address",
-            "address",
-            "address",
-            "address",
-            "address",
-            "uint32",
-            "uint32",
-            "uint32",
-            "uint128",
-            "uint128",
-            "uint128",
-            "uint128",
-            "bytes",
-          ],
-          restOfCalldata
-        );
+      let intent: Intent | undefined;
+      if (restOfCalldata && restOfCalldata.length > 2) {
+        try {
+          const result = defaultAbiCoder.decode(
+            [
+              "address",
+              "address",
+              "address",
+              "address",
+              "address",
+              "uint32",
+              "uint32",
+              "uint32",
+              "uint128",
+              "uint128",
+              "uint128",
+              "uint128",
+              "bytes",
+            ],
+            restOfCalldata
+          );
 
-        intent = {
-          maker: result[0].toLowerCase(),
-          filler: result[1].toLowerCase(),
-          tokenIn: result[2].toLowerCase(),
-          tokenOut: result[3].toLowerCase(),
-          referrer: result[4].toLowerCase(),
-          referrerFeeBps: result[5],
-          referrerSurplusBps: result[6],
-          deadline: result[7],
-          amountIn: result[8].toString(),
-          startAmountOut: result[9].toString(),
-          expectedAmountOut: result[10].toString(),
-          endAmountOut: result[11].toString(),
-          signature: result[12].toLowerCase(),
-        };
-      } catch {
-        // Skip errors
+          intent = {
+            maker: result[0].toLowerCase(),
+            filler: result[1].toLowerCase(),
+            tokenIn: result[2].toLowerCase(),
+            tokenOut: result[3].toLowerCase(),
+            referrer: result[4].toLowerCase(),
+            referrerFeeBps: result[5],
+            referrerSurplusBps: result[6],
+            deadline: result[7],
+            amountIn: result[8].toString(),
+            startAmountOut: result[9].toString(),
+            expectedAmountOut: result[10].toString(),
+            endAmountOut: result[11].toString(),
+            signature: result[12].toLowerCase(),
+          };
+        } catch {
+          // Skip errors
+        }
       }
-    }
 
-    if (intent) {
-      await fill(tx, intent);
+      if (intent) {
+        await fill(tx, intent);
+      }
+    } catch (error) {
+      console.error(`Error parsing: ${error}`);
     }
   })
 );
 
 // Fill intent
 const fill = async (tx: TransactionResponse, intent: Intent) => {
-  const provider = new JsonRpcProvider(process.env.JSON_URL!);
-  const filler = new Wallet(process.env.FILLER_PK!);
+  try {
+    const provider = new JsonRpcProvider(process.env.JSON_URL!);
+    const filler = new Wallet(process.env.FILLER_PK!);
 
-  const flashbotsProvider = await FlashbotsBundleProvider.create(
-    provider,
-    new Wallet(
-      "0x2000000000000000000000000000000000000000000000000000000000000000"
-    ),
-    "https://relay-goerli.flashbots.net"
-  );
-
-  const { data: swapData } = await axios.get(
-    "https://goerli.api.0x.org/swap/v1/quote",
-    {
-      params: {
-        buyToken: intent.tokenOut,
-        sellToken: intent.tokenIn,
-        sellAmount: intent.amountIn,
-      },
-      headers: {
-        "0x-Api-Key": "e519f152-3749-49ea-a8f3-2964bb0f90ac",
-      },
-    }
-  );
-
-  const latestBlock = await provider.getBlock("latest");
-  const chainId = await provider.getNetwork().then((n) => n.chainId);
-  for (let i = 1; i <= 10; i++) {
-    const blockNumber = latestBlock.number + i;
-    const blockTimestamp = latestBlock.timestamp + i * 14;
-
-    const currentBaseFee = await provider
-      .getBlock("pending")
-      .then((b) => b!.baseFeePerGas!);
-
-    // TODO: Compute both of these dynamically
-    const maxPriorityFeePerGas = parseUnits("10", "gwei");
-    const gasLimit = 500000;
-
-    const makerTx = {
-      signedTransaction: serialize(
-        {
-          to: tx.to,
-          nonce: tx.nonce,
-          gasLimit: tx.gasLimit,
-          data: tx.data,
-          value: tx.value,
-          chainId: tx.chainId,
-          type: tx.type,
-          accessList: tx.accessList,
-          maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
-          maxFeePerGas: tx.maxFeePerGas,
-        },
-        {
-          v: tx.v!,
-          r: tx.r!,
-          s: tx.s!,
-        }
+    const flashbotsProvider = await FlashbotsBundleProvider.create(
+      provider,
+      new Wallet(
+        "0x2000000000000000000000000000000000000000000000000000000000000000"
       ),
-    };
-    const fillerTx = {
-      signer: filler,
-      transaction: {
-        from: filler.address,
-        to: MEMSWAP,
-        value: 0,
-        data: new Interface([
-          `
-            function execute(
-              (
-                address maker,
-                address filler,
-                address tokenIn,
-                address tokenOut,
-                address referrer,
-                uint32 referrerFeeBps,
-                uint32 referrerSurplusBps,
-                uint32 deadline,
-                uint128 amountIn,
-                uint128 startAmountOut,
-                uint128 expectedAmountOut,
-                uint128 endAmountOut,
-                bytes signature
-              ) intent,
-              address fillContract,
-              bytes fillData
-            )
-          `,
-        ]).encodeFunctionData("execute", [
-          intent,
-          ZEROEX_FILLER,
-          new Interface([
-            "function fill(address to, bytes data, address tokenIn, address tokenOut)",
-          ]).encodeFunctionData("fill", [
-            swapData.to,
-            swapData.data,
-            intent.tokenIn,
-            intent.tokenOut,
+      "https://relay-goerli.flashbots.net"
+    );
+
+    const { data: swapData } = await axios.get(
+      "https://goerli.api.0x.org/swap/v1/quote",
+      {
+        params: {
+          buyToken: intent.tokenOut,
+          sellToken: intent.tokenIn,
+          sellAmount: intent.amountIn,
+        },
+        headers: {
+          "0x-Api-Key": "e519f152-3749-49ea-a8f3-2964bb0f90ac",
+        },
+      }
+    );
+
+    const latestBlock = await provider.getBlock("latest");
+    const chainId = await provider.getNetwork().then((n) => n.chainId);
+    for (let i = 1; i <= 10; i++) {
+      const blockNumber = latestBlock.number + i;
+      const blockTimestamp = latestBlock.timestamp + i * 14;
+
+      const currentBaseFee = await provider
+        .getBlock("pending")
+        .then((b) => b!.baseFeePerGas!);
+
+      // TODO: Compute both of these dynamically
+      const maxPriorityFeePerGas = parseUnits("10", "gwei");
+      const gasLimit = 500000;
+
+      const makerTx = {
+        signedTransaction: serialize(
+          {
+            to: tx.to,
+            nonce: tx.nonce,
+            gasLimit: tx.gasLimit,
+            data: tx.data,
+            value: tx.value,
+            chainId: tx.chainId,
+            type: tx.type,
+            accessList: tx.accessList,
+            maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
+            maxFeePerGas: tx.maxFeePerGas,
+          },
+          {
+            v: tx.v!,
+            r: tx.r!,
+            s: tx.s!,
+          }
+        ),
+      };
+      const fillerTx = {
+        signer: filler,
+        transaction: {
+          from: filler.address,
+          to: MEMSWAP,
+          value: 0,
+          data: new Interface([
+            `
+              function execute(
+                (
+                  address maker,
+                  address filler,
+                  address tokenIn,
+                  address tokenOut,
+                  address referrer,
+                  uint32 referrerFeeBps,
+                  uint32 referrerSurplusBps,
+                  uint32 deadline,
+                  uint128 amountIn,
+                  uint128 startAmountOut,
+                  uint128 expectedAmountOut,
+                  uint128 endAmountOut,
+                  bytes signature
+                ) intent,
+                address fillContract,
+                bytes fillData
+              )
+            `,
+          ]).encodeFunctionData("execute", [
+            intent,
+            ZEROEX_FILLER,
+            new Interface([
+              "function fill(address to, bytes data, address tokenIn, address tokenOut)",
+            ]).encodeFunctionData("fill", [
+              swapData.to,
+              swapData.data,
+              intent.tokenIn,
+              intent.tokenOut,
+            ]),
           ]),
-        ]),
-        type: 2,
-        gasLimit,
-        chainId,
-        maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas).toString(),
-        maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
-      },
-    };
+          type: 2,
+          gasLimit,
+          chainId,
+          maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas).toString(),
+          maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
+        },
+      };
 
-    const makerTxAlreadyIncluded = await provider
-      .getTransactionReceipt(tx.hash)
-      .then((tx) => tx.status === 1);
-    const signedBundle = await flashbotsProvider.signBundle(
-      makerTxAlreadyIncluded ? [fillerTx] : [makerTx, fillerTx]
-    );
-
-    const simulationResult = await flashbotsProvider.simulate(
-      signedBundle,
-      blockNumber
-    );
-    // TODO: Stop if the simulation failed
-
-    const minimumAmountOut = bn(intent.startAmountOut).sub(
-      bn(intent.startAmountOut)
-        .sub(intent.endAmountOut)
-        .div(intent.deadline - blockTimestamp)
-    );
-    const actualAmountOut = swapData.buyAmount;
-
-    const fillerGrossProfitInETH = bn(actualAmountOut)
-      .sub(minimumAmountOut)
-      .mul(parseEther(swapData.buyTokenToEthRate))
-      .div(parseEther("1"));
-    const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
-      currentBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
-    );
-    if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
-      break;
-    }
-
-    console.log(`Trying to send bundle for block ${blockNumber}`);
-
-    const receipt = await flashbotsProvider.sendRawBundle(
-      signedBundle,
-      blockNumber
-    );
-    const hash = (receipt as any).bundleHash;
-
-    console.log(`Bundle ${hash} submitted in block ${blockNumber}, waiting...`);
-
-    const waitResponse = await (receipt as any).wait();
-    if (
-      waitResponse === FlashbotsBundleResolution.BundleIncluded ||
-      waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
-    ) {
-      console.log(`Bundle ${hash} included in block ${blockNumber}`);
-      break;
-    } else {
-      console.log(
-        `Bundle ${hash} not included in block ${blockNumber} (${waitResponse})`
+      const makerTxAlreadyIncluded = await provider
+        .getTransactionReceipt(tx.hash)
+        .then((tx) => tx.status === 1);
+      const signedBundle = await flashbotsProvider.signBundle(
+        makerTxAlreadyIncluded ? [fillerTx] : [makerTx, fillerTx]
       );
+
+      const simulationResult = await flashbotsProvider.simulate(
+        signedBundle,
+        blockNumber
+      );
+      // TODO: Stop if the simulation failed
+
+      const minimumAmountOut = bn(intent.startAmountOut).sub(
+        bn(intent.startAmountOut)
+          .sub(intent.endAmountOut)
+          .div(intent.deadline - blockTimestamp)
+      );
+      const actualAmountOut = swapData.buyAmount;
+
+      const fillerGrossProfitInETH = bn(actualAmountOut)
+        .sub(minimumAmountOut)
+        .mul(parseEther(swapData.buyTokenToEthRate))
+        .div(parseEther("1"));
+      const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
+        currentBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
+      );
+      if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
+        break;
+      }
+
+      console.log(`Trying to send bundle for block ${blockNumber}`);
+
+      const receipt = await flashbotsProvider.sendRawBundle(
+        signedBundle,
+        blockNumber
+      );
+      const hash = (receipt as any).bundleHash;
+
+      console.log(
+        `Bundle ${hash} submitted in block ${blockNumber}, waiting...`
+      );
+
+      const waitResponse = await (receipt as any).wait();
+      if (
+        waitResponse === FlashbotsBundleResolution.BundleIncluded ||
+        waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
+      ) {
+        console.log(`Bundle ${hash} included in block ${blockNumber}`);
+        break;
+      } else {
+        console.log(
+          `Bundle ${hash} not included in block ${blockNumber} (${waitResponse})`
+        );
+      }
     }
+  } catch (error) {
+    console.error(`Error filling: ${error}`);
   }
 };
 
