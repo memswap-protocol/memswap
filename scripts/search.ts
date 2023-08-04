@@ -240,7 +240,10 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
 
       const makerTxAlreadyIncluded = await provider
         .getTransactionReceipt(tx.hash)
-        .then((tx) => tx && tx.status === 1);
+        .then((tx) => {
+          console.log(JSON.stringify(tx, null, 2));
+          return tx && tx.blockNumber;
+        });
       const signedBundle = await flashbotsProvider.signBundle(
         makerTxAlreadyIncluded ? [fillerTx] : [makerTx, fillerTx]
       );
