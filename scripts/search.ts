@@ -39,7 +39,7 @@ const bn = (value: BigNumberish) => BigNumber.from(value);
 
 const MEMSWAP = "0x69f2888491ea07bb10936aa110a5e0481122efd3";
 const WETH2 = "0xe6ea2a148c13893a8eedd57c75043055a8924c5f";
-const ZEROEX_FILLER = "0xe0af0ba537472654c8093b29b2971614cb1e51ae";
+const ZEROEX_FILLER = "0x009d6adf37607b20ba8d152b3e2fb061858e40ad";
 
 // Listen to pending mempool transactions
 const wsProvider = new WebSocketProvider(process.env.WS_URL!);

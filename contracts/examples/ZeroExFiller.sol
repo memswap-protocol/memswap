@@ -3,50 +3,89 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import {WETH2} from "../WETH2.sol";
+
 contract ZeroExFiller {
+    // --- Errors ---
+
+    error Unauthorized();
+    error UnsuccessfulCall();
+
+    // --- Fields ---
+
     address public immutable owner;
+    address public immutable memswap;
+    address public immutable weth2;
 
-    constructor() {
+    // --- Constructor ---
+
+    constructor(address memswapAddress, address weth2Address) {
         owner = msg.sender;
+        memswap = memswapAddress;
+        weth2 = weth2Address;
     }
 
-    function call(
-        address to,
-        bytes calldata data,
-        uint256 value
-    ) external payable {
-        require(msg.sender == owner);
+    // --- Fallback ---
 
-        (bool success, ) = to.call{value: value}(data);
-        require(success);
+    receive() external payable {
+        if (msg.sender != weth2) {
+            revert Unauthorized();
+        }
     }
+
+    // --- Public methods ---
 
     function fill(
         address to,
         bytes calldata data,
         IERC20 tokenIn,
-        IERC20 tokenOut
+        uint256 amountIn,
+        IERC20 tokenOut,
+        uint256 amountOut
     ) external {
-        require(tx.origin == owner);
+        if (msg.sender != memswap) {
+            revert Unauthorized();
+        }
 
         bool success;
 
-        if (address(tokenIn) != address(0)) {
-            tokenIn.approve(to, type(uint256).max);
-        }
-
-        (success, ) = to.call{value: address(this).balance}(data);
-        if (!success) {
-            revert();
-        }
-
-        if (address(tokenOut) != address(0)) {
-            tokenOut.approve(msg.sender, type(uint256).max);
+        bool inputETH = address(tokenIn) == address(weth2);
+        if (inputETH) {
+            WETH2(payable(weth2)).withdraw(amountIn);
         } else {
-            (success, ) = msg.sender.call{value: address(this).balance}("");
+            tokenIn.approve(to, amountIn);
+        }
+
+        (success, ) = to.call{value: inputETH ? amountIn : 0}(data);
+        if (!success) {
+            revert UnsuccessfulCall();
+        }
+
+        bool outputETH = address(tokenOut) == address(0);
+        if (outputETH) {
+            (success, ) = memswap.call{value: amountOut}("");
             if (!success) {
-                revert();
+                revert UnsuccessfulCall();
             }
+        } else {
+            tokenOut.approve(memswap, amountOut);
+        }
+    }
+
+    // --- Restricted methods ---
+
+    function ownerCall(
+        address to,
+        bytes calldata data,
+        uint256 value
+    ) external payable {
+        if (msg.sender != owner) {
+            revert Unauthorized();
+        }
+
+        (bool success, ) = to.call{value: value}(data);
+        if (!success) {
+            revert UnsuccessfulCall();
         }
     }
 }

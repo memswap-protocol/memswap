@@ -1,26 +1,30 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import hre, { ethers } from "hardhat";
 
-const deployContract = async (deployer: SignerWithAddress, name: string) => {
+const deployContract = async (
+  deployer: SignerWithAddress,
+  name: string,
+  constructorArguments: any[] = []
+) => {
   const contract = await ethers
     .getContractFactory(name, deployer)
-    .then((factory) => factory.deploy());
+    .then((factory: { deploy: (...args: any[]) => any }) =>
+      factory.deploy(...constructorArguments)
+    );
   console.log(`${name} deployed at ${contract.address.toLowerCase()}`);
 
   await new Promise((resolve) => setTimeout(resolve, 60 * 1000));
 
   await hre.run("verify:verify", {
     address: contract.address,
-    constructorArguments: [],
+    constructorArguments,
   });
 };
 
 const main = async () => {
   const [deployer] = await ethers.getSigners();
 
-  await deployContract(deployer, "Memswap");
-  await deployContract(deployer, "WETH2");
-  await deployContract(deployer, "ZeroExFiller");
+  deployer;
 };
 
 main()
