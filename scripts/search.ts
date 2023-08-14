@@ -185,6 +185,24 @@ const fill = async (
       const maxPriorityFeePerGas = parseUnits("10", "gwei");
       const gasLimit = 500000;
 
+      const minimumAmountOut = bn(intent.startAmountOut).sub(
+        bn(intent.startAmountOut)
+          .sub(intent.endAmountOut)
+          .div(intent.deadline - blockTimestamp)
+      );
+      const actualAmountOut = swapData.buyAmount;
+
+      const fillerGrossProfitInETH = bn(actualAmountOut)
+        .sub(minimumAmountOut)
+        .mul(parseEther(swapData.buyTokenToEthRate))
+        .div(parseEther("1"));
+      const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
+        currentBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
+      );
+      if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
+        break;
+      }
+
       const originTx = {
         signedTransaction: serialize(
           {
@@ -238,12 +256,14 @@ const fill = async (
             intent,
             ZEROEX_FILLER,
             new Interface([
-              "function fill(address to, bytes data, address tokenIn, address tokenOut)",
+              "function fill(address to, bytes data, address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut)",
             ]).encodeFunctionData("fill", [
               swapData.to,
               swapData.data,
               intent.tokenIn,
+              intent.amountIn,
               intent.tokenOut,
+              minimumAmountOut,
             ]),
           ]),
           type: 2,
@@ -274,24 +294,6 @@ const fill = async (
           })}`
         );
         return;
-      }
-
-      const minimumAmountOut = bn(intent.startAmountOut).sub(
-        bn(intent.startAmountOut)
-          .sub(intent.endAmountOut)
-          .div(intent.deadline - blockTimestamp)
-      );
-      const actualAmountOut = swapData.buyAmount;
-
-      const fillerGrossProfitInETH = bn(actualAmountOut)
-        .sub(minimumAmountOut)
-        .mul(parseEther(swapData.buyTokenToEthRate))
-        .div(parseEther("1"));
-      const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
-        currentBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
-      );
-      if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
-        break;
       }
 
       console.log(
