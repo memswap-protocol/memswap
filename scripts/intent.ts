@@ -9,15 +9,20 @@ import { Wallet } from "@ethersproject/wallet";
 // - MAKER_PK: private key of the maker
 
 const MEMSWAP = "0x69f2888491ea07bb10936aa110a5e0481122efd3";
+const WETH2 = "0xe6ea2a148c13893a8eedd57c75043055a8924c5f";
+
+const CURRENCIES = {
+  ETH: WETH2,
+  WETH: "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6",
+  USDC: "0x07865c6e87b9f70255377e024ace6630c1eaa37f",
+};
 
 const main = async () => {
   const provider = new JsonRpcProvider(process.env.JSON_URL!);
   const maker = new Wallet(process.env.MAKER_PK!);
 
-  // WETH
-  const tokenIn = "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6";
-  // USDC
-  const tokenOut = "0x07865c6e87b9f70255377e024ace6630c1eaa37f";
+  const tokenIn = CURRENCIES.ETH;
+  const tokenOut = CURRENCIES.USDC;
 
   const amountIn = parseEther("0.001");
   const amountOut = parseUnits("0.1", 6);
@@ -102,10 +107,11 @@ const main = async () => {
   );
 
   // Generate approval transaction
+  const approveMethod = tokenIn === WETH2 ? "depositAndApprove" : "approve";
   const data =
     new Interface([
-      "function approve(address spender, uint256 amount)",
-    ]).encodeFunctionData("approve", [MEMSWAP, amountIn]) +
+      `function ${approveMethod}(address spender, uint256 amount)`,
+    ]).encodeFunctionData(approveMethod, [MEMSWAP, amountIn]) +
     defaultAbiCoder
       .encode(
         [
@@ -148,6 +154,7 @@ const main = async () => {
   const tx = await maker.connect(provider).sendTransaction({
     to: tokenIn,
     data,
+    value: approveMethod === "depositAndApprove" ? amountIn : 0,
     maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas),
     maxPriorityFeePerGas: maxPriorityFeePerGas,
   });

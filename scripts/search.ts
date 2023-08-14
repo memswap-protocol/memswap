@@ -140,6 +140,8 @@ const fill = async (
   intent: Intent,
   intentOrigin: IntentOrigin
 ) => {
+  console.log(`Triggering filling from origin transaction ${tx.hash}`);
+
   try {
     const provider = new JsonRpcProvider(process.env.JSON_URL!);
     const filler = new Wallet(process.env.FILLER_PK!);
