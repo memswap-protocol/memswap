@@ -8,7 +8,7 @@ import { Wallet } from "@ethersproject/wallet";
 // - JSON_URL: url for the http provider
 // - MAKER_PK: private key of the maker
 
-const MEMSWAP = "0x69f2888491ea07bb10936aa110a5e0481122efd3";
+const MEMSWAP = "0x90d4ecf99ad7e8ac74994c5181ca78b279ca9f8e";
 const WETH2 = "0xe6ea2a148c13893a8eedd57c75043055a8924c5f";
 
 const CURRENCIES = {

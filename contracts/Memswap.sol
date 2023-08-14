@@ -160,7 +160,7 @@ contract Memswap is ReentrancyGuard {
 
         uint256 tokenOutBalance = address(intent.tokenOut) == address(0)
             ? address(this).balance
-            : intent.tokenOut.balanceOf(fillContract);
+            : intent.tokenOut.allowance(fillContract, address(this));
 
         if (tokenOutBalance < amountOut) {
             revert IntentNotFulfilled();

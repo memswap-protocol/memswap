@@ -37,9 +37,9 @@ type IntentOrigin = "approve" | "deposit-and-approve" | "unknown";
 
 const bn = (value: BigNumberish) => BigNumber.from(value);
 
-const MEMSWAP = "0x69f2888491ea07bb10936aa110a5e0481122efd3";
+const MEMSWAP = "0x90d4ecf99ad7e8ac74994c5181ca78b279ca9f8e";
 const WETH2 = "0xe6ea2a148c13893a8eedd57c75043055a8924c5f";
-const ZEROEX_FILLER = "0x009d6adf37607b20ba8d152b3e2fb061858e40ad";
+const ZEROEX_FILLER = "0x2f8e1f5516b423801c26cf455a02988b3a01627f";
 
 // Listen to pending mempool transactions
 const wsProvider = new WebSocketProvider(process.env.WS_URL!);
