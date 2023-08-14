@@ -191,6 +191,12 @@ const fill = async (
           .div(intent.deadline - blockTimestamp)
       );
       const actualAmountOut = swapData.buyAmount;
+      if (bn(actualAmountOut).lt(minimumAmountOut)) {
+        `[${
+          tx.hash
+        }] Not enough amount out for maker (actual=${actualAmountOut}, minimum=${minimumAmountOut.toString()})`;
+        return;
+      }
 
       const fillerGrossProfitInETH = bn(actualAmountOut)
         .sub(minimumAmountOut)
@@ -200,7 +206,10 @@ const fill = async (
         currentBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
       );
       if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
-        break;
+        `[${
+          tx.hash
+        }] Not enough amount out for filler (profit=${fillerNetProfitInETH.toString()})`;
+        return;
       }
 
       const originTx = {
