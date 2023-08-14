@@ -33,6 +33,8 @@ type Intent = {
   signature: string;
 };
 
+type IntentOrigin = "approve" | "deposit-and-approve" | "unknown";
+
 const bn = (value: BigNumberish) => BigNumber.from(value);
 
 const MEMSWAP = "0x69f2888491ea07bb10936aa110a5e0481122efd3";
@@ -51,6 +53,7 @@ wsProvider.on("pending", (tx) =>
       // Try to decode any intent appended at the end of the calldata
 
       let restOfCalldata: string | undefined;
+      let intentOrigin: IntentOrigin = "unknown";
       if (tx.data.startsWith("0x095ea7b3")) {
         const iface = new Interface([
           "function approve(address spender, uint256 amount)",
@@ -60,6 +63,7 @@ wsProvider.on("pending", (tx) =>
           .spender.toLowerCase();
         if (spender === MEMSWAP) {
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
+          intentOrigin = "approve";
         }
       } else if (
         tx.data.startsWith("0x28026ace") &&
@@ -73,7 +77,10 @@ wsProvider.on("pending", (tx) =>
           .spender.toLowerCase();
         if (spender === MEMSWAP) {
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
+          intentOrigin = "deposit-and-approve";
         }
+      } else {
+        restOfCalldata = tx.data;
       }
 
       let intent: Intent | undefined;
@@ -119,7 +126,7 @@ wsProvider.on("pending", (tx) =>
       }
 
       if (intent) {
-        await fill(tx, intent);
+        await fill(tx, intent, intentOrigin);
       }
     } catch (error) {
       console.error(`Error parsing: ${error}`);
@@ -128,7 +135,11 @@ wsProvider.on("pending", (tx) =>
 );
 
 // Fill intent
-const fill = async (tx: TransactionResponse, intent: Intent) => {
+const fill = async (
+  tx: TransactionResponse,
+  intent: Intent,
+  intentOrigin: IntentOrigin
+) => {
   try {
     const provider = new JsonRpcProvider(process.env.JSON_URL!);
     const filler = new Wallet(process.env.FILLER_PK!);
@@ -146,7 +157,10 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
       {
         params: {
           buyToken: intent.tokenOut,
-          sellToken: intent.tokenIn,
+          sellToken:
+            intent.tokenIn === WETH2
+              ? "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+              : intent.tokenIn,
           sellAmount: intent.amountIn,
         },
         headers: {
@@ -169,7 +183,7 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
       const maxPriorityFeePerGas = parseUnits("10", "gwei");
       const gasLimit = 500000;
 
-      const makerTx = {
+      const originTx = {
         signedTransaction: serialize(
           {
             to: tx.to,
@@ -238,11 +252,14 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
         },
       };
 
-      const makerTxAlreadyIncluded = await provider
-        .getTransactionReceipt(tx.hash)
-        .then((tx) => tx && tx.status === 1);
+      const skipOriginTransaction =
+        intentOrigin === "approve" || intentOrigin === "deposit-and-approve"
+          ? await provider
+              .getTransactionReceipt(tx.hash)
+              .then((tx) => tx && tx.status === 1)
+          : true;
       const signedBundle = await flashbotsProvider.signBundle(
-        makerTxAlreadyIncluded ? [fillerTx] : [makerTx, fillerTx]
+        skipOriginTransaction ? [fillerTx] : [originTx, fillerTx]
       );
 
       const simulationResult = await flashbotsProvider.simulate(
@@ -272,7 +289,7 @@ const fill = async (tx: TransactionResponse, intent: Intent) => {
 
       console.log(
         `Trying to send bundle (${
-          makerTxAlreadyIncluded ? "fill" : "approve-and-fill"
+          skipOriginTransaction ? "fill" : "approve-and-fill"
         }) for block ${blockNumber}`
       );
 
