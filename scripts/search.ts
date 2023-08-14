@@ -140,7 +140,7 @@ const fill = async (
   intent: Intent,
   intentOrigin: IntentOrigin
 ) => {
-  console.log(`Triggering filling from origin transaction ${tx.hash}`);
+  console.log(`[${tx.hash}] Triggering filling`);
 
   try {
     const provider = new JsonRpcProvider(process.env.JSON_URL!);
@@ -264,12 +264,17 @@ const fill = async (
         skipOriginTransaction ? [fillerTx] : [originTx, fillerTx]
       );
 
-      const simulationResult = await flashbotsProvider.simulate(
-        signedBundle,
-        blockNumber
-      );
-      console.log(JSON.stringify(simulationResult, null, 2));
-      // TODO: Stop if the simulation failed
+      const simulationResult: { results: [{ error?: string }] } =
+        (await flashbotsProvider.simulate(signedBundle, blockNumber)) as any;
+      if (simulationResult.results.some((r) => r.error)) {
+        console.log(
+          `[${tx.hash}] Simulation failed: ${JSON.stringify({
+            simulationResult,
+            fillerTx,
+          })}`
+        );
+        return;
+      }
 
       const minimumAmountOut = bn(intent.startAmountOut).sub(
         bn(intent.startAmountOut)
@@ -290,7 +295,7 @@ const fill = async (
       }
 
       console.log(
-        `Trying to send bundle (${
+        `[${tx.hash}] Trying to send bundle (${
           skipOriginTransaction ? "fill" : "approve-and-fill"
         }) for block ${blockNumber}`
       );
@@ -302,7 +307,7 @@ const fill = async (
       const hash = (receipt as any).bundleHash;
 
       console.log(
-        `Bundle ${hash} submitted in block ${blockNumber}, waiting...`
+        `[${tx.hash}] Bundle ${hash} submitted in block ${blockNumber}, waiting...`
       );
 
       const waitResponse = await (receipt as any).wait();
@@ -311,7 +316,7 @@ const fill = async (
         waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
       ) {
         console.log(
-          `Bundle ${hash} included in block ${blockNumber} (${
+          `[${tx.hash}] Bundle ${hash} included in block ${blockNumber} (${
             waitResponse === FlashbotsBundleResolution.BundleIncluded
               ? "BundleIncluded"
               : "AccountNonceTooHigh"
@@ -320,12 +325,12 @@ const fill = async (
         break;
       } else {
         console.log(
-          `Bundle ${hash} not included in block ${blockNumber} (BlockPassedWithoutInclusion)`
+          `[${tx.hash}] Bundle ${hash} not included in block ${blockNumber} (BlockPassedWithoutInclusion)`
         );
       }
     }
   } catch (error) {
-    console.error(`Error filling: ${error}`);
+    console.error(`[${tx.hash}] Error filling: ${error}`);
   }
 };
 
