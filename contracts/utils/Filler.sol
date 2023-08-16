@@ -31,11 +31,7 @@ contract Filler {
 
     // --- Fallback ---
 
-    receive() external payable {
-        if (msg.sender != weth2) {
-            revert Unauthorized();
-        }
-    }
+    receive() external payable {}
 
     // --- Public methods ---
 
