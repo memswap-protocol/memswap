@@ -7,9 +7,9 @@
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "rootDir": "scripts",
+    "rootDir": "src",
     "outDir": "dist",
-    "baseUrl": "scripts"
+    "baseUrl": "src"
   },
-  "include": ["scripts/search.ts"]
+  "include": ["src/**/*.ts"]
 }

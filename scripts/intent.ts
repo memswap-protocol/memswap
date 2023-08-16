@@ -4,12 +4,11 @@ import { JsonRpcProvider } from "@ethersproject/providers";
 import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 
+import { MEMSWAP, WETH2, getEIP712Domain, getEIP712Types } from "./utils";
+
 // Required env variables:
 // - JSON_URL: url for the http provider
 // - MAKER_PK: private key of the maker
-
-const MEMSWAP = "0x90d4ecf99ad7e8ac74994c5181ca78b279ca9f8e";
-const WETH2 = "0xe6ea2a148c13893a8eedd57c75043055a8924c5f";
 
 const CURRENCIES = {
   ETH: WETH2,
@@ -25,7 +24,9 @@ const main = async () => {
   const tokenOut = CURRENCIES.USDC;
 
   const amountIn = parseEther("0.001");
-  const amountOut = parseUnits("100000", 6);
+  const amountOut = parseUnits("10000", 6);
+
+  const chainId = await provider.getNetwork().then((n) => n.chainId);
 
   // Create intent
   const intent = {
@@ -45,64 +46,8 @@ const main = async () => {
     endAmountOut: amountOut,
   };
   (intent as any).signature = await maker._signTypedData(
-    {
-      name: "Memswap",
-      version: "1.0",
-      chainId: await provider.getNetwork().then((n) => n.chainId),
-      verifyingContract: MEMSWAP,
-    },
-    {
-      Intent: [
-        {
-          name: "maker",
-          type: "address",
-        },
-        {
-          name: "filler",
-          type: "address",
-        },
-        {
-          name: "tokenIn",
-          type: "address",
-        },
-        {
-          name: "tokenOut",
-          type: "address",
-        },
-        {
-          name: "referrer",
-          type: "address",
-        },
-        {
-          name: "referrerFeeBps",
-          type: "uint32",
-        },
-        {
-          name: "referrerSurplusBps",
-          type: "uint32",
-        },
-        {
-          name: "deadline",
-          type: "uint32",
-        },
-        {
-          name: "amountIn",
-          type: "uint128",
-        },
-        {
-          name: "startAmountOut",
-          type: "uint128",
-        },
-        {
-          name: "expectedAmountOut",
-          type: "uint128",
-        },
-        {
-          name: "endAmountOut",
-          type: "uint128",
-        },
-      ],
-    },
+    getEIP712Domain(chainId),
+    getEIP712Types(),
     intent
   );
 

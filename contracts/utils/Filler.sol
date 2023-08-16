@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {WETH2} from "../WETH2.sol";
 
-contract ZeroExFiller {
+contract Filler {
     // --- Errors ---
 
     error Unauthorized();
@@ -19,8 +19,12 @@ contract ZeroExFiller {
 
     // --- Constructor ---
 
-    constructor(address memswapAddress, address weth2Address) {
-        owner = msg.sender;
+    constructor(
+        address ownerAddress,
+        address memswapAddress,
+        address weth2Address
+    ) {
+        owner = ownerAddress;
         memswap = memswapAddress;
         weth2 = weth2Address;
     }

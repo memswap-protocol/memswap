@@ -3,6 +3,7 @@ node_modules
 
 # Secrets
 .env
+.env.sh
 
 # Build
 dist
