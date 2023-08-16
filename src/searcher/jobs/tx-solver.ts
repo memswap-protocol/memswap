@@ -1,4 +1,5 @@
 import { Interface } from "@ethersproject/abi";
+import { AddressZero } from "@ethersproject/constants";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { serialize } from "@ethersproject/transactions";
 import { parseEther, parseUnits } from "@ethersproject/units";
@@ -11,7 +12,7 @@ import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
-import { FILLER, MEMSWAP } from "../../common/addresses";
+import { BATCHER, FILLER, MEMSWAP } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { bn, isTxIncluded, now } from "../../common/utils";
 import { Intent, IntentOrigin } from "../../common/types";
@@ -47,6 +48,14 @@ const worker = new Worker(
         logger.info(
           COMPONENT,
           `[${txHash}] Intent expired: ${intent.deadline} <= ${now()}`
+        );
+        return;
+      }
+
+      if (![AddressZero, FILLER, BATCHER].includes(intent.filler)) {
+        logger.info(
+          COMPONENT,
+          `[${txHash}] Intent not fillable: ${intent.filler}`
         );
         return;
       }
@@ -211,7 +220,7 @@ const worker = new Worker(
         return;
       }
 
-      if (config.relayToMatchMaker) {
+      if (intent.maker === BATCHER) {
         await axios.post(`${config.matchMakerBaseUrl}/fills`, {
           preTxs: skipOriginTransaction ? [] : [originTx.signedTransaction],
           fill: {
