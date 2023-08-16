@@ -21,7 +21,7 @@ import { BestFill } from "../types";
 const COMPONENT = "tx-batcher";
 
 cron.schedule(`*/10 * * * * *`, async () => {
-  const keys = await redis.keys("match-maker:best-fill:");
+  const keys = await redis.keys("match-maker:best-fill:*");
   if (keys.length) {
     const bestFills: BestFill[] = await Promise.all(
       keys.map(async (key) => {
@@ -99,7 +99,7 @@ const worker = new Worker(
                 ) intent,
                 address fillContract,
                 bytes fillData
-              ) fills
+              )[] fills
             )
           `,
         ]).encodeFunctionData("batch", [

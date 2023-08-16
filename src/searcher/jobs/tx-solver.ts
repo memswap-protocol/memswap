@@ -13,7 +13,7 @@ import { randomUUID } from "crypto";
 
 import { FILLER, MEMSWAP } from "../../common/addresses";
 import { logger } from "../../common/logger";
-import { bn, isTxIncluded } from "../../common/utils";
+import { bn, isTxIncluded, now } from "../../common/utils";
 import { Intent, IntentOrigin } from "../../common/types";
 import { config } from "../config";
 import { redis } from "../redis";
@@ -42,6 +42,14 @@ const worker = new Worker(
     try {
       const provider = new JsonRpcProvider(config.jsonUrl);
       const searcher = new Wallet(config.searcherPk);
+
+      if (intent.deadline <= now()) {
+        logger.info(
+          COMPONENT,
+          `[${txHash}] Intent expired: ${intent.deadline} <= ${now()}`
+        );
+        return;
+      }
 
       const tx = await provider.getTransaction(txHash);
       logger.info(COMPONENT, `[${tx.hash}] Triggering filling`);

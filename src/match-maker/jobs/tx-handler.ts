@@ -88,11 +88,11 @@ const worker = new Worker(
                     ) intent,
                     address fillContract,
                     bytes fillData
-                  ) fills
+                  )[] fills
                 )
               `,
             ]).encodeFunctionData("batch", [
-              [fill.intent, fill.fillContract, fill.fillData],
+              [[fill.intent, fill.fillContract, fill.fillData]],
             ]),
             value: 0,
             gas: 2000000,

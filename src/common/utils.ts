@@ -5,7 +5,7 @@ import { MEMSWAP } from "./addresses";
 
 export const bn = (value: BigNumberish) => BigNumber.from(value);
 
-export const now = () => Math.floor(Date.now());
+export const now = () => Math.floor(Date.now() / 1000);
 
 export const isTxIncluded = async (txHash: string, provider: Provider) =>
   provider.getTransactionReceipt(txHash).then((tx) => tx && tx.status === 1);
