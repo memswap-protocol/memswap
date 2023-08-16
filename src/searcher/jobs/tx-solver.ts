@@ -11,19 +11,20 @@ import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
-import { FILLER, MEMSWAP, WETH2 } from "../../common/addresses";
+import { FILLER, MEMSWAP } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { bn, isTxIncluded } from "../../common/utils";
 import { Intent, IntentOrigin } from "../../common/types";
 import { config } from "../config";
 import { redis } from "../redis";
+import * as solutions from "../solutions";
 
 const COMPONENT = "tx-solver";
 
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
   defaultJobOptions: {
-    attempts: 10,
+    attempts: 30,
     removeOnComplete: 10000,
     removeOnFail: 10000,
   },
@@ -53,25 +54,7 @@ const worker = new Worker(
         "https://relay-goerli.flashbots.net"
       );
 
-      const { data: swapData } = await axios.get(
-        "https://goerli.api.0x.org/swap/v1/quote",
-        {
-          params: {
-            buyToken: intent.tokenOut,
-            sellToken:
-              intent.tokenIn === WETH2
-                ? "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-                : intent.tokenIn,
-            sellAmount: intent.amountIn,
-          },
-          headers: {
-            "0x-Api-Key": config.zeroExApiKey,
-          },
-        }
-      );
-
       const latestBlock = await provider.getBlock("latest");
-      const chainId = await provider.getNetwork().then((n) => n.chainId);
 
       const blockNumber = latestBlock.number + 1;
       const blockTimestamp = latestBlock.timestamp + 14;
@@ -88,32 +71,44 @@ const worker = new Worker(
           .sub(intent.endAmountOut)
           .div(intent.deadline - blockTimestamp)
       );
-      const actualAmountOut = swapData.buyAmount;
-      if (bn(actualAmountOut).lt(minimumAmountOut)) {
-        logger.error(
-          COMPONENT,
-          `[${
-            tx.hash
-          }] Not enough amount out for maker (actual=${actualAmountOut}, minimum=${minimumAmountOut.toString()})`
-        );
-        return;
+
+      const solution = await solutions.uniswapV3.solve(
+        intent.tokenIn,
+        intent.tokenOut,
+        intent.amountIn,
+        provider
+      );
+      if (!solution) {
+        throw new Error("Could not generate solution");
       }
 
-      const fillerGrossProfitInETH = bn(actualAmountOut)
-        .sub(minimumAmountOut)
-        .mul(parseEther(swapData.buyTokenToEthRate))
-        .div(parseEther("1"));
-      const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
-        currentBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
-      );
-      if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
-        logger.error(
-          COMPONENT,
-          `[${
-            tx.hash
-          }] Not enough amount out for filler (profit=${fillerNetProfitInETH.toString()})`
+      if (solution.amountOut && solution.tokenOutToEthRate) {
+        if (bn(solution.amountOut).lt(minimumAmountOut)) {
+          logger.error(
+            COMPONENT,
+            `[${tx.hash}] Not enough amount out for maker (actual=${
+              solution.amountOut
+            }, minimum=${minimumAmountOut.toString()})`
+          );
+          return;
+        }
+
+        const fillerGrossProfitInETH = bn(solution.amountOut)
+          .sub(minimumAmountOut)
+          .mul(parseEther(solution.tokenOutToEthRate))
+          .div(parseEther("1"));
+        const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
+          currentBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
         );
-        return;
+        if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
+          logger.error(
+            COMPONENT,
+            `[${
+              tx.hash
+            }] Not enough amount out for filler (profit=${fillerNetProfitInETH.toString()})`
+          );
+          return;
+        }
       }
 
       const originTx = {
@@ -142,8 +137,8 @@ const worker = new Worker(
       const fillData = new Interface([
         "function fill(address to, bytes data, address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut)",
       ]).encodeFunctionData("fill", [
-        swapData.to,
-        swapData.data,
+        solution.to,
+        solution.data,
         intent.tokenIn,
         intent.amountIn,
         intent.tokenOut,
@@ -181,7 +176,7 @@ const worker = new Worker(
           ]).encodeFunctionData("execute", [intent, fillContract, fillData]),
           type: 2,
           gasLimit,
-          chainId,
+          chainId: await provider.getNetwork().then((n) => n.chainId),
           maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas).toString(),
           maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
         },
