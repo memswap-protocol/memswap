@@ -64,38 +64,8 @@ export const solve = async (
     }
   );
 
-  const iface = new Interface([
-    `function multicall(uint256 deadline, bytes[] calldata data)`,
-    `
-      function exactInputSingle(
-        tuple(
-          address tokenIn,
-          address tokenOut,
-          uint24 fee,
-          address recipient,
-          uint256 amountIn,
-          uint256 amountOutMinimum,
-          uint160 sqrtPriceLimitX96
-        ) params
-      )
-    `,
-  ]);
-
-  try {
-    // Properly handle multicall-wrapping
-    let calldata = route!.methodParameters!.calldata;
-    if (calldata.startsWith(iface.getSighash("multicall"))) {
-      const decodedMulticall = iface.decodeFunctionData("multicall", calldata);
-      for (const data of decodedMulticall.data) {
-        if (data.startsWith(iface.getSighash("exactInputSingle"))) {
-          return {
-            to: route!.methodParameters!.to,
-            data,
-          };
-        }
-      }
-    }
-  } catch {
-    throw new Error("Could not generate compatible route");
-  }
+  return {
+    to: route!.methodParameters!.to,
+    data: route!.methodParameters!.calldata,
+  };
 };
