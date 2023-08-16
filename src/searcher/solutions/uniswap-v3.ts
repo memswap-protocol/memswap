@@ -1,5 +1,6 @@
 import { Interface } from "@ethersproject/abi";
 import { Provider } from "@ethersproject/abstract-provider";
+import { AddressZero } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
 import { Protocol } from "@uniswap/router-sdk";
 import {
@@ -26,7 +27,7 @@ const getToken = async (
   );
 
   const chainId = await provider.getNetwork().then((n) => n.chainId);
-  return address === WETH2
+  return [WETH2, AddressZero].includes(address)
     ? Ether.onChain(chainId)
     : new Token(chainId, address, await contract.decimals());
 };
