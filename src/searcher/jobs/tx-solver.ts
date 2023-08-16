@@ -149,6 +149,10 @@ const worker = new Worker(
           }
         ),
       };
+      const skipOriginTransaction =
+        intentOrigin === "approve" || intentOrigin === "deposit-and-approve"
+          ? await isTxIncluded(tx.hash, provider)
+          : true;
 
       const fillContract = FILLER;
       const fillData = new Interface([
@@ -161,64 +165,6 @@ const worker = new Worker(
         intent.tokenOut,
         minimumAmountOut,
       ]);
-
-      const fillerTx = {
-        signer: searcher,
-        transaction: {
-          from: searcher.address,
-          to: MEMSWAP,
-          value: 0,
-          data: new Interface([
-            `
-              function execute(
-                (
-                  address maker,
-                  address filler,
-                  address tokenIn,
-                  address tokenOut,
-                  address referrer,
-                  uint32 referrerFeeBps,
-                  uint32 referrerSurplusBps,
-                  uint32 deadline,
-                  uint128 amountIn,
-                  uint128 startAmountOut,
-                  uint128 expectedAmountOut,
-                  uint128 endAmountOut,
-                  bytes signature
-                ) intent,
-                address fillContract,
-                bytes fillData
-              )
-            `,
-          ]).encodeFunctionData("execute", [intent, fillContract, fillData]),
-          type: 2,
-          gasLimit,
-          chainId: await provider.getNetwork().then((n) => n.chainId),
-          maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas).toString(),
-          maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
-        },
-      };
-
-      const skipOriginTransaction =
-        intentOrigin === "approve" || intentOrigin === "deposit-and-approve"
-          ? await isTxIncluded(tx.hash, provider)
-          : true;
-      const signedBundle = await flashbotsProvider.signBundle(
-        skipOriginTransaction ? [fillerTx] : [originTx, fillerTx]
-      );
-
-      const simulationResult: { results: [{ error?: string }] } =
-        (await flashbotsProvider.simulate(signedBundle, blockNumber)) as any;
-      if (simulationResult.results.some((r) => r.error)) {
-        logger.error(
-          COMPONENT,
-          `[${tx.hash}] Simulation failed: ${JSON.stringify({
-            simulationResult,
-            fillerTx,
-          })}`
-        );
-        return;
-      }
 
       if (intent.maker === BATCHER) {
         await axios.post(`${config.matchMakerBaseUrl}/fills`, {
@@ -235,6 +181,60 @@ const worker = new Worker(
           `[${tx.hash}] Successfully relayed to match-maker`
         );
       } else {
+        const fillerTx = {
+          signer: searcher,
+          transaction: {
+            from: searcher.address,
+            to: MEMSWAP,
+            value: 0,
+            data: new Interface([
+              `
+                function execute(
+                  (
+                    address maker,
+                    address filler,
+                    address tokenIn,
+                    address tokenOut,
+                    address referrer,
+                    uint32 referrerFeeBps,
+                    uint32 referrerSurplusBps,
+                    uint32 deadline,
+                    uint128 amountIn,
+                    uint128 startAmountOut,
+                    uint128 expectedAmountOut,
+                    uint128 endAmountOut,
+                    bytes signature
+                  ) intent,
+                  address fillContract,
+                  bytes fillData
+                )
+              `,
+            ]).encodeFunctionData("execute", [intent, fillContract, fillData]),
+            type: 2,
+            gasLimit,
+            chainId: await provider.getNetwork().then((n) => n.chainId),
+            maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas).toString(),
+            maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
+          },
+        };
+
+        const signedBundle = await flashbotsProvider.signBundle(
+          skipOriginTransaction ? [fillerTx] : [originTx, fillerTx]
+        );
+
+        const simulationResult: { results: [{ error?: string }] } =
+          (await flashbotsProvider.simulate(signedBundle, blockNumber)) as any;
+        if (simulationResult.results.some((r) => r.error)) {
+          logger.error(
+            COMPONENT,
+            `[${tx.hash}] Simulation failed: ${JSON.stringify({
+              simulationResult,
+              fillerTx,
+            })}`
+          );
+          return;
+        }
+
         logger.info(
           COMPONENT,
           `[${tx.hash}] Trying to send bundle (${
