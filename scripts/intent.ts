@@ -4,7 +4,8 @@ import { JsonRpcProvider } from "@ethersproject/providers";
 import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 
-import { MEMSWAP, WETH2, getEIP712Domain, getEIP712Types } from "./utils";
+import { MEMSWAP, WETH2 } from "../src/common/addresses";
+import { getEIP712Domain, getEIP712Types } from "../src/common/utils";
 
 // Required env variables:
 // - JSON_URL: url for the http provider

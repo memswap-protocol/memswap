@@ -49,9 +49,7 @@ const worker = new Worker(
 
       const flashbotsProvider = await FlashbotsBundleProvider.create(
         provider,
-        new Wallet(
-          "0x2000000000000000000000000000000000000000000000000000000000000000"
-        ),
+        new Wallet(config.flashbotsSignerPk),
         "https://relay-goerli.flashbots.net"
       );
 
@@ -67,7 +65,7 @@ const worker = new Worker(
             sellAmount: intent.amountIn,
           },
           headers: {
-            "0x-Api-Key": "e519f152-3749-49ea-a8f3-2964bb0f90ac",
+            "0x-Api-Key": config.zeroExApiKey,
           },
         }
       );

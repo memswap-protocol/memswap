@@ -119,9 +119,7 @@ const worker = new Worker(
 
       const flashbotsProvider = await FlashbotsBundleProvider.create(
         provider,
-        new Wallet(
-          "0x2000000000000000000000000000000000000000000000000000000000000000"
-        ),
+        new Wallet(config.flashbotsSignerPk),
         "https://relay-goerli.flashbots.net"
       );
 
