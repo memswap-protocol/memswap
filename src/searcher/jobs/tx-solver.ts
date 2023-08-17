@@ -89,7 +89,7 @@ const worker = new Worker(
 
       // TODO: Compute both of these dynamically
       const maxPriorityFeePerGas = parseUnits("10", "gwei");
-      const gasLimit = 500000;
+      const gasLimit = 1000000;
 
       const minimumAmountOut = bn(intent.startAmountOut).sub(
         bn(intent.startAmountOut)
