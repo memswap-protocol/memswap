@@ -12,7 +12,7 @@ import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
-import { BATCHER, FILLER, MEMSWAP } from "../../common/addresses";
+import { BATCHER, FILLER, MEMSWAP, WETH, WETH2 } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { bn, isTxIncluded, now } from "../../common/utils";
 import { Intent, IntentOrigin } from "../../common/types";
@@ -43,6 +43,14 @@ const worker = new Worker(
     try {
       const provider = new JsonRpcProvider(config.jsonUrl);
       const searcher = new Wallet(config.searcherPk);
+
+      if (
+        (intent.tokenIn === WETH2 && intent.tokenOut === WETH) ||
+        (intent.tokenIn === WETH && intent.tokenOut === AddressZero)
+      ) {
+        logger.info(COMPONENT, `[${txHash}] Attempted to wrap / unwrap WETH`);
+        return;
+      }
 
       if (intent.deadline <= now()) {
         logger.info(
@@ -89,11 +97,10 @@ const worker = new Worker(
           .div(intent.deadline - blockTimestamp)
       );
 
-      const solution = await solutions.uniswapV3.solve(
+      const solution = await solutions.zeroEx.solve(
         intent.tokenIn,
         intent.tokenOut,
-        intent.amountIn,
-        provider
+        intent.amountIn
       );
       if (!solution) {
         throw new Error("Could not generate solution");
@@ -273,7 +280,9 @@ const worker = new Worker(
     } catch (error: any) {
       logger.error(
         COMPONENT,
-        `Job failed: ${error.response?.data ? error.response.data : error}`
+        `Job failed: ${error.response?.data ? error.response.data : error} (${
+          error.stack
+        })`
       );
       throw error;
     }

@@ -117,8 +117,8 @@ const worker = new Worker(
       if (intent) {
         await txSolver.addToQueue(txHash, intent, intentOrigin);
       }
-    } catch (error) {
-      logger.error(COMPONENT, `Job failed: ${error}`);
+    } catch (error: any) {
+      logger.error(COMPONENT, `Job failed: ${error} (${error.stack})`);
       throw error;
     }
   },
