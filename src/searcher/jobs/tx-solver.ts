@@ -239,7 +239,9 @@ const worker = new Worker(
               fillerTx,
             })}`
           );
-          return;
+
+          // We retry jobs for which the simulation failed
+          throw new Error("Simulation failed");
         }
 
         logger.info(
