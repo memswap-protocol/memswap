@@ -156,14 +156,14 @@ contract Memswap is ReentrancyGuard {
         emit IntentPosted();
     }
 
-    function validate(Intent[] calldata intents) external nonReentrant {
+    function validate(Intent[] calldata intents) external {
         uint256 length = intents.length;
         for (uint256 i; i < length; ) {
             Intent calldata intent = intents[i];
 
             bytes32 intentHash = getIntentHash(intent);
-            _validateIntent(intentHash, intent.maker, intent.signature);
 
+            _validateIntent(intentHash, intent.maker, intent.signature);
             emit IntentValidated(intentHash);
 
             unchecked {
@@ -181,6 +181,11 @@ contract Memswap is ReentrancyGuard {
             }
 
             bytes32 intentHash = getIntentHash(intent);
+            IntentStatus memory status = intentStatus[intentHash];
+            status.isValidated = false;
+            status.isCancelled = true;
+
+            intentStatus[intentHash] = status;
             emit IntentCancelled(intentHash);
 
             unchecked {
@@ -220,15 +225,10 @@ contract Memswap is ReentrancyGuard {
         bytes calldata signature
     ) external nonReentrant {
         bytes32 intentHash = getIntentHash(intent);
-        bytes32 authorizationHash = keccak256(
-            abi.encode(
-                AUTHORIZATION_TYPEHASH,
-                intentHash,
-                msg.sender,
-                auth.maximumAmount,
-                auth.blockDeadline,
-                auth.isPartiallyFillable
-            )
+        bytes32 authorizationHash = getAuthorizationHash(
+            auth,
+            intentHash,
+            msg.sender
         );
 
         bytes32 digest = _getEIP712Hash(authorizationHash);
@@ -245,6 +245,23 @@ contract Memswap is ReentrancyGuard {
     }
 
     // View methods
+
+    function getAuthorizationHash(
+        Authorization memory auth,
+        bytes32 intentHash,
+        address authorizedFiller
+    ) public view returns (bytes32 authorizationHash) {
+        authorizationHash = keccak256(
+            abi.encode(
+                AUTHORIZATION_TYPEHASH,
+                intentHash,
+                authorizedFiller,
+                auth.maximumAmount,
+                auth.blockDeadline,
+                auth.isPartiallyFillable
+            )
+        );
+    }
 
     function getIntentHash(
         Intent memory intent
@@ -436,6 +453,8 @@ contract Memswap is ReentrancyGuard {
             revert UnsuccessfullCall();
         }
     }
+
+    // Copied from Seaport's source code
 
     function _verifySignature(
         bytes32 intentHash,

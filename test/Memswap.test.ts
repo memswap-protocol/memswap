@@ -226,7 +226,7 @@ describe("Memswap", async () => {
     const amount = bn(intent.startAmountOut).sub(
       bn(intent.startAmountOut)
         .sub(intent.endAmountOut)
-        .div(endTime - startTime)
+        .div(endTime - startTime ?? 1)
     );
 
     const makerBalanceBefore =
@@ -302,7 +302,7 @@ describe("Memswap", async () => {
 
   const RUNS = 30;
   for (let i = 0; i < RUNS; i++) {
-    it(`Basic filling with random values (run ${i})`, async () => test());
+    it(`Fill random values (run ${i})`, async () => test());
   }
 
   it("Fill with on-chain authorization", async () => {
@@ -586,5 +586,80 @@ describe("Memswap", async () => {
         authSignature
       );
     }
+  });
+
+  it("Validation", async () => {
+    const intent = {
+      tokenIn: token0.address,
+      tokenOut: token1.address,
+      maker: alice.address,
+      filler: AddressZero,
+      referrer: AddressZero,
+      referrerFeeBps: 0,
+      referrerSurplusBps: 0,
+      deadline: (await getCurrentTimestamp()) + 60,
+      isPartiallyFillable: true,
+      amountIn: ethers.utils.parseEther("0.5"),
+      startAmountOut: ethers.utils.parseEther("0.3"),
+      expectedAmountOut: ethers.utils.parseEther("0.3"),
+      endAmountOut: ethers.utils.parseEther("0.3"),
+      signature: "0x",
+    };
+
+    await token0.connect(alice).mint(intent.amountIn);
+    await token0.connect(alice).approve(memswap.address, intent.amountIn);
+
+    await expect(memswap.connect(bob).validate([intent])).to.be.revertedWith(
+      "InvalidSignature"
+    );
+    await memswap.connect(alice).validate([intent]);
+
+    await memswap.connect(carol).solve(intent, {
+      to: filler.address,
+      data: filler.interface.encodeFunctionData("fill", [
+        intent.tokenOut,
+        intent.startAmountOut,
+      ]),
+      amount: intent.amountIn,
+    });
+  });
+
+  it("Cancellation", async () => {
+    const intent = {
+      tokenIn: token0.address,
+      tokenOut: token1.address,
+      maker: alice.address,
+      filler: AddressZero,
+      referrer: AddressZero,
+      referrerFeeBps: 0,
+      referrerSurplusBps: 0,
+      deadline: (await getCurrentTimestamp()) + 60,
+      isPartiallyFillable: true,
+      amountIn: ethers.utils.parseEther("0.5"),
+      startAmountOut: ethers.utils.parseEther("0.3"),
+      expectedAmountOut: ethers.utils.parseEther("0.3"),
+      endAmountOut: ethers.utils.parseEther("0.3"),
+      signature: "0x",
+    };
+    (intent as any).signature = await signIntent(alice, intent);
+
+    await token0.connect(alice).mint(intent.amountIn);
+    await token0.connect(alice).approve(memswap.address, intent.amountIn);
+
+    await expect(memswap.connect(bob).cancel([intent])).to.be.revertedWith(
+      "Unauthorized"
+    );
+    await memswap.connect(alice).cancel([intent]);
+
+    await expect(
+      memswap.connect(carol).solve(intent, {
+        to: filler.address,
+        data: filler.interface.encodeFunctionData("fill", [
+          intent.tokenOut,
+          intent.startAmountOut,
+        ]),
+        amount: intent.amountIn,
+      })
+    ).to.be.revertedWith("IntentIsCancelled");
   });
 });
