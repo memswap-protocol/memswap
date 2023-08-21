@@ -51,6 +51,9 @@ contract Memswap is ReentrancyGuard {
 
     // --- Errors ---
 
+    error AuthorizationIsExpired();
+    error AuthorizationIsInsufficient();
+    error AuthorizationIsNotPartiallyFillable();
     error IntentIsCancelled();
     error IntentIsExpired();
     error IntentIsFilled();
@@ -63,6 +66,7 @@ contract Memswap is ReentrancyGuard {
     // --- Fields ---
 
     bytes32 public immutable DOMAIN_SEPARATOR;
+    bytes32 public immutable AUTHORIZATION_TYPEHASH;
     bytes32 public immutable INTENT_TYPEHASH;
 
     mapping(bytes32 => IntentStatus) public intentStatus;
@@ -90,6 +94,18 @@ contract Memswap is ReentrancyGuard {
                 keccak256("1.0"),
                 chainId,
                 address(this)
+            )
+        );
+
+        AUTHORIZATION_TYPEHASH = keccak256(
+            abi.encodePacked(
+                "Authorization(",
+                "bytes32 intentHash,",
+                "address authorizedFiller,",
+                "uint128 maximumAmount,",
+                "uint32 blockDeadline,",
+                "bool isPartiallyFillable",
+                ")"
             )
         );
 
@@ -193,16 +209,7 @@ contract Memswap is ReentrancyGuard {
         bytes32 authId = keccak256(abi.encodePacked(intentHash, msg.sender));
         Authorization memory auth = authorization[authId];
 
-        if (auth.blockDeadline < block.number) {
-            revert Unauthorized();
-        }
-        if (auth.maximumAmount < fill.amount) {
-            revert Unauthorized();
-        }
-        if (!auth.isPartiallyFillable && auth.maximumAmount != fill.amount) {
-            revert Unauthorized();
-        }
-
+        _checkAuthorization(auth, fill.amount);
         _solve(intent, fill);
     }
 
@@ -213,9 +220,9 @@ contract Memswap is ReentrancyGuard {
         bytes calldata signature
     ) external nonReentrant {
         bytes32 intentHash = getIntentHash(intent);
-
-        bytes32 digest = keccak256(
-            abi.encodePacked(
+        bytes32 authorizationHash = keccak256(
+            abi.encode(
+                AUTHORIZATION_TYPEHASH,
                 intentHash,
                 msg.sender,
                 auth.maximumAmount,
@@ -223,6 +230,8 @@ contract Memswap is ReentrancyGuard {
                 auth.isPartiallyFillable
             )
         );
+
+        bytes32 digest = _getEIP712Hash(authorizationHash);
         _assertValidSignature(
             intent.filler,
             digest,
@@ -231,16 +240,7 @@ contract Memswap is ReentrancyGuard {
             signature
         );
 
-        if (auth.blockDeadline < block.number) {
-            revert Unauthorized();
-        }
-        if (auth.maximumAmount < fill.amount) {
-            revert Unauthorized();
-        }
-        if (!auth.isPartiallyFillable && auth.maximumAmount != fill.amount) {
-            revert Unauthorized();
-        }
-
+        _checkAuthorization(auth, fill.amount);
         _solve(intent, fill);
     }
 
@@ -384,6 +384,21 @@ contract Memswap is ReentrancyGuard {
         }
 
         emit IntentSolved(intentHash, intent, fill);
+    }
+
+    function _checkAuthorization(
+        Authorization memory auth,
+        uint128 fillAmount
+    ) internal view {
+        if (auth.blockDeadline < block.number) {
+            revert AuthorizationIsExpired();
+        }
+        if (auth.maximumAmount < fillAmount) {
+            revert AuthorizationIsInsufficient();
+        }
+        if (!auth.isPartiallyFillable && auth.maximumAmount != fillAmount) {
+            revert AuthorizationIsNotPartiallyFillable();
+        }
     }
 
     function _getEIP712Hash(

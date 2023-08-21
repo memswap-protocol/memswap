@@ -1,6 +1,8 @@
 import { Interface } from "@ethersproject/abi";
+import { BigNumberish } from "@ethersproject/bignumber";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
+import { keccak256 } from "@ethersproject/solidity";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
@@ -23,6 +25,7 @@ describe("Memswap", async () => {
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
   let carol: SignerWithAddress;
+  let dan: SignerWithAddress;
 
   let memswap: Contract;
   let weth: Contract;
@@ -33,7 +36,7 @@ describe("Memswap", async () => {
   beforeEach(async () => {
     chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
 
-    [deployer, alice, bob, carol] = await ethers.getSigners();
+    [deployer, alice, bob, carol, dan] = await ethers.getSigners();
 
     memswap = await ethers
       .getContractFactory("Memswap")
@@ -126,6 +129,42 @@ describe("Memswap", async () => {
     );
   };
 
+  const signAuthorization = async (signer: SignerWithAddress, auth: any) => {
+    return signer._signTypedData(
+      {
+        name: "Memswap",
+        version: "1.0",
+        chainId,
+        verifyingContract: memswap.address,
+      },
+      {
+        Authorization: [
+          {
+            name: "intentHash",
+            type: "bytes32",
+          },
+          {
+            name: "authorizedFiller",
+            type: "address",
+          },
+          {
+            name: "maximumAmount",
+            type: "uint128",
+          },
+          {
+            name: "blockDeadline",
+            type: "uint32",
+          },
+          {
+            name: "isPartiallyFillable",
+            type: "bool",
+          },
+        ],
+      },
+      auth
+    );
+  };
+
   const test = async () => {
     // Generate an intent with random values
     const intent = {
@@ -144,6 +183,7 @@ describe("Memswap", async () => {
       endAmountOut: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
     };
 
+    // Generate a random fill amount (for partially-fillable intents)
     const fillAmount = intent.isPartiallyFillable
       ? ethers.utils.parseEther(
           getRandomFloat(
@@ -234,6 +274,7 @@ describe("Memswap", async () => {
         ? await ethers.provider.getBalance(intent.referrer)
         : await token1.balanceOf(intent.referrer);
 
+    // Compute referrer fees
     const referrerFee =
       intent.referrer === AddressZero
         ? bn(0)
@@ -274,7 +315,7 @@ describe("Memswap", async () => {
       referrerFeeBps: 0,
       referrerSurplusBps: 0,
       deadline: (await getCurrentTimestamp()) + 60,
-      isPartiallyFillable: false,
+      isPartiallyFillable: true,
       amountIn: ethers.utils.parseEther("0.5"),
       startAmountOut: ethers.utils.parseEther("0.3"),
       expectedAmountOut: ethers.utils.parseEther("0.3"),
@@ -296,22 +337,254 @@ describe("Memswap", async () => {
       })
     ).to.be.revertedWith("Unauthorized");
 
-    // Authorize
-    await memswap.connect(bob).authorize(intent, carol.address, {
-      maximumAmount: intent.amountIn,
-      blockDeadline: await ethers.provider
-        .getBlock("latest")
-        .then((b) => b.number + 2),
-      isPartiallyFillable: false,
-    });
+    // Authorization must come from the intent filler
+    {
+      await expect(
+        memswap.connect(dan).authorize(intent, carol.address, {
+          maximumAmount: intent.amountIn,
+          blockDeadline: await ethers.provider
+            .getBlock("latest")
+            .then((b) => b.number + 2),
+          isPartiallyFillable: true,
+        })
+      ).to.be.revertedWith("Unauthorized");
+    }
 
-    await memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
-      to: filler.address,
-      data: filler.interface.encodeFunctionData("fill", [
-        intent.tokenOut,
-        intent.startAmountOut,
-      ]),
-      amount: intent.amountIn,
-    });
+    // Non-partially-fillable authorizations cannot be partially filled
+    {
+      const maximumAmount = ethers.utils.parseEther("0.4");
+      await memswap.connect(bob).authorize(intent, carol.address, {
+        maximumAmount,
+        blockDeadline: await ethers.provider
+          .getBlock("latest")
+          .then((b) => b.number + 2),
+        isPartiallyFillable: false,
+      });
+
+      await expect(
+        memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
+          to: filler.address,
+          data: filler.interface.encodeFunctionData("fill", [
+            intent.tokenOut,
+            intent.startAmountOut,
+          ]),
+          amount: ethers.utils.parseEther("0.3"),
+        })
+      ).to.be.revertedWith("AuthorizationIsNotPartiallyFillable");
+    }
+
+    // Cannot fill more than the authorization maximum amount
+    {
+      const maximumAmount = ethers.utils.parseEther("0.3");
+      await memswap.connect(bob).authorize(intent, carol.address, {
+        maximumAmount,
+        blockDeadline: await ethers.provider
+          .getBlock("latest")
+          .then((b) => b.number + 2),
+        isPartiallyFillable: true,
+      });
+
+      await expect(
+        memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
+          to: filler.address,
+          data: filler.interface.encodeFunctionData("fill", [
+            intent.tokenOut,
+            intent.startAmountOut,
+          ]),
+          amount: ethers.utils.parseEther("0.4"),
+        })
+      ).to.be.revertedWith("AuthorizationIsInsufficient");
+    }
+
+    // Cannot use expired authorization
+    {
+      const maximumAmount = ethers.utils.parseEther("0.3");
+      await memswap.connect(bob).authorize(intent, carol.address, {
+        maximumAmount,
+        blockDeadline: await ethers.provider
+          .getBlock("latest")
+          .then((b) => b.number + 1),
+        isPartiallyFillable: false,
+      });
+
+      await expect(
+        memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
+          to: filler.address,
+          data: filler.interface.encodeFunctionData("fill", [
+            intent.tokenOut,
+            intent.startAmountOut,
+          ]),
+          amount: maximumAmount,
+        })
+      ).to.be.revertedWith("AuthorizationIsExpired");
+    }
+
+    // Successful fill
+    {
+      const maximumAmount = ethers.utils.parseEther("0.3");
+      await memswap.connect(bob).authorize(intent, carol.address, {
+        maximumAmount,
+        blockDeadline: await ethers.provider
+          .getBlock("latest")
+          .then((b) => b.number + 2),
+        isPartiallyFillable: false,
+      });
+
+      await memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
+        to: filler.address,
+        data: filler.interface.encodeFunctionData("fill", [
+          intent.tokenOut,
+          intent.startAmountOut,
+        ]),
+        amount: maximumAmount,
+      });
+    }
+  });
+
+  it("Fill with signature authorization", async () => {
+    const intent = {
+      tokenIn: token0.address,
+      tokenOut: token1.address,
+      maker: alice.address,
+      filler: bob.address,
+      referrer: AddressZero,
+      referrerFeeBps: 0,
+      referrerSurplusBps: 0,
+      deadline: (await getCurrentTimestamp()) + 60,
+      isPartiallyFillable: true,
+      amountIn: ethers.utils.parseEther("0.5"),
+      startAmountOut: ethers.utils.parseEther("0.3"),
+      expectedAmountOut: ethers.utils.parseEther("0.3"),
+      endAmountOut: ethers.utils.parseEther("0.3"),
+    };
+    (intent as any).signature = await signIntent(alice, intent);
+
+    await token0.connect(alice).mint(intent.amountIn);
+    await token0.connect(alice).approve(memswap.address, intent.amountIn);
+
+    await expect(
+      memswap.connect(carol).solve(intent, {
+        to: filler.address,
+        data: filler.interface.encodeFunctionData("fill", [
+          intent.tokenOut,
+          intent.startAmountOut,
+        ]),
+        amount: intent.amountIn,
+      })
+    ).to.be.revertedWith("Unauthorized");
+
+    const _signAuthorization = async (
+      signer: SignerWithAddress,
+      intent: any,
+      authorizedFiller: string,
+      auth: {
+        maximumAmount: BigNumberish;
+        blockDeadline: number;
+        isPartiallyFillable: boolean;
+      }
+    ) => {
+      return signAuthorization(signer, {
+        intentHash: await memswap.getIntentHash(intent),
+        authorizedFiller,
+        ...auth,
+      });
+    };
+
+    // Authorization must come from the intent filler
+    {
+      const auth = {
+        maximumAmount: ethers.utils.parseEther("0.3"),
+        blockDeadline: await ethers.provider
+          .getBlock("latest")
+          .then((b) => b.number + 1),
+        isPartiallyFillable: false,
+      };
+      const authSignature = await _signAuthorization(
+        dan,
+        intent,
+        carol.address,
+        auth
+      );
+
+      await expect(
+        memswap.connect(carol).solveWithSignatureAuthorizationCheck(
+          intent,
+          {
+            to: filler.address,
+            data: filler.interface.encodeFunctionData("fill", [
+              intent.tokenOut,
+              intent.startAmountOut,
+            ]),
+            amount: ethers.utils.parseEther("0.3"),
+          },
+          auth,
+          authSignature
+        )
+      ).to.be.revertedWith("InvalidSignature");
+    }
+
+    // Authorization must be given to filler
+    {
+      const auth = {
+        maximumAmount: ethers.utils.parseEther("0.3"),
+        blockDeadline: await ethers.provider
+          .getBlock("latest")
+          .then((b) => b.number + 1),
+        isPartiallyFillable: false,
+      };
+      const authSignature = await _signAuthorization(
+        bob,
+        intent,
+        alice.address,
+        auth
+      );
+
+      await expect(
+        memswap.connect(carol).solveWithSignatureAuthorizationCheck(
+          intent,
+          {
+            to: filler.address,
+            data: filler.interface.encodeFunctionData("fill", [
+              intent.tokenOut,
+              intent.startAmountOut,
+            ]),
+            amount: ethers.utils.parseEther("0.3"),
+          },
+          auth,
+          authSignature
+        )
+      ).to.be.revertedWith("InvalidSignature");
+    }
+
+    // Successful fill
+    {
+      const auth = {
+        maximumAmount: ethers.utils.parseEther("0.3"),
+        blockDeadline: await ethers.provider
+          .getBlock("latest")
+          .then((b) => b.number + 1),
+        isPartiallyFillable: false,
+      };
+      const authSignature = await _signAuthorization(
+        bob,
+        intent,
+        carol.address,
+        auth
+      );
+
+      await memswap.connect(carol).solveWithSignatureAuthorizationCheck(
+        intent,
+        {
+          to: filler.address,
+          data: filler.interface.encodeFunctionData("fill", [
+            intent.tokenOut,
+            intent.startAmountOut,
+          ]),
+          amount: ethers.utils.parseEther("0.3"),
+        },
+        auth,
+        authSignature
+      );
+    }
   });
 });
