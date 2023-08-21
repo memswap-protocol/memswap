@@ -1,5 +1,4 @@
 import { Interface } from "@ethersproject/abi";
-import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
@@ -7,23 +6,13 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-// Utilities
-
-const bn = (value: BigNumberish) => BigNumber.from(value);
-
-const getCurrentTimestamp = async () =>
-  ethers.provider.getBlock("latest").then((b) => b!.timestamp);
-
-const getRandomBoolean = () => Math.random() < 0.5;
-
-const getRandomInteger = (min: number, max: number) => {
-  min = Math.ceil(min);
-  max = Math.floor(max);
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-};
-
-const getRandomFloat = (min: number, max: number) =>
-  (Math.random() * (max - min) + min).toFixed(6);
+import {
+  bn,
+  getCurrentTimestamp,
+  getRandomBoolean,
+  getRandomFloat,
+  getRandomInteger,
+} from "./utils";
 
 // Tests
 
@@ -80,19 +69,19 @@ describe("Memswap", async () => {
       {
         Intent: [
           {
-            name: "maker",
-            type: "address",
-          },
-          {
-            name: "filler",
-            type: "address",
-          },
-          {
             name: "tokenIn",
             type: "address",
           },
           {
             name: "tokenOut",
+            type: "address",
+          },
+          {
+            name: "maker",
+            type: "address",
+          },
+          {
+            name: "filler",
             type: "address",
           },
           {
@@ -110,6 +99,10 @@ describe("Memswap", async () => {
           {
             name: "deadline",
             type: "uint32",
+          },
+          {
+            name: "isPartiallyFillable",
+            type: "bool",
           },
           {
             name: "amountIn",
@@ -136,19 +129,29 @@ describe("Memswap", async () => {
   const test = async () => {
     // Generate an intent with random values
     const intent = {
-      maker: alice.address,
-      filler: AddressZero,
       tokenIn: getRandomBoolean() ? weth.address : token0.address,
       tokenOut: getRandomBoolean() ? AddressZero : token1.address,
+      maker: alice.address,
+      filler: AddressZero,
       referrer: getRandomBoolean() ? AddressZero : carol.address,
       referrerFeeBps: getRandomInteger(0, 1000),
       referrerSurplusBps: getRandomInteger(0, 1000),
       deadline: (await getCurrentTimestamp()) + getRandomInteger(1, 1000),
+      isPartiallyFillable: getRandomBoolean(),
       amountIn: ethers.utils.parseEther(getRandomFloat(0.01, 1)),
       startAmountOut: ethers.utils.parseEther(getRandomFloat(0.5, 1)),
       expectedAmountOut: ethers.utils.parseEther(getRandomFloat(0.5, 0.7)),
       endAmountOut: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
     };
+
+    const fillAmount = intent.isPartiallyFillable
+      ? ethers.utils.parseEther(
+          getRandomFloat(
+            0.01,
+            Number(ethers.utils.formatEther(intent.amountIn))
+          )
+        )
+      : intent.amountIn;
 
     if (intent.tokenIn === weth.address) {
       // Deposit and approve
@@ -158,14 +161,14 @@ describe("Memswap", async () => {
           "function depositAndApprove(address spender, uint256 amount)",
         ]).encodeFunctionData("depositAndApprove", [
           memswap.address,
-          intent.amountIn,
+          fillAmount,
         ]),
-        value: intent.amountIn,
+        value: fillAmount,
       });
     } else {
       // Mint and approve
-      await token0.connect(alice).mint(intent.amountIn);
-      await token0.connect(alice).approve(memswap.address, intent.amountIn);
+      await token0.connect(alice).mint(fillAmount);
+      await token0.connect(alice).approve(memswap.address, fillAmount);
     }
 
     // Sign the intent
@@ -201,29 +204,25 @@ describe("Memswap", async () => {
     );
     if (intent.deadline < startTime) {
       await expect(
-        memswap
-          .connect(bob)
-          .execute(
-            intent,
-            filler.address,
-            filler.interface.encodeFunctionData("fill", [
-              intent.tokenOut,
-              amount.add(positiveSlippage),
-            ])
-          )
-      ).to.be.revertedWith("IntentExpired");
-      return;
-    } else {
-      await memswap
-        .connect(bob)
-        .execute(
-          intent,
-          filler.address,
-          filler.interface.encodeFunctionData("fill", [
+        memswap.connect(bob).solve(intent, {
+          to: filler.address,
+          data: filler.interface.encodeFunctionData("fill", [
             intent.tokenOut,
             amount.add(positiveSlippage),
-          ])
-        );
+          ]),
+          amount: fillAmount,
+        })
+      ).to.be.revertedWith("IntentIsExpired");
+      return;
+    } else {
+      await memswap.connect(bob).solve(intent, {
+        to: filler.address,
+        data: filler.interface.encodeFunctionData("fill", [
+          intent.tokenOut,
+          amount.add(positiveSlippage),
+        ]),
+        amount: fillAmount,
+      });
     }
 
     const makerBalanceAfter =
@@ -265,16 +264,17 @@ describe("Memswap", async () => {
     it(`Basic filling with random values (run ${i})`, async () => test());
   }
 
-  it("Exclusive filler", async () => {
+  it("Fill with on-chain authorization", async () => {
     const intent = {
-      maker: alice.address,
-      filler: bob.address,
       tokenIn: token0.address,
       tokenOut: token1.address,
+      maker: alice.address,
+      filler: bob.address,
       referrer: AddressZero,
       referrerFeeBps: 0,
       referrerSurplusBps: 0,
       deadline: (await getCurrentTimestamp()) + 60,
+      isPartiallyFillable: false,
       amountIn: ethers.utils.parseEther("0.5"),
       startAmountOut: ethers.utils.parseEther("0.3"),
       expectedAmountOut: ethers.utils.parseEther("0.3"),
@@ -286,32 +286,32 @@ describe("Memswap", async () => {
     await token0.connect(alice).approve(memswap.address, intent.amountIn);
 
     await expect(
-      memswap
-        .connect(carol)
-        .execute(
-          intent,
-          filler.address,
-          filler.interface.encodeFunctionData("fill", [
-            intent.tokenOut,
-            intent.startAmountOut,
-          ])
-        )
-    ).to.be.revertedWith("Unauthorized");
-
-    // Delegate
-    await memswap
-      .connect(bob)
-      .delegate(carol.address, await memswap.getIntentHash(intent));
-
-    await memswap
-      .connect(carol)
-      .execute(
-        intent,
-        filler.address,
-        filler.interface.encodeFunctionData("fill", [
+      memswap.connect(carol).solve(intent, {
+        to: filler.address,
+        data: filler.interface.encodeFunctionData("fill", [
           intent.tokenOut,
           intent.startAmountOut,
-        ])
-      );
+        ]),
+        amount: intent.amountIn,
+      })
+    ).to.be.revertedWith("Unauthorized");
+
+    // Authorize
+    await memswap.connect(bob).authorize(intent, carol.address, {
+      maximumAmount: intent.amountIn,
+      blockDeadline: await ethers.provider
+        .getBlock("latest")
+        .then((b) => b.number + 2),
+      isPartiallyFillable: false,
+    });
+
+    await memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
+      to: filler.address,
+      data: filler.interface.encodeFunctionData("fill", [
+        intent.tokenOut,
+        intent.startAmountOut,
+      ]),
+      amount: intent.amountIn,
+    });
   });
 });
