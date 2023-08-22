@@ -8,11 +8,18 @@ import {
   FlashbotsBundleProvider,
   FlashbotsBundleResolution,
 } from "@flashbots/ethers-provider-bundle";
+// import * as txSimulator from "@georgeroman/evm-tx-simulator";
 import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
-import { BATCHER, FILLER, MEMSWAP, WETH, WETH2 } from "../../common/addresses";
+import {
+  BATCHER,
+  FILLER,
+  MEMSWAP,
+  MEMSWAP_WETH,
+  REGULAR_WETH,
+} from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { bn, isTxIncluded, now } from "../../common/utils";
 import { Intent, IntentOrigin } from "../../common/types";
@@ -45,8 +52,8 @@ const worker = new Worker(
       const searcher = new Wallet(config.searcherPk);
 
       if (
-        (intent.tokenIn === WETH2 && intent.tokenOut === WETH) ||
-        (intent.tokenIn === WETH && intent.tokenOut === AddressZero)
+        (intent.tokenIn === MEMSWAP_WETH && intent.tokenOut === REGULAR_WETH) ||
+        (intent.tokenIn === REGULAR_WETH && intent.tokenOut === AddressZero)
       ) {
         logger.info(COMPONENT, `[${txHash}] Attempted to wrap / unwrap WETH`);
         return;
@@ -60,7 +67,7 @@ const worker = new Worker(
         return;
       }
 
-      if (![AddressZero, FILLER, BATCHER].includes(intent.filler)) {
+      if (![AddressZero, FILLER].includes(intent.filler)) {
         logger.info(
           COMPONENT,
           `[${txHash}] Intent not fillable: ${intent.filler}`
@@ -161,25 +168,27 @@ const worker = new Worker(
           ? await isTxIncluded(tx.hash, provider)
           : true;
 
-      const fillContract = FILLER;
-      const fillData = new Interface([
-        "function fill(address to, bytes data, address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut)",
-      ]).encodeFunctionData("fill", [
-        solution.to,
-        solution.data,
-        intent.tokenIn,
-        intent.amountIn,
-        intent.tokenOut,
-        minimumAmountOut,
-      ]);
+      const fill = {
+        to: FILLER,
+        data: new Interface([
+          "function fill(address to, bytes data, address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut)",
+        ]).encodeFunctionData("fill", [
+          solution.to,
+          solution.data,
+          intent.tokenIn,
+          intent.amountIn,
+          intent.tokenOut,
+          minimumAmountOut,
+        ]),
+        amount: intent.amountIn,
+      };
 
-      if (intent.maker === BATCHER) {
+      if (intent.filler === BATCHER) {
         await axios.post(`${config.matchMakerBaseUrl}/fills`, {
           preTxs: skipOriginTransaction ? [] : [originTx.signedTransaction],
           fill: {
             intent,
-            fillContract,
-            fillData,
+            fill,
           },
         });
 
@@ -196,27 +205,31 @@ const worker = new Worker(
             value: 0,
             data: new Interface([
               `
-                function execute(
+                function solve(
                   (
-                    address maker,
-                    address filler,
                     address tokenIn,
                     address tokenOut,
+                    address maker,
+                    address filler,
                     address referrer,
                     uint32 referrerFeeBps,
                     uint32 referrerSurplusBps,
                     uint32 deadline,
+                    bool isPartiallyFillable,
                     uint128 amountIn,
                     uint128 startAmountOut,
                     uint128 expectedAmountOut,
                     uint128 endAmountOut,
                     bytes signature
                   ) intent,
-                  address fillContract,
-                  bytes fillData
+                  (
+                    address to,
+                    bytes data,
+                    uint128 amount
+                  ) fill
                 )
               `,
-            ]).encodeFunctionData("execute", [intent, fillContract, fillData]),
+            ]).encodeFunctionData("solve", [intent, fill]),
             type: 2,
             gasLimit,
             chainId: await provider.getNetwork().then((n) => n.chainId),
@@ -229,6 +242,22 @@ const worker = new Worker(
           skipOriginTransaction ? [fillerTx] : [originTx, fillerTx]
         );
 
+        // // Alternative non-flashbots simulation
+        // if (skipOriginTransaction) {
+        //   await txSimulator.getCallResult(
+        //     {
+        //       from: fillerTx.transaction.from,
+        //       to: fillerTx.transaction.to,
+        //       data: fillerTx.transaction.data,
+        //       value: fillerTx.transaction.value,
+        //       gas: fillerTx.transaction.gasLimit,
+        //       gasPrice: fillerTx.transaction.maxFeePerGas,
+        //     },
+        //     provider
+        //   );
+        // }
+
+        // Flashbots simulation
         const simulationResult: { results: [{ error?: string }] } =
           (await flashbotsProvider.simulate(signedBundle, blockNumber)) as any;
         if (simulationResult.results.some((r) => r.error)) {

@@ -1,12 +1,13 @@
 export type Intent = {
-  maker: string;
-  filler: string;
   tokenIn: string;
   tokenOut: string;
+  maker: string;
+  filler: string;
   referrer: string;
   referrerFeeBps: number;
   referrerSurplusBps: number;
   deadline: number;
+  isPartiallyFillable: boolean;
   amountIn: string;
   startAmountOut: string;
   expectedAmountOut: string;

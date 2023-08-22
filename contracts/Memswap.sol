@@ -227,9 +227,9 @@ contract Memswap is ReentrancyGuard {
     ) external nonReentrant {
         bytes32 intentHash = getIntentHash(intent);
         bytes32 authorizationHash = getAuthorizationHash(
-            auth,
             intentHash,
-            msg.sender
+            msg.sender,
+            auth
         );
 
         bytes32 digest = _getEIP712Hash(authorizationHash);
@@ -248,9 +248,9 @@ contract Memswap is ReentrancyGuard {
     // View methods
 
     function getAuthorizationHash(
-        Authorization memory auth,
         bytes32 intentHash,
-        address authorizedFiller
+        address authorizedFiller,
+        Authorization memory auth
     ) public view returns (bytes32 authorizationHash) {
         authorizationHash = keccak256(
             abi.encode(

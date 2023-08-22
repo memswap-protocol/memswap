@@ -3,7 +3,7 @@ import { JsonRpcProvider, WebSocketProvider } from "@ethersproject/providers";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
-import { MEMSWAP, WETH2 } from "../../common/addresses";
+import { MEMSWAP, MEMSWAP_WETH } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { Intent, IntentOrigin } from "../../common/types";
 import { config } from "../config";
@@ -56,7 +56,7 @@ const worker = new Worker(
         }
       } else if (
         tx.data.startsWith("0x28026ace") &&
-        tx.to?.toLowerCase() === WETH2
+        tx.to?.toLowerCase() === MEMSWAP_WETH
       ) {
         const iface = new Interface([
           "function depositAndApprove(address spender, uint256 amount)",
@@ -85,6 +85,7 @@ const worker = new Worker(
               "uint32",
               "uint32",
               "uint32",
+              "bool",
               "uint128",
               "uint128",
               "uint128",
@@ -95,19 +96,20 @@ const worker = new Worker(
           );
 
           intent = {
-            maker: result[0].toLowerCase(),
-            filler: result[1].toLowerCase(),
-            tokenIn: result[2].toLowerCase(),
-            tokenOut: result[3].toLowerCase(),
+            tokenIn: result[0].toLowerCase(),
+            tokenOut: result[1].toLowerCase(),
+            maker: result[2].toLowerCase(),
+            filler: result[3].toLowerCase(),
             referrer: result[4].toLowerCase(),
             referrerFeeBps: result[5],
             referrerSurplusBps: result[6],
             deadline: result[7],
-            amountIn: result[8].toString(),
-            startAmountOut: result[9].toString(),
-            expectedAmountOut: result[10].toString(),
-            endAmountOut: result[11].toString(),
-            signature: result[12].toLowerCase(),
+            isPartiallyFillable: result[8],
+            amountIn: result[9].toString(),
+            startAmountOut: result[10].toString(),
+            expectedAmountOut: result[11].toString(),
+            endAmountOut: result[12].toString(),
+            signature: result[13].toLowerCase(),
           };
         } catch {
           // Skip errors

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { WETH2 } from "../../common/addresses";
+import { MEMSWAP_WETH } from "../../common/addresses";
 import { config } from "../config";
 import { Solution } from "../types";
 
@@ -15,7 +15,7 @@ export const solve = async (
       params: {
         buyToken: tokenOut,
         sellToken:
-          tokenIn === WETH2
+          tokenIn === MEMSWAP_WETH
             ? "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
             : tokenIn,
         sellAmount: amountIn,

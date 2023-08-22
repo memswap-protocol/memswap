@@ -15,7 +15,7 @@
     "@types/ioredis": "^5.0.0",
     "@types/mocha": "^10.0.1",
     "@types/node-cron": "^3.0.8",
-    "@uniswap/smart-order-router": "^3.15.4",
+    "@uniswap/smart-order-router": "^3.15.14",
     "axios": "^1.4.0",
     "bullmq": "^4.7.2",
     "chai": "^4.3.7",
@@ -33,7 +33,7 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "start-match-maker": "node ./dist/match-maker/index.js",
-    "start-searcher": "node ./dist/searcher/index.js"
+    "start-match-maker": "node ./dist/src/match-maker/index.js",
+    "start-searcher": "node ./dist/src/searcher/index.js"
   }
 }

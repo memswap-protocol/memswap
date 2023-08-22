@@ -1,6 +1,8 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import hre, { ethers } from "hardhat";
 
+import { MEMSWAP, MEMSWAP_WETH } from "../src/common/addresses";
+
 const deployContract = async (
   deployer: SignerWithAddress,
   name: string,
@@ -23,8 +25,6 @@ const deployContract = async (
 
 const main = async () => {
   const [deployer] = await ethers.getSigners();
-
-  deployer;
 };
 
 main()

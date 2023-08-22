@@ -4,7 +4,7 @@ import { JsonRpcProvider } from "@ethersproject/providers";
 import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 
-import { MEMSWAP, WETH2 } from "../src/common/addresses";
+import { MEMSWAP, MEMSWAP_WETH, REGULAR_WETH } from "../src/common/addresses";
 import { getEIP712Domain, getEIP712Types } from "../src/common/utils";
 
 // Required env variables:
@@ -12,8 +12,8 @@ import { getEIP712Domain, getEIP712Types } from "../src/common/utils";
 // - MAKER_PK: private key of the maker
 
 const CURRENCIES = {
-  ETH: WETH2,
-  WETH: "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6",
+  ETH: MEMSWAP_WETH,
+  WETH: REGULAR_WETH,
   USDC: "0x07865c6e87b9f70255377e024ace6630c1eaa37f",
 };
 
@@ -31,10 +31,10 @@ const main = async () => {
 
   // Create intent
   const intent = {
-    maker: maker.address,
-    filler: AddressZero,
     tokenIn,
     tokenOut,
+    maker: maker.address,
+    filler: AddressZero,
     referrer: AddressZero,
     referrerFeeBps: 0,
     referrerSurplusBps: 0,
@@ -42,6 +42,7 @@ const main = async () => {
       .getBlock("latest")
       .then((b) => b!.timestamp + 3600 * 24),
     amountIn,
+    isPartiallyFillable: false,
     startAmountOut: amountOut,
     expectedAmountOut: amountOut,
     endAmountOut: amountOut,
@@ -53,7 +54,8 @@ const main = async () => {
   );
 
   // Generate approval transaction
-  const approveMethod = tokenIn === WETH2 ? "depositAndApprove" : "approve";
+  const approveMethod =
+    tokenIn === MEMSWAP_WETH ? "depositAndApprove" : "approve";
   const data =
     new Interface([
       `function ${approveMethod}(address spender, uint256 amount)`,
@@ -69,6 +71,7 @@ const main = async () => {
           "uint32",
           "uint32",
           "uint32",
+          "bool",
           "uint128",
           "uint128",
           "uint128",
@@ -76,14 +79,15 @@ const main = async () => {
           "bytes",
         ],
         [
-          intent.maker,
-          intent.filler,
           intent.tokenIn,
           intent.tokenOut,
+          intent.maker,
+          intent.filler,
           intent.referrer,
           intent.referrerFeeBps,
           intent.referrerSurplusBps,
           intent.deadline,
+          intent.isPartiallyFillable,
           intent.amountIn,
           intent.startAmountOut,
           intent.expectedAmountOut,

@@ -1,2 +1,2 @@
-export * as uniswapV3 from "./uniswap-v3";
+export * as uniswap from "./uniswap";
 export * as zeroEx from "./zero-ex";

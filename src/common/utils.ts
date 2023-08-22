@@ -20,19 +20,19 @@ export const getEIP712Domain = (chainId: number) => ({
 export const getEIP712Types = () => ({
   Intent: [
     {
-      name: "maker",
-      type: "address",
-    },
-    {
-      name: "filler",
-      type: "address",
-    },
-    {
       name: "tokenIn",
       type: "address",
     },
     {
       name: "tokenOut",
+      type: "address",
+    },
+    {
+      name: "maker",
+      type: "address",
+    },
+    {
+      name: "filler",
       type: "address",
     },
     {
@@ -50,6 +50,10 @@ export const getEIP712Types = () => ({
     {
       name: "deadline",
       type: "uint32",
+    },
+    {
+      name: "isPartiallyFillable",
+      type: "bool",
     },
     {
       name: "amountIn",
