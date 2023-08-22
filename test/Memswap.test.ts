@@ -265,7 +265,8 @@ describe("Memswap", async () => {
     {
       await expect(
         memswap.connect(dan).authorize(intent, carol.address, {
-          maximumAmount: intent.amountIn,
+          maximumAmountIn: intent.amountIn,
+          minimumAmountOut: intent.endAmountOut,
           blockDeadline: await ethers.provider
             .getBlock("latest")
             .then((b) => b.number + 2),
@@ -276,9 +277,10 @@ describe("Memswap", async () => {
 
     // Non-partially-fillable authorizations cannot be partially filled
     {
-      const maximumAmount = ethers.utils.parseEther("0.4");
+      const maximumAmountIn = ethers.utils.parseEther("0.4");
       await memswap.connect(bob).authorize(intent, carol.address, {
-        maximumAmount,
+        maximumAmountIn,
+        minimumAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -299,9 +301,10 @@ describe("Memswap", async () => {
 
     // Cannot fill more than the authorization maximum amount
     {
-      const maximumAmount = ethers.utils.parseEther("0.3");
+      const maximumAmountIn = ethers.utils.parseEther("0.3");
       await memswap.connect(bob).authorize(intent, carol.address, {
-        maximumAmount,
+        maximumAmountIn,
+        minimumAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -322,9 +325,10 @@ describe("Memswap", async () => {
 
     // Cannot use expired authorization
     {
-      const maximumAmount = ethers.utils.parseEther("0.3");
+      const maximumAmountIn = ethers.utils.parseEther("0.3");
       await memswap.connect(bob).authorize(intent, carol.address, {
-        maximumAmount,
+        maximumAmountIn,
+        minimumAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 1),
@@ -338,16 +342,41 @@ describe("Memswap", async () => {
             intent.tokenOut,
             intent.startAmountOut,
           ]),
-          amount: maximumAmount,
+          amount: maximumAmountIn,
         })
       ).to.be.revertedWith("AuthorizationIsExpired");
     }
 
+    // Cannot fill less at a worse rate than authorized
+    {
+      const maximumAmountIn = ethers.utils.parseEther("0.3");
+      await memswap.connect(bob).authorize(intent, carol.address, {
+        maximumAmountIn,
+        minimumAmountOut: intent.startAmountOut,
+        blockDeadline: await ethers.provider
+          .getBlock("latest")
+          .then((b) => b.number + 2),
+        isPartiallyFillable: false,
+      });
+
+      await expect(
+        memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
+          to: filler.address,
+          data: filler.interface.encodeFunctionData("fill", [
+            intent.tokenOut,
+            intent.startAmountOut.sub(1),
+          ]),
+          amount: maximumAmountIn,
+        })
+      ).to.be.revertedWith("InvalidSolution");
+    }
+
     // Successful fill
     {
-      const maximumAmount = ethers.utils.parseEther("0.3");
+      const maximumAmountIn = ethers.utils.parseEther("0.3");
       await memswap.connect(bob).authorize(intent, carol.address, {
-        maximumAmount,
+        maximumAmountIn,
+        minimumAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -360,7 +389,7 @@ describe("Memswap", async () => {
           intent.tokenOut,
           intent.startAmountOut,
         ]),
-        amount: maximumAmount,
+        amount: maximumAmountIn,
       });
     }
   });
@@ -402,7 +431,8 @@ describe("Memswap", async () => {
       intent: any,
       authorizedFiller: string,
       auth: {
-        maximumAmount: BigNumberish;
+        maximumAmountIn: BigNumberish;
+        minimumAmountOut: BigNumberish;
         blockDeadline: number;
         isPartiallyFillable: boolean;
       }
@@ -417,7 +447,8 @@ describe("Memswap", async () => {
     // Authorization must come from the intent filler
     {
       const auth = {
-        maximumAmount: ethers.utils.parseEther("0.3"),
+        maximumAmountIn: ethers.utils.parseEther("0.3"),
+        minimumAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 1),
@@ -450,7 +481,8 @@ describe("Memswap", async () => {
     // Authorization must be given to filler
     {
       const auth = {
-        maximumAmount: ethers.utils.parseEther("0.3"),
+        maximumAmountIn: ethers.utils.parseEther("0.3"),
+        minimumAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 1),
@@ -483,7 +515,8 @@ describe("Memswap", async () => {
     // Successful fill
     {
       const auth = {
-        maximumAmount: ethers.utils.parseEther("0.3"),
+        maximumAmountIn: ethers.utils.parseEther("0.3"),
+        minimumAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 1),
@@ -640,7 +673,6 @@ describe("Memswap", async () => {
 
   const BULK_SIGNATURE_RUNS = 20;
   for (let i = 0; i < BULK_SIGNATURE_RUNS; i++) {
-    it.only(`Bulk-signature (${i + 1} intents)`, async () =>
-      bulkSignature(i + 1));
+    it(`Bulk-signature (${i + 1} intents)`, async () => bulkSignature(i + 1));
   }
 });

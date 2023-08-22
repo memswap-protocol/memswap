@@ -25,6 +25,8 @@ const deployContract = async (
 
 const main = async () => {
   const [deployer] = await ethers.getSigners();
+
+  deployer;
 };
 
 main()

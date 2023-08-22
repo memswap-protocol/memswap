@@ -31,7 +31,8 @@ contract Memswap is ReentrancyGuard {
     }
 
     struct Authorization {
-        uint128 maximumAmount;
+        uint128 maximumAmountIn;
+        uint128 minimumAmountOut;
         uint32 blockDeadline;
         bool isPartiallyFillable;
     }
@@ -103,7 +104,8 @@ contract Memswap is ReentrancyGuard {
                 "Authorization(",
                 "bytes32 intentHash,",
                 "address authorizedFiller,",
-                "uint128 maximumAmount,",
+                "uint128 maximumAmountIn,",
+                "uint128 minimumAmountOut,",
                 "uint32 blockDeadline,",
                 "bool isPartiallyFillable",
                 ")"
@@ -203,7 +205,8 @@ contract Memswap is ReentrancyGuard {
             revert Unauthorized();
         }
 
-        _solve(intent, fill);
+        // No minimum amount out restrictions when filling without authorization
+        _solve(intent, fill, 0);
     }
 
     function solveWithOnChainAuthorizationCheck(
@@ -216,7 +219,7 @@ contract Memswap is ReentrancyGuard {
         Authorization memory auth = authorization[authId];
 
         _checkAuthorization(auth, fill.amount);
-        _solve(intent, fill);
+        _solve(intent, fill, auth.minimumAmountOut);
     }
 
     function solveWithSignatureAuthorizationCheck(
@@ -242,7 +245,7 @@ contract Memswap is ReentrancyGuard {
         );
 
         _checkAuthorization(auth, fill.amount);
-        _solve(intent, fill);
+        _solve(intent, fill, auth.minimumAmountOut);
     }
 
     // View methods
@@ -257,7 +260,8 @@ contract Memswap is ReentrancyGuard {
                 AUTHORIZATION_TYPEHASH,
                 intentHash,
                 authorizedFiller,
-                auth.maximumAmount,
+                auth.maximumAmountIn,
+                auth.minimumAmountOut,
                 auth.blockDeadline,
                 auth.isPartiallyFillable
             )
@@ -289,7 +293,11 @@ contract Memswap is ReentrancyGuard {
 
     // Internal methods
 
-    function _solve(Intent calldata intent, Fill calldata fill) internal {
+    function _solve(
+        Intent calldata intent,
+        Fill calldata fill,
+        uint128 minimumAmountOut
+    ) internal {
         bytes32 intentHash = getIntentHash(intent);
 
         // Verify deadline
@@ -348,6 +356,10 @@ contract Memswap is ReentrancyGuard {
         uint128 requiredAmountOut = intent.startAmountOut -
             amountDiff /
             (timeDiff > 0 ? timeDiff : 1);
+
+        if (requiredAmountOut < minimumAmountOut) {
+            revert InvalidSolution();
+        }
 
         uint256 tokenOutBalance = address(intent.tokenOut) == address(0)
             ? address(this).balance
@@ -411,10 +423,10 @@ contract Memswap is ReentrancyGuard {
         if (auth.blockDeadline < block.number) {
             revert AuthorizationIsExpired();
         }
-        if (auth.maximumAmount < fillAmount) {
+        if (auth.maximumAmountIn < fillAmount) {
             revert AuthorizationIsInsufficient();
         }
-        if (!auth.isPartiallyFillable && auth.maximumAmount != fillAmount) {
+        if (!auth.isPartiallyFillable && auth.maximumAmountIn != fillAmount) {
             revert AuthorizationIsNotPartiallyFillable();
         }
     }

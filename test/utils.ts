@@ -156,7 +156,11 @@ export const AUTHORIZATION_EIP712_TYPES = {
       type: "address",
     },
     {
-      name: "maximumAmount",
+      name: "maximumAmountIn",
+      type: "uint128",
+    },
+    {
+      name: "minimumAmountOut",
       type: "uint128",
     },
     {
