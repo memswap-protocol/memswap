@@ -2,14 +2,16 @@ import { Interface } from "@ethersproject/abi";
 import { BigNumberish } from "@ethersproject/bignumber";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
-import { keccak256 } from "@ethersproject/solidity";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import {
+  AUTHORIZATION_EIP712_TYPES,
+  INTENT_EIP712_HASH,
   bn,
+  bulkSign,
   getCurrentTimestamp,
   getRandomBoolean,
   getRandomFloat,
@@ -69,62 +71,7 @@ describe("Memswap", async () => {
         chainId,
         verifyingContract: memswap.address,
       },
-      {
-        Intent: [
-          {
-            name: "tokenIn",
-            type: "address",
-          },
-          {
-            name: "tokenOut",
-            type: "address",
-          },
-          {
-            name: "maker",
-            type: "address",
-          },
-          {
-            name: "filler",
-            type: "address",
-          },
-          {
-            name: "referrer",
-            type: "address",
-          },
-          {
-            name: "referrerFeeBps",
-            type: "uint32",
-          },
-          {
-            name: "referrerSurplusBps",
-            type: "uint32",
-          },
-          {
-            name: "deadline",
-            type: "uint32",
-          },
-          {
-            name: "isPartiallyFillable",
-            type: "bool",
-          },
-          {
-            name: "amountIn",
-            type: "uint128",
-          },
-          {
-            name: "startAmountOut",
-            type: "uint128",
-          },
-          {
-            name: "expectedAmountOut",
-            type: "uint128",
-          },
-          {
-            name: "endAmountOut",
-            type: "uint128",
-          },
-        ],
-      },
+      INTENT_EIP712_HASH,
       intent
     );
   };
@@ -137,35 +84,12 @@ describe("Memswap", async () => {
         chainId,
         verifyingContract: memswap.address,
       },
-      {
-        Authorization: [
-          {
-            name: "intentHash",
-            type: "bytes32",
-          },
-          {
-            name: "authorizedFiller",
-            type: "address",
-          },
-          {
-            name: "maximumAmount",
-            type: "uint128",
-          },
-          {
-            name: "blockDeadline",
-            type: "uint32",
-          },
-          {
-            name: "isPartiallyFillable",
-            type: "bool",
-          },
-        ],
-      },
+      AUTHORIZATION_EIP712_TYPES,
       auth
     );
   };
 
-  const test = async () => {
+  const fillWithRandomValues = async () => {
     // Generate an intent with random values
     const intent = {
       tokenIn: getRandomBoolean() ? weth.address : token0.address,
@@ -300,9 +224,9 @@ describe("Memswap", async () => {
     );
   };
 
-  const RUNS = 30;
-  for (let i = 0; i < RUNS; i++) {
-    it(`Fill random values (run ${i})`, async () => test());
+  const FILL_WITH_RANDOM_VALUES_RUNS = 30;
+  for (let i = 0; i < FILL_WITH_RANDOM_VALUES_RUNS; i++) {
+    it(`Fill random values (run ${i})`, fillWithRandomValues);
   }
 
   it("Fill with on-chain authorization", async () => {
@@ -662,4 +586,61 @@ describe("Memswap", async () => {
       })
     ).to.be.revertedWith("IntentIsCancelled");
   });
+
+  const bulkSignature = async (count: number) => {
+    const intents: any[] = [];
+    for (let i = 0; i < count; i++) {
+      intents.push({
+        tokenIn: token0.address,
+        tokenOut: token1.address,
+        maker: alice.address,
+        filler: AddressZero,
+        referrer: AddressZero,
+        referrerFeeBps: 0,
+        referrerSurplusBps: 0,
+        deadline: (await getCurrentTimestamp()) + 60,
+        isPartiallyFillable: true,
+        amountIn: ethers.utils.parseEther("0.5"),
+        startAmountOut: ethers.utils.parseEther("0.3"),
+        expectedAmountOut: ethers.utils.parseEther("0.3"),
+        endAmountOut: ethers.utils.parseEther("0.3"),
+      });
+    }
+
+    await bulkSign(alice, intents, memswap.address, chainId);
+
+    const intent = intents[getRandomInteger(0, intents.length - 1)];
+    await token0.connect(alice).mint(intent.amountIn);
+    await token0.connect(alice).approve(memswap.address, intent.amountIn);
+
+    // Move to a known block timestamp
+    const startTime = Math.max(
+      (await getCurrentTimestamp()) + 1,
+      intent.deadline - getRandomInteger(1, 100)
+    );
+    const endTime = intent.deadline;
+    await time.setNextBlockTimestamp(startTime);
+
+    // Compute the intent amount at above timestamp
+    const amount = bn(intent.startAmountOut).sub(
+      bn(intent.startAmountOut)
+        .sub(intent.endAmountOut)
+        .div(endTime - startTime ?? 1)
+    );
+
+    await memswap.connect(bob).solve(intent, {
+      to: filler.address,
+      data: filler.interface.encodeFunctionData("fill", [
+        intent.tokenOut,
+        amount,
+      ]),
+      amount: intent.amountIn,
+    });
+  };
+
+  const BULK_SIGNATURE_RUNS = 20;
+  for (let i = 0; i < BULK_SIGNATURE_RUNS; i++) {
+    it.only(`Bulk-signature (${i + 1} intents)`, async () =>
+      bulkSignature(i + 1));
+  }
 });

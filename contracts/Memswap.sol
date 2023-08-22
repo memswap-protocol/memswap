@@ -60,6 +60,7 @@ contract Memswap is ReentrancyGuard {
     error IntentIsNotPartiallyFillable();
     error InvalidSignature();
     error InvalidSolution();
+    error MerkleTreeTooLarge();
     error Unauthorized();
     error UnsuccessfullCall();
 
@@ -569,172 +570,27 @@ contract Memswap is ReentrancyGuard {
     }
 
     function _lookupBulkOrderTypehash(
-        uint256 _treeHeight
-    ) internal pure returns (bytes32 _typeHash) {
-        // Utilize assembly to efficiently retrieve correct bulk order typehash
-        assembly {
-            // Use a Yul function to enable use of the `leave` keyword to stop searching once the appropriate type hash is found
-            function lookupTypeHash(treeHeight) -> typeHash {
-                // Handle tree heights one through eight
-                if lt(treeHeight, 9) {
-                    // Handle tree heights one through four
-                    if lt(treeHeight, 5) {
-                        // Handle tree heights one and two
-                        if lt(treeHeight, 3) {
-                            // Utilize branchless logic to determine typehash
-                            typeHash := ternary(
-                                eq(treeHeight, 1),
-                                0x59e4eeeffa771fdcf6e0b2bdd57eec1d4c28a6b46d763d7b0630bd454c9897ac,
-                                0xd9007baeff9e48dd0f15d53a782f644083a72c112216c77ecc9ddf95e252d051
-                            )
-
-                            // Exit the function once typehash has been located
-                            leave
-                        }
-
-                        // Handle height three and four via branchless logic
-                        typeHash := ternary(
-                            eq(treeHeight, 3),
-                            0xea55668d4e1cbca6c2d769ad1de685f6428b14911f37c15d0c4c63d66df0bef6,
-                            0xace16f6c79c4e96a97f8fe124281ba9165df225bcac18a4b33d80d6afe0f3b9f
-                        )
-
-                        // Exit the function once typehash has been located.
-                        leave
-                    }
-
-                    // Handle tree height five and six
-                    if lt(treeHeight, 7) {
-                        // Utilize branchless logic to determine typehash
-                        typeHash := ternary(
-                            eq(treeHeight, 5),
-                            0xec7e70800fd0629d8c3eded1bb2f4d97bf0d77df90f2c2c6044a6baf2ca21972,
-                            0x65506a9614d79aef337b38d9dad2956745a60454300e4f9c0974be9d39ecb551
-                        )
-
-                        // Exit the function once typehash has been located
-                        leave
-                    }
-
-                    // Handle height seven and eight via branchless logic
-                    typeHash := ternary(
-                        eq(treeHeight, 7),
-                        0x30faccc97d26554244cd814088f1ef96cf00285061b3bd5f1c102e08887e9025,
-                        0x76aa4166a496e03b1f3e584949597a41c9441abbb0b9cb5c5f489dee990d25d1
-                    )
-
-                    // Exit the function once typehash has been located
-                    leave
-                }
-
-                // Handle tree height nine through sixteen
-                if lt(treeHeight, 17) {
-                    // Handle tree height nine through twelve
-                    if lt(treeHeight, 13) {
-                        // Handle tree height nine and ten
-                        if lt(treeHeight, 11) {
-                            // Utilize branchless logic to determine typehash
-                            typeHash := ternary(
-                                eq(treeHeight, 9),
-                                0xe216f4d3d6757777d884cbfd67ce72a84f4f3eb21850580fb707558cd508d2d5,
-                                0x23cc45baf83992e33599e36cbf0222a27b2afd5cbf6450447a662b449ad64a83
-                            )
-
-                            // Exit the function once typehash has been located
-                            leave
-                        }
-
-                        // Handle height eleven and twelve via branchless logic
-                        typeHash := ternary(
-                            eq(treeHeight, 11),
-                            0xee6f3fb74c101dcb03fb9769cbf717ec8e78404839d17aa4841c6ab2ac20cd56,
-                            0xbe0fad3317cebf51b686dd0a66d27acb869b1faccee40514c702b977aa3c574f
-                        )
-
-                        // Exit the function once typehash has been located
-                        leave
-                    }
-
-                    // Handle tree height thirteen and fourteen
-                    if lt(treeHeight, 15) {
-                        // Utilize branchless logic to determine typehash
-                        typeHash := ternary(
-                            eq(treeHeight, 13),
-                            0x81e342983c1b9a4e90bbebaf8475371ac2c4e09d2a8056b8e8062016d93bbb31,
-                            0x9c6d24f7e815aebe72ce8db091c513f9f93019c2620d8e038bcd7941d4b10e9a
-                        )
-
-                        // Exit the function once typehash has been located
-                        leave
-                    }
-                    // Handle height fifteen and sixteen via branchless logic
-                    typeHash := ternary(
-                        eq(treeHeight, 15),
-                        0xcc0d75d3c41d7664567cad6888c1ead146b2150cd988112bddc8f26446acd79d,
-                        0xa5cc5a30f8bf2a8ce65aa2ee7870f1d52b6a0fe28b30abded726dadd5ed0287a
-                    )
-
-                    // Exit the function once typehash has been located
-                    leave
-                }
-
-                // Handle tree height seventeen through twenty
-                if lt(treeHeight, 21) {
-                    // Handle tree height seventeen and eighteen
-                    if lt(treeHeight, 19) {
-                        // Utilize branchless logic to determine typehash
-                        typeHash := ternary(
-                            eq(treeHeight, 17),
-                            0xe3eab514e6c7ec3ac6078212d0c0be660069e16067a7fc48c8c9517ea63735f6,
-                            0xd61fb347b606f8fcfdc36f4c09793046583f026219bb2ab74333e2edc6741eb8
-                        )
-
-                        // Exit the function once typehash has been located
-                        leave
-                    }
-
-                    // Handle height nineteen and twenty via branchless logic
-                    typeHash := ternary(
-                        eq(treeHeight, 19),
-                        0xe9fd80f8457f4a61cb5cd938afb305eed232f5ce20e3f134407b9e93eb60a795,
-                        0xf66db8956e120af5d2fb81966c74672890d2bd2b6035bee4ed510194242a864c
-                    )
-
-                    // Exit the function once typehash has been located
-                    leave
-                }
-
-                // Handle tree height twenty-one and twenty-two
-                if lt(treeHeight, 23) {
-                    // Utilize branchless logic to determine typehash
-                    typeHash := ternary(
-                        eq(treeHeight, 21),
-                        0x37510ac615d338f9af92458407fe93f4cb8b477363541f6613a94434b2407496,
-                        0x32889c87bb942b09a8c3d3ff461cb65366dd5103d2a78cc795f1a64b8f6df15f
-                    )
-
-                    // Exit the function once typehash has been located
-                    leave
-                }
-
-                // Handle height twenty-three & twenty-four w/ branchless logic
-                typeHash := ternary(
-                    eq(treeHeight, 23),
-                    0x3b302549a3e7d1f55e22e140315fb9412e8362482210413a1151a3b8c403cf91,
-                    0xf7531e6ddb5b7f8342387ddf44ee2c90190fe54293b489a87763980298e0c337
-                )
-
-                // Exit the function once typehash has been located
-                leave
-            }
-
-            // Implement ternary conditional using branchless logic
-            function ternary(cond, ifTrue, ifFalse) -> c {
-                c := xor(ifFalse, mul(cond, xor(ifFalse, ifTrue)))
-            }
-
-            // Look up the typehash using the supplied tree height
-            _typeHash := lookupTypeHash(_treeHeight)
+        uint256 treeHeight
+    ) internal pure returns (bytes32 typeHash) {
+        // kecca256("BatchIntent(Intent[2]...[2] tree)Intent(address tokenIn,address tokenOut,address maker,address filler,address referrer,uint32 referrerFeeBps,uint32 referrerSurplusBps,uint32 deadline,bool isPartiallyFillable,uint128 amountIn,uint128 startAmountOut,uint128 expectedAmountOut,uint128 endAmountOut)")
+        if (treeHeight == 1) {
+            typeHash = 0x5888ead0bee66ec5c9b976d7d5f0d5a6ddcdbcb002828fa378f6baaf167922d5;
+        } else if (treeHeight == 2) {
+            typeHash = 0x60ae5aa548d57f8edc240ccfab272133c227a20488d90e659cc5cba57aac7dd1;
+        } else if (treeHeight == 3) {
+            typeHash = 0x3b37ca5e523d0714a522e69eeb94ff61f97b6b08f34b78e499bc74ce91cd880c;
+        } else if (treeHeight == 4) {
+            typeHash = 0xcba57bc231bdd9c56613856301179eac42096dc31cc3ff76c41c2d1ecbe0e88b;
+        } else if (treeHeight == 5) {
+            typeHash = 0x368cc56a56882cf105ced7b793a3396682e29f6d63f81c3642883256b38e22ed;
+        } else if (treeHeight == 6) {
+            typeHash = 0xa1dcb7e7297abf2b965bbd82354825d1ce0705a2c6533e24bec353dc5447c01e;
+        } else if (treeHeight == 7) {
+            typeHash = 0xe6653a68bcd0b9d6b207b8b2436e530343e63be828ced9fb0a751d1901e3ed14;
+        } else if (treeHeight == 8) {
+            typeHash = 0xfadd1d63d56ccbc53d70d60de34c8f45e85038325ecdfb8e2fba53e5846458f4;
+        } else {
+            revert MerkleTreeTooLarge();
         }
     }
 
