@@ -6,6 +6,7 @@ import { Wallet } from "@ethersproject/wallet";
 import { getCallTraces, getStateChange } from "@georgeroman/evm-tx-simulator";
 
 import { MEMSWAP } from "../../common/addresses";
+import { logger } from "../../common/logger";
 import { Intent } from "../../common/types";
 import {
   bn,
@@ -17,6 +18,8 @@ import {
 import { config } from "../config";
 import { redis } from "../redis";
 import { Solution } from "../types";
+
+const COMPONENT = "solution-handler";
 
 const AUCTION_DURATION = 9;
 const RELEASE_DURATION = 3;
@@ -181,7 +184,8 @@ export const handle = async (
     // Make sure the solution transaction didn't reverted
     const solveTrace = traces[traces.length - 1];
     if (solveTrace.error) {
-      console.log(JSON.stringify(traces, null, 2));
+      logger.info(COMPONENT, JSON.stringify(parse(txs[txs.length - 1])));
+
       return {
         status: "error",
         error: "Solve transaction reverted",
