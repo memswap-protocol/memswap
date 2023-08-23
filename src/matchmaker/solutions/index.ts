@@ -112,79 +112,76 @@ export const handle = async (
     }
 
     // Get the call traces of the submission + status check transactions
-    const traces = await getCallTraces(
-      [
-        // Authorization transaction
-        await (async () => {
-          const parsedTx = parse(txs[txs.length - 1]);
-          return {
-            from: matchMaker.address,
-            to: MEMSWAP,
-            data: new Interface([
-              `
-                function authorize(
-                  (
-                    address tokenIn,
-                    address tokenOut,
-                    address maker,
-                    address filler,
-                    address referrer,
-                    uint32 referrerFeeBps,
-                    uint32 referrerSurplusBps,
-                    uint32 deadline,
-                    bool isPartiallyFillable,
-                    uint128 amountIn,
-                    uint128 startAmountOut,
-                    uint128 expectedAmountOut,
-                    uint128 endAmountOut,
-                    bytes signature
-                  ) intent,
-                  address authorizedFiller,
-                  (
-                    uint128 maximumAmountIn,
-                    uint128 minimumAmountOut,
-                    uint32 blockDeadline,
-                    bool isPartiallyFillable
-                  ) auth
-                )
-              `,
-            ]).encodeFunctionData("authorize", [
-              intent,
-              parsedTx.from!,
-              {
-                maximumAmountIn: intent.amountIn,
-                minimumAmountOut: 0,
-                blockDeadline:
-                  (await provider.getBlock("latest").then((b) => b.number)) +
-                  100,
-                isPartiallyFillable: false,
-              },
-            ]),
-            value: 0,
-            gas: parsedTx.gasLimit,
-            gasPrice: (parsedTx.gasPrice ?? parsedTx.maxFeePerGas)!,
-          };
-        })(),
-        // Submission transactions
-        ...txs.map((tx) => {
-          const parsedTx = parse(tx);
-          return {
-            from: parsedTx.from!,
-            to: parsedTx.to!,
-            data: parsedTx.data!,
-            value: parsedTx.value,
-            gas: parsedTx.gasLimit,
-            gasPrice: (parsedTx.gasPrice ?? parsedTx.maxFeePerGas)!,
-          };
-        }),
-      ],
-      provider
-    );
+    const txsToSimulate = [
+      // Authorization transaction
+      await (async () => {
+        const parsedTx = parse(txs[txs.length - 1]);
+        return {
+          from: matchMaker.address,
+          to: MEMSWAP,
+          data: new Interface([
+            `
+              function authorize(
+                (
+                  address tokenIn,
+                  address tokenOut,
+                  address maker,
+                  address filler,
+                  address referrer,
+                  uint32 referrerFeeBps,
+                  uint32 referrerSurplusBps,
+                  uint32 deadline,
+                  bool isPartiallyFillable,
+                  uint128 amountIn,
+                  uint128 startAmountOut,
+                  uint128 expectedAmountOut,
+                  uint128 endAmountOut,
+                  bytes signature
+                ) intent,
+                address authorizedFiller,
+                (
+                  uint128 maximumAmountIn,
+                  uint128 minimumAmountOut,
+                  uint32 blockDeadline,
+                  bool isPartiallyFillable
+                ) auth
+              )
+            `,
+          ]).encodeFunctionData("authorize", [
+            intent,
+            parsedTx.from!,
+            {
+              maximumAmountIn: intent.amountIn,
+              minimumAmountOut: 0,
+              blockDeadline:
+                (await provider.getBlock("latest").then((b) => b.number)) + 100,
+              isPartiallyFillable: false,
+            },
+          ]),
+          value: 0,
+          gas: parsedTx.gasLimit,
+          gasPrice: (parsedTx.gasPrice ?? parsedTx.maxFeePerGas)!,
+        };
+      })(),
+      // Submission transactions
+      ...txs.map((tx) => {
+        const parsedTx = parse(tx);
+        return {
+          from: parsedTx.from!,
+          to: parsedTx.to!,
+          data: parsedTx.data!,
+          value: parsedTx.value,
+          gas: parsedTx.gasLimit,
+          gasPrice: (parsedTx.gasPrice ?? parsedTx.maxFeePerGas)!,
+        };
+      }),
+    ];
+    const traces = await getCallTraces(txsToSimulate, provider);
 
     // Make sure the solution transaction didn't reverted
     const solveTrace = traces[traces.length - 1];
     if (solveTrace.error) {
-      logger.info(COMPONENT, JSON.stringify(txs.map((tx) => parse(tx))));
+      logger.info(COMPONENT, JSON.stringify(txsToSimulate);
 
       return {
         status: "error",
