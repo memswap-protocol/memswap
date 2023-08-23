@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {WETH2} from "../WETH2.sol";
 
-contract Filler {
+contract FillProxy {
     // --- Errors ---
 
     error Unauthorized();

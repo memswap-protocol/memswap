@@ -13,7 +13,7 @@ import {
 } from "@uniswap/sdk-core";
 import { AlphaRouter, SwapType } from "@uniswap/smart-order-router";
 
-import { FILLER, MEMSWAP_WETH, REGULAR_WETH } from "../../common/addresses";
+import { MEMSWAP_WETH, REGULAR_WETH } from "../../common/addresses";
 import { Solution } from "../types";
 
 const getToken = async (
@@ -65,7 +65,6 @@ export const solve = async (
     TradeType.EXACT_INPUT,
     {
       type: SwapType.UNIVERSAL_ROUTER,
-      recipient: FILLER,
       slippageTolerance: new Percent(5, 100),
     }
   );

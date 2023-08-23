@@ -14,7 +14,7 @@ import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
 import {
-  FILLER,
+  FILL_PROXY,
   MATCHMAKER,
   MEMSWAP,
   MEMSWAP_WETH,
@@ -67,7 +67,7 @@ const worker = new Worker(
         return;
       }
 
-      if (![AddressZero, FILLER, MATCHMAKER].includes(intent.filler)) {
+      if (![AddressZero, FILL_PROXY, MATCHMAKER].includes(intent.filler)) {
         logger.info(
           COMPONENT,
           `[${txHash}] Intent not fillable: ${intent.filler}`
@@ -163,7 +163,7 @@ const worker = new Worker(
       };
 
       const fill = {
-        to: FILLER,
+        to: FILL_PROXY,
         data: new Interface([
           "function fill(address to, bytes data, address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut)",
         ]).encodeFunctionData("fill", [
