@@ -1,11 +1,13 @@
 import { Interface, defaultAbiCoder } from "@ethersproject/abi";
 import { JsonRpcProvider, WebSocketProvider } from "@ethersproject/providers";
+import { verifyTypedData } from "@ethersproject/wallet";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
 import { MEMSWAP, MEMSWAP_WETH } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { Intent, IntentOrigin } from "../../common/types";
+import { getEIP712Domain, getEIP712TypesForIntent } from "../../common/utils";
 import { config } from "../config";
 import { redis } from "../redis";
 import * as txSolver from "./tx-solver";
@@ -142,6 +144,21 @@ const worker = new Worker(
       }
 
       if (intent) {
+        // Check the signature first
+        const signer = verifyTypedData(
+          getEIP712Domain(await provider.getNetwork().then((n) => n.chainId)),
+          getEIP712TypesForIntent(),
+          intent,
+          intent.signature
+        );
+        if (signer.toLowerCase() !== intent.maker) {
+          logger.info(
+            COMPONENT,
+            `Invalid intent signature in transaction ${txHash}`
+          );
+          return;
+        }
+
         await txSolver.addToQueue(txHash, intent, intentOrigin);
       }
     } catch (error: any) {
