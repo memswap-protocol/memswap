@@ -5,7 +5,7 @@ import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 
 import {
-  MATCH_MAKER,
+  MATCHMAKER,
   MEMSWAP,
   MEMSWAP_WETH,
   REGULAR_WETH,
@@ -39,7 +39,7 @@ const main = async () => {
     tokenIn,
     tokenOut,
     maker: maker.address,
-    filler: MATCH_MAKER,
+    filler: MATCHMAKER,
     referrer: AddressZero,
     referrerFeeBps: 0,
     referrerSurplusBps: 0,
