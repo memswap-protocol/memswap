@@ -37,7 +37,7 @@ contract Memswap is ReentrancyGuard {
         bool isPartiallyFillable;
     }
 
-    struct Fill {
+    struct Solution {
         address to;
         bytes data;
         uint128 amount;
@@ -47,7 +47,7 @@ contract Memswap is ReentrancyGuard {
 
     event IntentCancelled(bytes32 indexed intentHash);
     event IntentPosted();
-    event IntentSolved(bytes32 indexed intentHash, Intent intent, Fill fill);
+    event IntentSolved(bytes32 indexed intentHash, uint128 amount);
     event IntentValidated(bytes32 indexed intentHash);
 
     // --- Errors ---
@@ -139,6 +139,13 @@ contract Memswap is ReentrancyGuard {
 
     // Public methods
 
+    /**
+     * @notice Authorize an address to solve a particular intent
+     *
+     * @param intent Intent which is being solved
+     * @param authorizedFiller The address authorized to solve the intent
+     * @param auth Authorization details and conditions
+     */
     function authorize(
         Intent calldata intent,
         address authorizedFiller,
@@ -155,10 +162,29 @@ contract Memswap is ReentrancyGuard {
         authorization[authId] = auth;
     }
 
-    function post(Intent calldata) external {
+    /**
+     * @notice Make an intent available on-chain (this method doesn't do
+     *         anything useful, it's only used as a mechanism for intent
+     *         distribution)
+     *
+     * @custom:param intent Intent being made available
+     */
+    function post(
+        /**
+         * @custom:name intent
+         */
+        Intent calldata
+    ) external {
         emit IntentPosted();
     }
 
+    /**
+     * @notice Validate an arbitrary number of intents (the signature of each
+     *         intent will be checked thus resulting in skipping verification
+     *         on further attempts to solve the intent)
+     *
+     * @param intents Intents to validate
+     */
     function validate(Intent[] calldata intents) external {
         uint256 length = intents.length;
         for (uint256 i; i < length; ) {
@@ -175,6 +201,11 @@ contract Memswap is ReentrancyGuard {
         }
     }
 
+    /**
+     * @notice Cancel an arbitrary number of intents
+     *
+     * @param intents Intents to cancel
+     */
     function cancel(Intent[] calldata intents) external nonReentrant {
         uint256 length = intents.length;
         for (uint256 i; i < length; ) {
@@ -197,34 +228,63 @@ contract Memswap is ReentrancyGuard {
         }
     }
 
+    /**
+     * @notice Solve an intent
+     *
+     * @param intent Intent to solve
+     * @param solution Solution for the intent
+     */
     function solve(
         Intent calldata intent,
-        Fill calldata fill
+        Solution calldata solution
     ) external nonReentrant {
+        // The intent must be open or tied to the current filler
         if (intent.filler != address(0) && intent.filler != msg.sender) {
             revert Unauthorized();
         }
 
-        // No minimum amount out restrictions when filling without authorization
-        _solve(intent, fill, 0);
+        // Solve (no minimum amount out restrictions when filling without authorization)
+        _solve(intent, solution, 0);
     }
 
+    /**
+     * @notice Solve an intent with authorization (compared to the regular `solve`,
+     *         this method allows filling intents tied to another filler as long as
+     *         there is a valid authorization in-place for the current sender). The
+     *         authorization check will be done on-chain.
+     *
+     * @param intent Intent to solve
+     * @param solution Solution for the intent
+     */
     function solveWithOnChainAuthorizationCheck(
         Intent calldata intent,
-        Fill calldata fill
+        Solution calldata solution
     ) external nonReentrant {
         bytes32 intentHash = getIntentHash(intent);
 
+        // Fetch the authorization
         bytes32 authId = keccak256(abi.encodePacked(intentHash, msg.sender));
         Authorization memory auth = authorization[authId];
 
-        _checkAuthorization(auth, fill.amount);
-        _solve(intent, fill, auth.minimumAmountOut);
+        // Check the authorization and solve
+        _checkAuthorization(auth, solution.amount);
+        _solve(intent, solution, auth.minimumAmountOut);
     }
 
+    /**
+     * @notice Solve an intent with authorization (compared to the regular `solve`,
+     *         this method allows filling intents tied to another filler as long as
+     *         there is a valid authorization in-place for the current sender). The
+     *         authorization check will be done via a signature from the filler.
+     *
+     * @param intent Intent to solve
+     * @param solution Solution for the intent
+     * @param auth Authorization details/conditions
+     * @param signature Authorization signature
+     */
     function solveWithSignatureAuthorizationCheck(
         Intent calldata intent,
-        Fill calldata fill,
+        Solution calldata solution,
         Authorization calldata auth,
         bytes calldata signature
     ) external nonReentrant {
@@ -235,6 +295,7 @@ contract Memswap is ReentrancyGuard {
             auth
         );
 
+        // Verify the authorization
         bytes32 digest = _getEIP712Hash(authorizationHash);
         _assertValidSignature(
             intent.filler,
@@ -244,12 +305,22 @@ contract Memswap is ReentrancyGuard {
             signature
         );
 
-        _checkAuthorization(auth, fill.amount);
-        _solve(intent, fill, auth.minimumAmountOut);
+        // Check the authorization and solve
+        _checkAuthorization(auth, solution.amount);
+        _solve(intent, solution, auth.minimumAmountOut);
     }
 
     // View methods
 
+    /**
+     * @notice Get the EIP712 struct hash for an authorization
+     *
+     * @param intentHash Intent EIP712 struct hash to authorize
+     * @param authorizedFiller Filler to authorize
+     * @param auth Authorization details/conditions
+     *
+     * @return authorizationHash The EIP712 struct hash of the authorization
+     */
     function getAuthorizationHash(
         bytes32 intentHash,
         address authorizedFiller,
@@ -268,6 +339,13 @@ contract Memswap is ReentrancyGuard {
         );
     }
 
+    /**
+     * @notice Get the EIP712 struct hash for an intent
+     *
+     * @param intent Intent to compute the hash for
+     *
+     * @return intentHash The EIP712 struct hash of the intent
+     */
     function getIntentHash(
         Intent memory intent
     ) public view returns (bytes32 intentHash) {
@@ -293,9 +371,16 @@ contract Memswap is ReentrancyGuard {
 
     // Internal methods
 
+    /**
+     * @dev Solve an intent
+     *
+     * @param intent Intent to solve
+     * @param solution Solution for the intent
+     * @param minimumAmountOut The minimum amount out the solution is required to fulfill
+     */
     function _solve(
         Intent calldata intent,
-        Fill calldata fill,
+        Solution calldata solution,
         uint128 minimumAmountOut
     ) internal {
         bytes32 intentHash = getIntentHash(intent);
@@ -324,23 +409,28 @@ contract Memswap is ReentrancyGuard {
         }
 
         // Ensure non-partially-fillable intents are fully filled
-        if (!intent.isPartiallyFillable && fill.amount < amountAvailable) {
+        if (!intent.isPartiallyFillable && solution.amount < amountAvailable) {
             revert IntentIsNotPartiallyFillable();
         }
 
         // Compute the amount available to fill
-        uint128 amountToFill = fill.amount > amountAvailable
+        uint128 amountToFill = solution.amount > amountAvailable
             ? amountAvailable
-            : fill.amount;
+            : solution.amount;
         intentStatus[intentHash].amountFilled += amountToFill;
 
         // Transfer inputs to fill contract
         if (amountToFill > 0) {
-            _transferToken(intent.maker, fill.to, intent.tokenIn, amountToFill);
+            _transferToken(
+                intent.maker,
+                solution.to,
+                intent.tokenIn,
+                amountToFill
+            );
         }
 
         // Execute solution
-        (bool result, ) = fill.to.call(fill.data);
+        (bool result, ) = solution.to.call(solution.data);
         if (!result) {
             revert UnsuccessfullCall();
         }
@@ -363,7 +453,7 @@ contract Memswap is ReentrancyGuard {
 
         uint256 tokenOutBalance = address(intent.tokenOut) == address(0)
             ? address(this).balance
-            : intent.tokenOut.allowance(fill.to, address(this));
+            : intent.tokenOut.allowance(solution.to, address(this));
 
         // Ensure the maker got at least what he intended
         if (tokenOutBalance < requiredAmountOut) {
@@ -393,7 +483,7 @@ contract Memswap is ReentrancyGuard {
             // Transfer fees to referrer
             if (amount > 0) {
                 _transferToken(
-                    fill.to,
+                    solution.to,
                     intent.referrer,
                     intent.tokenOut,
                     amount
@@ -406,49 +496,83 @@ contract Memswap is ReentrancyGuard {
         // Transfer ouputs to maker
         if (tokenOutBalance > 0) {
             _transferToken(
-                fill.to,
+                solution.to,
                 intent.maker,
                 intent.tokenOut,
                 tokenOutBalance
             );
         }
 
-        emit IntentSolved(intentHash, intent, fill);
+        emit IntentSolved(intentHash, amountToFill);
     }
 
+    /**
+     * @dev Check an authorization
+     *
+     * @param auth Authorization to check
+     * @param amount Amount to check the authorization against
+     */
     function _checkAuthorization(
         Authorization memory auth,
-        uint128 fillAmount
+        uint128 amount
     ) internal view {
+        // Ensure the authorization is not expired
         if (auth.blockDeadline < block.number) {
             revert AuthorizationIsExpired();
         }
-        if (auth.maximumAmountIn < fillAmount) {
+
+        // Ensure the amount doesn't exceed the maximum authorized amount
+        if (auth.maximumAmountIn < amount) {
             revert AuthorizationIsInsufficient();
         }
-        if (!auth.isPartiallyFillable && auth.maximumAmountIn != fillAmount) {
+
+        // Ensure non-partially-fillable authorizations are fully filled
+        if (!auth.isPartiallyFillable && auth.maximumAmountIn != amount) {
             revert AuthorizationIsNotPartiallyFillable();
         }
     }
 
+    /**
+     * @dev Get the EIP712 hash of a struct hash
+     *
+     * @param structHash Struct hash to get the EIP712 hash for
+     *
+     * @return eip712Hash The resulting EIP712 hash
+     */
     function _getEIP712Hash(
         bytes32 structHash
-    ) internal view returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(hex"1901", DOMAIN_SEPARATOR, structHash)
-            );
+    ) internal view returns (bytes32 eip712Hash) {
+        eip712Hash = keccak256(
+            abi.encodePacked(hex"1901", DOMAIN_SEPARATOR, structHash)
+        );
     }
 
+    /**
+     * @dev Validate an intent by checking its signature
+     *
+     * @param intentHash EIP712 intent struct hash to verify
+     * @param maker The maker of the intent
+     * @param signature The signature of the intent
+     */
     function _validateIntent(
         bytes32 intentHash,
         address maker,
         bytes calldata signature
     ) internal {
         _verifySignature(intentHash, maker, signature);
+
+        // Mark the intent as validated
         intentStatus[intentHash].isValidated = true;
     }
 
+    /**
+     * @dev Helper method for transferring native and ERC20 tokens
+     *
+     * @param from Transfer from this address
+     * @param to Transfer to this address
+     * @param token Token to transfer
+     * @param amount Amonut to transfer
+     */
     function _transferToken(
         address from,
         address to,
@@ -456,6 +580,8 @@ contract Memswap is ReentrancyGuard {
         uint256 amount
     ) internal {
         bool success;
+
+        // Represent native tokens as `address(0)`
         if (address(token) == address(0)) {
             (success, ) = to.call{value: amount}("");
         } else {
