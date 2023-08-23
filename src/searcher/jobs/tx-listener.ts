@@ -40,6 +40,23 @@ const worker = new Worker(
         return;
       }
 
+      const intentTypes = [
+        "address",
+        "address",
+        "address",
+        "address",
+        "address",
+        "uint32",
+        "uint32",
+        "uint32",
+        "bool",
+        "uint128",
+        "uint128",
+        "uint128",
+        "uint128",
+        "bytes",
+      ];
+
       // Try to decode any intent appended at the end of the calldata
       let restOfCalldata: string | undefined;
       let intentOrigin: IntentOrigin = "unknown";
@@ -68,6 +85,32 @@ const worker = new Worker(
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
           intentOrigin = "deposit-and-approve";
         }
+      } else if (
+        tx.data.startsWith("0x4adb41f5") &&
+        tx.to?.toLowerCase() === MEMSWAP
+      ) {
+        const iface = new Interface([
+          `function post(
+            (
+              address tokenIn,
+              address tokenOut,
+              address maker,
+              address filler,
+              address referrer,
+              uint32 referrerFeeBps,
+              uint32 referrerSurplusBps,
+              uint32 deadline,
+              bool isPartiallyFillable,
+              uint128 amountIn,
+              uint128 startAmountOut,
+              uint128 expectedAmountOut,
+              uint128 endAmountOut,
+              bytes signature
+            ) intent
+          )`,
+        ]);
+        const result = iface.decodeFunctionData("post", tx.data);
+        restOfCalldata = defaultAbiCoder.encode(intentTypes, result.intent);
       } else {
         restOfCalldata = tx.data;
       }
@@ -75,25 +118,7 @@ const worker = new Worker(
       let intent: Intent | undefined;
       if (restOfCalldata && restOfCalldata.length > 2) {
         try {
-          const result = defaultAbiCoder.decode(
-            [
-              "address",
-              "address",
-              "address",
-              "address",
-              "address",
-              "uint32",
-              "uint32",
-              "uint32",
-              "bool",
-              "uint128",
-              "uint128",
-              "uint128",
-              "uint128",
-              "bytes",
-            ],
-            restOfCalldata
-          );
+          const result = defaultAbiCoder.decode(intentTypes, restOfCalldata);
 
           intent = {
             tokenIn: result[0].toLowerCase(),
