@@ -362,9 +362,9 @@ const worker = new Worker(
     } catch (error: any) {
       logger.error(
         COMPONENT,
-        `Job failed: ${error.response?.data ? error.response.data : error} (${
-          error.stack
-        })`
+        `Job failed: ${
+          error.response?.data ? JSON.stringify(error.response.data) : error
+        } (${error.stack})`
       );
       throw error;
     }
