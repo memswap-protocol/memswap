@@ -14,8 +14,8 @@ import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
 import {
-  BATCHER,
   FILLER,
+  MATCH_MAKER,
   MEMSWAP,
   MEMSWAP_WETH,
   REGULAR_WETH,
@@ -67,7 +67,7 @@ const worker = new Worker(
         return;
       }
 
-      if (![AddressZero, FILLER].includes(intent.filler)) {
+      if (![AddressZero, FILLER, MATCH_MAKER].includes(intent.filler)) {
         logger.info(
           COMPONENT,
           `[${txHash}] Intent not fillable: ${intent.filler}`
@@ -87,10 +87,8 @@ const worker = new Worker(
       );
 
       const latestBlock = await provider.getBlock("latest");
-
-      const blockNumber = latestBlock.number + 1;
-      const blockTimestamp = latestBlock.timestamp + 14;
-      const currentBaseFee = await provider
+      const latestTimestamp = latestBlock.timestamp + 14;
+      const latestBaseFee = await provider
         .getBlock("pending")
         .then((b) => b!.baseFeePerGas!);
 
@@ -101,7 +99,7 @@ const worker = new Worker(
       const minimumAmountOut = bn(intent.startAmountOut).sub(
         bn(intent.startAmountOut)
           .sub(intent.endAmountOut)
-          .div(intent.deadline - blockTimestamp)
+          .div(intent.deadline - latestTimestamp)
       );
 
       const solution = await solutions.zeroEx.solve(
@@ -129,7 +127,7 @@ const worker = new Worker(
           .mul(parseEther(solution.tokenOutToEthRate))
           .div(parseEther("1"));
         const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
-          currentBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
+          latestBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
         );
         if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
           logger.error(
@@ -163,10 +161,6 @@ const worker = new Worker(
           }
         ),
       };
-      const skipOriginTransaction =
-        intentOrigin === "approve" || intentOrigin === "deposit-and-approve"
-          ? await isTxIncluded(tx.hash, provider)
-          : true;
 
       const fill = {
         to: FILLER,
@@ -183,21 +177,14 @@ const worker = new Worker(
         amount: intent.amountIn,
       };
 
-      if (intent.filler === BATCHER) {
-        await axios.post(`${config.matchMakerBaseUrl}/fills`, {
-          preTxs: skipOriginTransaction ? [] : [originTx.signedTransaction],
-          fill: {
-            intent,
-            fill,
-          },
-        });
+      const getFillerTx = async (intent: Intent, authFromMatchMaker?: any) => {
+        const method = authFromMatchMaker
+          ? "solveWithSignatureAuthorizationCheck"
+          : intent.filler === MATCH_MAKER
+          ? "solveWithOnChainAuthorizationCheck"
+          : "solve";
 
-        logger.info(
-          COMPONENT,
-          `[${tx.hash}] Successfully relayed to match-maker`
-        );
-      } else {
-        const fillerTx = {
+        return {
           signer: searcher,
           transaction: {
             from: searcher.address,
@@ -205,39 +192,100 @@ const worker = new Worker(
             value: 0,
             data: new Interface([
               `
-                function solve(
-                  (
-                    address tokenIn,
-                    address tokenOut,
-                    address maker,
-                    address filler,
-                    address referrer,
-                    uint32 referrerFeeBps,
-                    uint32 referrerSurplusBps,
-                    uint32 deadline,
-                    bool isPartiallyFillable,
-                    uint128 amountIn,
-                    uint128 startAmountOut,
-                    uint128 expectedAmountOut,
-                    uint128 endAmountOut,
-                    bytes signature
-                  ) intent,
-                  (
-                    address to,
-                    bytes data,
-                    uint128 amount
-                  ) fill
-                )
-              `,
-            ]).encodeFunctionData("solve", [intent, fill]),
+              function ${method}(
+                (
+                  address tokenIn,
+                  address tokenOut,
+                  address maker,
+                  address filler,
+                  address referrer,
+                  uint32 referrerFeeBps,
+                  uint32 referrerSurplusBps,
+                  uint32 deadline,
+                  bool isPartiallyFillable,
+                  uint128 amountIn,
+                  uint128 startAmountOut,
+                  uint128 expectedAmountOut,
+                  uint128 endAmountOut,
+                  bytes signature
+                ) intent,
+                (
+                  address to,
+                  bytes data,
+                  uint128 amount
+                ) fill${
+                  authFromMatchMaker
+                    ? `,
+                        (
+                          uint128 maximumAmountIn,
+                          uint128 minimumAmountOut,
+                          uint32 blockDeadline,
+                          bool isPartiallyFillable
+                        ),
+                        bytes signature
+                      `
+                    : ""
+                }
+              )
+            `,
+            ]).encodeFunctionData(
+              method,
+              authFromMatchMaker
+                ? [
+                    intent,
+                    fill,
+                    authFromMatchMaker,
+                    authFromMatchMaker?.signature,
+                  ]
+                : [intent, fill]
+            ),
             type: 2,
             gasLimit,
             chainId: await provider.getNetwork().then((n) => n.chainId),
-            maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas).toString(),
+            maxFeePerGas: latestBaseFee.add(maxPriorityFeePerGas).toString(),
             maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
           },
         };
+      };
 
+      let authFromMatchMaker: any;
+      if (intent.filler === MATCH_MAKER) {
+        const signedFillerTx = await searcher.signTransaction(
+          await getFillerTx(intent).then((tx) => tx.transaction)
+        );
+
+        let done = false;
+        while (!done) {
+          const response = await axios.post(
+            `${config.matchMakerBaseUrl}/fills`,
+            {
+              intent,
+              txs: [originTx.signedTransaction, signedFillerTx],
+            }
+          );
+
+          if (response.data.recheckIn) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, response.data.recheckIn * 1000)
+            );
+          } else {
+            authFromMatchMaker = response.data.auth;
+            done = true;
+          }
+        }
+
+        if (!authFromMatchMaker) {
+          throw new Error("No auth received");
+        }
+      }
+
+      if (intent.filler !== MATCH_MAKER || authFromMatchMaker) {
+        const skipOriginTransaction =
+          intentOrigin === "approve" || intentOrigin === "deposit-and-approve"
+            ? await isTxIncluded(tx.hash, provider)
+            : true;
+
+        const fillerTx = await getFillerTx(intent, authFromMatchMaker);
         const signedBundle = await flashbotsProvider.signBundle(
           skipOriginTransaction ? [fillerTx] : [originTx, fillerTx]
         );
@@ -257,9 +305,12 @@ const worker = new Worker(
         //   );
         // }
 
+        const targetBlock =
+          (await provider.getBlock("latest").then((b) => b.number)) + 1;
+
         // Flashbots simulation
         const simulationResult: { results: [{ error?: string }] } =
-          (await flashbotsProvider.simulate(signedBundle, blockNumber)) as any;
+          (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
         if (simulationResult.results.some((r) => r.error)) {
           logger.error(
             COMPONENT,
@@ -277,18 +328,18 @@ const worker = new Worker(
           COMPONENT,
           `[${tx.hash}] Trying to send bundle (${
             skipOriginTransaction ? "fill" : "approve-and-fill"
-          }) for block ${blockNumber}`
+          }) for block ${targetBlock}`
         );
 
         const receipt = await flashbotsProvider.sendRawBundle(
           signedBundle,
-          blockNumber
+          targetBlock
         );
         const hash = (receipt as any).bundleHash;
 
         logger.info(
           COMPONENT,
-          `[${tx.hash}] Bundle ${hash} submitted in block ${blockNumber}, waiting...`
+          `[${tx.hash}] Bundle ${hash} submitted for block ${targetBlock}, waiting...`
         );
 
         const waitResponse = await (receipt as any).wait();
@@ -298,7 +349,7 @@ const worker = new Worker(
         ) {
           logger.info(
             COMPONENT,
-            `[${tx.hash}] Bundle ${hash} included in block ${blockNumber} (${
+            `[${tx.hash}] Bundle ${hash} included in block ${targetBlock} (${
               waitResponse === FlashbotsBundleResolution.BundleIncluded
                 ? "BundleIncluded"
                 : "AccountNonceTooHigh"

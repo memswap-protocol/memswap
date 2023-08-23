@@ -4,8 +4,13 @@ import { JsonRpcProvider } from "@ethersproject/providers";
 import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 
-import { MEMSWAP, MEMSWAP_WETH, REGULAR_WETH } from "../src/common/addresses";
-import { getEIP712Domain, getEIP712Types } from "../src/common/utils";
+import {
+  MATCH_MAKER,
+  MEMSWAP,
+  MEMSWAP_WETH,
+  REGULAR_WETH,
+} from "../src/common/addresses";
+import { getEIP712Domain, getEIP712TypesForIntent } from "../src/common/utils";
 
 // Required env variables:
 // - JSON_URL: url for the http provider
@@ -34,7 +39,7 @@ const main = async () => {
     tokenIn,
     tokenOut,
     maker: maker.address,
-    filler: AddressZero,
+    filler: MATCH_MAKER,
     referrer: AddressZero,
     referrerFeeBps: 0,
     referrerSurplusBps: 0,
@@ -49,7 +54,7 @@ const main = async () => {
   };
   (intent as any).signature = await maker._signTypedData(
     getEIP712Domain(chainId),
-    getEIP712Types(),
+    getEIP712TypesForIntent(),
     intent
   );
 

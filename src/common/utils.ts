@@ -17,7 +17,36 @@ export const getEIP712Domain = (chainId: number) => ({
   verifyingContract: MEMSWAP,
 });
 
-export const getEIP712Types = () => ({
+export const getEIP712TypesForAuthorization = () => ({
+  Authorization: [
+    {
+      name: "intentHash",
+      type: "bytes32",
+    },
+    {
+      name: "authorizedFiller",
+      type: "address",
+    },
+    {
+      name: "maximumAmountIn",
+      type: "uint128",
+    },
+    {
+      name: "minimumAmountOut",
+      type: "uint128",
+    },
+    {
+      name: "blockDeadline",
+      type: "uint32",
+    },
+    {
+      name: "isPartiallyFillable",
+      type: "bool",
+    },
+  ],
+});
+
+export const getEIP712TypesForIntent = () => ({
   Intent: [
     {
       name: "tokenIn",

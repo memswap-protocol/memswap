@@ -633,10 +633,10 @@
   optionalDependencies:
     "@trufflesuite/bigint-buffer" "1.1.9"
 
-"@georgeroman/evm-tx-simulator@^0.0.25":
-  version "0.0.25"
-  resolved "https://registry.yarnpkg.com/@georgeroman/evm-tx-simulator/-/evm-tx-simulator-0.0.25.tgz#24eb3a26cab178909ed6d8ca511fd1cf68d70012"
-  integrity sha512-YnwguUuGjsrvkIBYNpYT89CytgaVN6eaYyESdsoRci1oJkw/TrZJD3Tu1nlgn7M/fCoPWrlkbc4Fi9HR7lcx3A==
+"@georgeroman/evm-tx-simulator@^0.0.26":
+  version "0.0.26"
+  resolved "https://registry.yarnpkg.com/@georgeroman/evm-tx-simulator/-/evm-tx-simulator-0.0.26.tgz#26d55260bf384ee8c84d4eb9d7be3529d3746754"
+  integrity sha512-TUxxvZSkEIeVsNB+aLK37qxodHpsP4/X0VU/Qg59blojNwkwgiq0XNAiQhcRyEjlHz70OFeQ7crEatzFgFtmpw==
   dependencies:
     axios "^1.3.4"
     ethers "^5.6.9"
