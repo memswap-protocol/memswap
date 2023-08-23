@@ -47,7 +47,15 @@ contract Memswap is ReentrancyGuard {
 
     event IntentCancelled(bytes32 indexed intentHash);
     event IntentPosted();
-    event IntentSolved(bytes32 indexed intentHash, uint128 amount);
+    event IntentSolved(
+        bytes32 indexed intentHash,
+        address tokenIn,
+        address tokenOut,
+        address maker,
+        address filler,
+        uint128 amountIn,
+        uint128 amountOut
+    );
     event IntentValidated(bytes32 indexed intentHash);
 
     // --- Errors ---
@@ -503,7 +511,15 @@ contract Memswap is ReentrancyGuard {
             );
         }
 
-        emit IntentSolved(intentHash, amountToFill);
+        emit IntentSolved(
+            intentHash,
+            address(intent.tokenIn),
+            address(intent.tokenOut),
+            intent.maker,
+            msg.sender,
+            amountToFill,
+            uint128(tokenOutBalance)
+        );
     }
 
     /**
