@@ -1,7 +1,9 @@
 # Memswap
 
+Memswap is a fully decentralized intent-based swap protocol that leverages the public mempool for distribution.
+
 Repository structure:
 
 - [`contracts`](./contracts): core contracts
-- [`match-maker`](./src/match-maker): reference match-maker implementation
+- [`matchmaker`](./src/matchmaker): reference matchmaker implementation
 - [`searcher`](./src/searcher): reference searcher implementation

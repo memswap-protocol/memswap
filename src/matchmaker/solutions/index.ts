@@ -54,7 +54,7 @@ export const handle = async (
     {
       const ct = now();
 
-      const bestSolutionStartKey = `match-maker:best-solution-start:${intentHash}`;
+      const bestSolutionStartKey = `matchmaker:best-solution-start:${intentHash}`;
       const bestSolutionStart = await redis.get(bestSolutionStartKey);
       if (
         // The auction period is finalized
@@ -62,7 +62,7 @@ export const handle = async (
         // The release period is not yet finalized
         ct - Number(bestSolutionStart) <= AUCTION_DURATION + RELEASE_DURATION
       ) {
-        const bestSolutionKey = `match-maker:best-solution:${intentHash}`;
+        const bestSolutionKey = `matchmaker:best-solution:${intentHash}`;
         const bestSolution: Solution | undefined = await redis
           .get(bestSolutionKey)
           .then((bf) => (bf ? JSON.parse(bf) : undefined));
@@ -196,7 +196,7 @@ export const handle = async (
       ];
 
     // Fetch the current best solution
-    const bestSolutionKey = `match-maker:best-solution:${intentHash}`;
+    const bestSolutionKey = `matchmaker:best-solution:${intentHash}`;
     const bestSolution: Solution | undefined = await redis
       .get(bestSolutionKey)
       .then((bf) => (bf ? JSON.parse(bf) : undefined));
@@ -204,7 +204,7 @@ export const handle = async (
     const ct = now();
 
     // Fetch the start time of the auction period
-    const bestSolutionStartKey = `match-maker:best-solution-start:${intentHash}`;
+    const bestSolutionStartKey = `matchmaker:best-solution-start:${intentHash}`;
     const bestSolutionStart = await redis.get(bestSolutionStartKey);
 
     if (

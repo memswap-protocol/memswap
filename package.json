@@ -33,7 +33,7 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "start-match-maker": "node ./dist/src/match-maker/index.js",
+    "start-matchmaker": "node ./dist/src/matchmaker/index.js",
     "start-searcher": "node ./dist/src/searcher/index.js"
   }
 }

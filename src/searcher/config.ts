@@ -4,7 +4,7 @@ export const config = {
   redisUrl: process.env.REDIS_URL!,
   flashbotsSignerPk: process.env.FLASHBOTS_SIGNER_PK!,
   searcherPk: process.env.SEARCHER_PK!,
-  matchMakerBaseUrl: process.env.MATCH_MAKER_BASE_URL!,
+  matchMakerBaseUrl: process.env.MATCHMAKER_BASE_URL!,
   zeroExApiKey: process.env.ZERO_EX_API_KEY!,
   port: process.env.PORT!,
 };

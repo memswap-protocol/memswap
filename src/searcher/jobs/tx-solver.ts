@@ -15,7 +15,7 @@ import { randomUUID } from "crypto";
 
 import {
   FILLER,
-  MATCH_MAKER,
+  MATCHMAKER,
   MEMSWAP,
   MEMSWAP_WETH,
   REGULAR_WETH,
@@ -67,7 +67,7 @@ const worker = new Worker(
         return;
       }
 
-      if (![AddressZero, FILLER, MATCH_MAKER].includes(intent.filler)) {
+      if (![AddressZero, FILLER, MATCHMAKER].includes(intent.filler)) {
         logger.info(
           COMPONENT,
           `[${txHash}] Intent not fillable: ${intent.filler}`
@@ -180,7 +180,7 @@ const worker = new Worker(
       const getFillerTx = async (intent: Intent, authFromMatchMaker?: any) => {
         const method = authFromMatchMaker
           ? "solveWithSignatureAuthorizationCheck"
-          : intent.filler === MATCH_MAKER
+          : intent.filler === MATCHMAKER
           ? "solveWithOnChainAuthorizationCheck"
           : "solve";
 
@@ -249,7 +249,7 @@ const worker = new Worker(
       };
 
       let authFromMatchMaker: any;
-      if (intent.filler === MATCH_MAKER) {
+      if (intent.filler === MATCHMAKER) {
         const signedFillerTx = await searcher.signTransaction(
           await getFillerTx(intent).then((tx) => tx.transaction)
         );
@@ -279,7 +279,7 @@ const worker = new Worker(
         }
       }
 
-      if (intent.filler !== MATCH_MAKER || authFromMatchMaker) {
+      if (intent.filler !== MATCHMAKER || authFromMatchMaker) {
         const skipOriginTransaction =
           intentOrigin === "approve" || intentOrigin === "deposit-and-approve"
             ? await isTxIncluded(tx.hash, provider)
