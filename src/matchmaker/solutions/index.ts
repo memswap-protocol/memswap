@@ -181,7 +181,7 @@ export const handle = async (
     // Make sure the solution transaction didn't reverted
     const solveTrace = traces[traces.length - 1];
     if (solveTrace.error) {
-      logger.info(COMPONENT, JSON.stringify(txsToSimulate);
+      logger.info(COMPONENT, JSON.stringify(txsToSimulate));
 
       return {
         status: "error",
