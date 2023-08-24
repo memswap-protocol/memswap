@@ -381,7 +381,9 @@ const worker = new Worker(
             `[${tx.hash}] Trying to send solve transaction`
           );
 
-          await searcher.sendTransaction(fillerTx.transaction);
+          await searcher
+            .connect(provider)
+            .sendTransaction(fillerTx.transaction);
         }
       }
     } catch (error: any) {
