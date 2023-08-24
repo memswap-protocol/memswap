@@ -8,7 +8,7 @@ import {
   FlashbotsBundleProvider,
   FlashbotsBundleResolution,
 } from "@flashbots/ethers-provider-bundle";
-// import * as txSimulator from "@georgeroman/evm-tx-simulator";
+import * as txSimulator from "@georgeroman/evm-tx-simulator";
 import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
@@ -285,78 +285,103 @@ const worker = new Worker(
             ? await isTxIncluded(tx.hash, provider)
             : true;
 
-        const fillerTx = await getFillerTx(intent, authFromMatchMaker);
-        const signedBundle = await flashbotsProvider.signBundle(
-          skipOriginTransaction ? [fillerTx] : [originTx, fillerTx]
-        );
-
-        // // Alternative non-flashbots simulation
-        // if (skipOriginTransaction) {
-        //   await txSimulator.getCallResult(
-        //     {
-        //       from: fillerTx.transaction.from,
-        //       to: fillerTx.transaction.to,
-        //       data: fillerTx.transaction.data,
-        //       value: fillerTx.transaction.value,
-        //       gas: fillerTx.transaction.gasLimit,
-        //       gasPrice: fillerTx.transaction.maxFeePerGas,
-        //     },
-        //     provider
-        //   );
-        // }
-
-        const targetBlock =
-          (await provider.getBlock("latest").then((b) => b.number)) + 1;
-
-        // Flashbots simulation
-        const simulationResult: { results: [{ error?: string }] } =
-          (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
-        if (simulationResult.results.some((r) => r.error)) {
-          logger.error(
-            COMPONENT,
-            `[${tx.hash}] Simulation failed: ${JSON.stringify({
-              simulationResult,
-              fillerTx,
-            })}`
-          );
-
-          // We retry jobs for which the simulation failed
-          throw new Error("Simulation failed");
+        let useFlashbots = true;
+        if (skipOriginTransaction) {
+          useFlashbots = false;
+        }
+        if (Boolean(Number(process.env.FORCE_FLASHBOTS))) {
+          useFlashbots = true;
         }
 
         logger.info(
           COMPONENT,
-          `[${tx.hash}] Trying to send bundle (${
-            skipOriginTransaction ? "fill" : "approve-and-fill"
-          }) for block ${targetBlock}`
+          `[${txHash}] ${
+            useFlashbots ? "Using flashbots" : "Using a regular transaction"
+          }`
         );
 
-        const receipt = await flashbotsProvider.sendRawBundle(
-          signedBundle,
-          targetBlock
-        );
-        const hash = (receipt as any).bundleHash;
+        const fillerTx = await getFillerTx(intent, authFromMatchMaker);
+        if (useFlashbots) {
+          const signedBundle = await flashbotsProvider.signBundle(
+            skipOriginTransaction ? [fillerTx] : [originTx, fillerTx]
+          );
 
-        logger.info(
-          COMPONENT,
-          `[${tx.hash}] Bundle ${hash} submitted for block ${targetBlock}, waiting...`
-        );
+          const targetBlock =
+            (await provider.getBlock("latest").then((b) => b.number)) + 1;
 
-        const waitResponse = await (receipt as any).wait();
-        if (
-          waitResponse === FlashbotsBundleResolution.BundleIncluded ||
-          waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
-        ) {
+          const simulationResult: { results: [{ error?: string }] } =
+            (await flashbotsProvider.simulate(
+              signedBundle,
+              targetBlock
+            )) as any;
+          if (simulationResult.results.some((r) => r.error)) {
+            logger.error(
+              COMPONENT,
+              `[${tx.hash}] Simulation failed: ${JSON.stringify({
+                simulationResult,
+                fillerTx,
+              })}`
+            );
+
+            // We retry jobs for which the simulation failed
+            throw new Error("Simulation failed");
+          }
+
           logger.info(
             COMPONENT,
-            `[${tx.hash}] Bundle ${hash} included in block ${targetBlock} (${
-              waitResponse === FlashbotsBundleResolution.BundleIncluded
-                ? "BundleIncluded"
-                : "AccountNonceTooHigh"
-            })`
+            `[${tx.hash}] Trying to send bundle (${
+              skipOriginTransaction ? "fill" : "approve-and-fill"
+            }) for block ${targetBlock}`
           );
+
+          const receipt = await flashbotsProvider.sendRawBundle(
+            signedBundle,
+            targetBlock
+          );
+          const hash = (receipt as any).bundleHash;
+
+          logger.info(
+            COMPONENT,
+            `[${tx.hash}] Bundle ${hash} submitted for block ${targetBlock}, waiting...`
+          );
+
+          const waitResponse = await (receipt as any).wait();
+          if (
+            waitResponse === FlashbotsBundleResolution.BundleIncluded ||
+            waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
+          ) {
+            logger.info(
+              COMPONENT,
+              `[${tx.hash}] Bundle ${hash} included in block ${targetBlock} (${
+                waitResponse === FlashbotsBundleResolution.BundleIncluded
+                  ? "BundleIncluded"
+                  : "AccountNonceTooHigh"
+              })`
+            );
+          } else {
+            throw new Error(
+              `[${tx.hash}] Bundle ${hash} not included in block`
+            );
+          }
         } else {
-          throw new Error(`[${tx.hash}] Bundle ${hash} not included in block`);
+          await txSimulator.getCallResult(
+            {
+              from: fillerTx.transaction.from,
+              to: fillerTx.transaction.to,
+              data: fillerTx.transaction.data,
+              value: fillerTx.transaction.value,
+              gas: fillerTx.transaction.gasLimit,
+              gasPrice: fillerTx.transaction.maxFeePerGas,
+            },
+            provider
+          );
+
+          logger.info(
+            COMPONENT,
+            `[${tx.hash}] Trying to send solve transaction`
+          );
+
+          await searcher.sendTransaction(fillerTx.transaction);
         }
       }
     } catch (error: any) {
