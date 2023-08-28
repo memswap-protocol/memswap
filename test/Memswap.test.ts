@@ -31,7 +31,7 @@ describe("Memswap", async () => {
 
   let memswap: Contract;
   let weth: Contract;
-  let filler: Contract;
+  let solver: Contract;
   let token0: Contract;
   let token1: Contract;
 
@@ -46,7 +46,7 @@ describe("Memswap", async () => {
     weth = await ethers
       .getContractFactory("WETH2")
       .then((factory) => factory.deploy());
-    filler = await ethers
+    solver = await ethers
       .getContractFactory("MockFiller")
       .then((factory) => factory.deploy());
     token0 = await ethers
@@ -56,9 +56,9 @@ describe("Memswap", async () => {
       .getContractFactory("MockERC20")
       .then((factory) => factory.deploy());
 
-    // Send some ETH to filler contract for the tests where `tokenOut` is ETH
+    // Send some ETH to solver contract for the tests where `tokenOut` is ETH
     await deployer.sendTransaction({
-      to: filler.address,
+      to: solver.address,
       value: ethers.utils.parseEther("10"),
     });
   });
@@ -95,16 +95,16 @@ describe("Memswap", async () => {
       tokenIn: getRandomBoolean() ? weth.address : token0.address,
       tokenOut: getRandomBoolean() ? AddressZero : token1.address,
       maker: alice.address,
-      filler: AddressZero,
-      referrer: getRandomBoolean() ? AddressZero : carol.address,
-      referrerFeeBps: getRandomInteger(0, 1000),
-      referrerSurplusBps: getRandomInteger(0, 1000),
+      matchmaker: AddressZero,
+      source: getRandomBoolean() ? AddressZero : carol.address,
+      feeBps: getRandomInteger(0, 1000),
+      surplusBps: getRandomInteger(0, 1000),
       deadline: (await getCurrentTimestamp()) + getRandomInteger(1, 1000),
       isPartiallyFillable: getRandomBoolean(),
       amountIn: ethers.utils.parseEther(getRandomFloat(0.01, 1)),
-      startAmountOut: ethers.utils.parseEther(getRandomFloat(0.5, 1)),
-      expectedAmountOut: ethers.utils.parseEther(getRandomFloat(0.5, 0.7)),
       endAmountOut: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
+      startAmountBps: getRandomInteger(800, 1000),
+      expectedAmountBps: getRandomInteger(500, 800),
     };
 
     // Generate a random fill amount (for partially-fillable intents)
@@ -146,9 +146,16 @@ describe("Memswap", async () => {
     const endTime = intent.deadline;
     await time.setNextBlockTimestamp(startTime);
 
+    const startAmountOut = bn(intent.endAmountOut).add(
+      bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
+    );
+    const expectedAmountOut = bn(intent.endAmountOut).add(
+      bn(intent.endAmountOut).mul(intent.expectedAmountBps).div(10000)
+    );
+
     // Compute the intent amount at above timestamp
-    const amount = bn(intent.startAmountOut).sub(
-      bn(intent.startAmountOut)
+    const amount = bn(startAmountOut).sub(
+      bn(startAmountOut)
         .sub(intent.endAmountOut)
         .div(endTime - startTime ?? 1)
     );
@@ -157,10 +164,10 @@ describe("Memswap", async () => {
       intent.tokenOut === AddressZero
         ? await ethers.provider.getBalance(intent.maker)
         : await token1.balanceOf(intent.maker);
-    const referrerBalanceBefore =
+    const sourceBalanceBefore =
       intent.tokenOut === AddressZero
-        ? await ethers.provider.getBalance(intent.referrer)
-        : await token1.balanceOf(intent.referrer);
+        ? await ethers.provider.getBalance(intent.source)
+        : await token1.balanceOf(intent.source);
 
     // Optionally have some positive slippage (eg. on top of amount required by intent)
     const positiveSlippage = ethers.utils.parseEther(
@@ -169,8 +176,8 @@ describe("Memswap", async () => {
     if (intent.deadline < startTime) {
       await expect(
         memswap.connect(bob).solve(intent, {
-          to: filler.address,
-          data: filler.interface.encodeFunctionData("fill", [
+          to: solver.address,
+          data: solver.interface.encodeFunctionData("fill", [
             intent.tokenOut,
             amount.add(positiveSlippage),
           ]),
@@ -180,8 +187,8 @@ describe("Memswap", async () => {
       return;
     } else {
       await memswap.connect(bob).solve(intent, {
-        to: filler.address,
-        data: filler.interface.encodeFunctionData("fill", [
+        to: solver.address,
+        data: solver.interface.encodeFunctionData("fill", [
           intent.tokenOut,
           amount.add(positiveSlippage),
         ]),
@@ -193,34 +200,34 @@ describe("Memswap", async () => {
       intent.tokenOut === AddressZero
         ? await ethers.provider.getBalance(intent.maker)
         : await token1.balanceOf(intent.maker);
-    const referrerBalanceAfter =
+    const sourceBalanceAfter =
       intent.tokenOut === AddressZero
-        ? await ethers.provider.getBalance(intent.referrer)
-        : await token1.balanceOf(intent.referrer);
+        ? await ethers.provider.getBalance(intent.source)
+        : await token1.balanceOf(intent.source);
 
-    // Compute referrer fees
-    const referrerFee =
-      intent.referrer === AddressZero
+    // Compute source fees
+    const sourceFee =
+      intent.source === AddressZero
         ? bn(0)
-        : amount.mul(intent.referrerFeeBps).div(10000);
-    const referrerSlippage =
-      intent.referrer === AddressZero
+        : amount.mul(intent.feeBps).div(10000);
+    const sourceSlippage =
+      intent.source === AddressZero
         ? bn(0)
-        : amount.add(positiveSlippage).gt(intent.expectedAmountOut) &&
-          amount.lt(intent.expectedAmountOut)
+        : amount.add(positiveSlippage).gt(expectedAmountOut) &&
+          amount.lt(expectedAmountOut)
         ? amount
             .add(positiveSlippage)
-            .sub(intent.expectedAmountOut)
-            .mul(intent.referrerSurplusBps)
+            .sub(expectedAmountOut)
+            .mul(intent.surplusBps)
             .div(10000)
         : bn(0);
 
-    // Make sure the maker and the referrer got the right amounts
+    // Make sure the maker and the source got the right amounts
     expect(makerBalanceAfter.sub(makerBalanceBefore)).to.eq(
-      amount.add(positiveSlippage).sub(referrerFee).sub(referrerSlippage)
+      amount.add(positiveSlippage).sub(sourceFee).sub(sourceSlippage)
     );
-    expect(referrerBalanceAfter.sub(referrerBalanceBefore)).to.eq(
-      referrerFee.add(referrerSlippage)
+    expect(sourceBalanceAfter.sub(sourceBalanceBefore)).to.eq(
+      sourceFee.add(sourceSlippage)
     );
   };
 
@@ -234,39 +241,43 @@ describe("Memswap", async () => {
       tokenIn: token0.address,
       tokenOut: token1.address,
       maker: alice.address,
-      filler: bob.address,
-      referrer: AddressZero,
-      referrerFeeBps: 0,
-      referrerSurplusBps: 0,
+      matchmaker: bob.address,
+      source: AddressZero,
+      feeBps: 0,
+      surplusBps: 0,
       deadline: (await getCurrentTimestamp()) + 60,
       isPartiallyFillable: true,
       amountIn: ethers.utils.parseEther("0.5"),
-      startAmountOut: ethers.utils.parseEther("0.3"),
-      expectedAmountOut: ethers.utils.parseEther("0.3"),
       endAmountOut: ethers.utils.parseEther("0.3"),
+      startAmountBps: 0,
+      expectedAmountBps: 0,
     };
     (intent as any).signature = await signIntent(alice, intent);
 
     await token0.connect(alice).mint(intent.amountIn);
     await token0.connect(alice).approve(memswap.address, intent.amountIn);
 
+    const startAmountOut = bn(intent.endAmountOut).add(
+      bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
+    );
+
     await expect(
       memswap.connect(carol).solve(intent, {
-        to: filler.address,
-        data: filler.interface.encodeFunctionData("fill", [
+        to: solver.address,
+        data: solver.interface.encodeFunctionData("fill", [
           intent.tokenOut,
-          intent.startAmountOut,
+          startAmountOut,
         ]),
         amount: intent.amountIn,
       })
     ).to.be.revertedWith("Unauthorized");
 
-    // Authorization must come from the intent filler
+    // Authorization must come from the intent solver
     {
       await expect(
         memswap.connect(dan).authorize(intent, carol.address, {
-          maximumAmountIn: intent.amountIn,
-          minimumAmountOut: intent.endAmountOut,
+          maxAmountIn: intent.amountIn,
+          minAmountOut: intent.endAmountOut,
           blockDeadline: await ethers.provider
             .getBlock("latest")
             .then((b) => b.number + 2),
@@ -277,10 +288,10 @@ describe("Memswap", async () => {
 
     // Non-partially-fillable authorizations cannot be partially filled
     {
-      const maximumAmountIn = ethers.utils.parseEther("0.4");
+      const maxAmountIn = ethers.utils.parseEther("0.4");
       await memswap.connect(bob).authorize(intent, carol.address, {
-        maximumAmountIn,
-        minimumAmountOut: intent.endAmountOut,
+        maxAmountIn,
+        minAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -289,10 +300,10 @@ describe("Memswap", async () => {
 
       await expect(
         memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
-          to: filler.address,
-          data: filler.interface.encodeFunctionData("fill", [
+          to: solver.address,
+          data: solver.interface.encodeFunctionData("fill", [
             intent.tokenOut,
-            intent.startAmountOut,
+            startAmountOut,
           ]),
           amount: ethers.utils.parseEther("0.3"),
         })
@@ -301,10 +312,10 @@ describe("Memswap", async () => {
 
     // Cannot fill more than the authorization maximum amount
     {
-      const maximumAmountIn = ethers.utils.parseEther("0.3");
+      const maxAmountIn = ethers.utils.parseEther("0.3");
       await memswap.connect(bob).authorize(intent, carol.address, {
-        maximumAmountIn,
-        minimumAmountOut: intent.endAmountOut,
+        maxAmountIn,
+        minAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -313,10 +324,10 @@ describe("Memswap", async () => {
 
       await expect(
         memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
-          to: filler.address,
-          data: filler.interface.encodeFunctionData("fill", [
+          to: solver.address,
+          data: solver.interface.encodeFunctionData("fill", [
             intent.tokenOut,
-            intent.startAmountOut,
+            startAmountOut,
           ]),
           amount: ethers.utils.parseEther("0.4"),
         })
@@ -325,10 +336,10 @@ describe("Memswap", async () => {
 
     // Cannot use expired authorization
     {
-      const maximumAmountIn = ethers.utils.parseEther("0.3");
+      const maxAmountIn = ethers.utils.parseEther("0.3");
       await memswap.connect(bob).authorize(intent, carol.address, {
-        maximumAmountIn,
-        minimumAmountOut: intent.endAmountOut,
+        maxAmountIn,
+        minAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 1),
@@ -337,22 +348,22 @@ describe("Memswap", async () => {
 
       await expect(
         memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
-          to: filler.address,
-          data: filler.interface.encodeFunctionData("fill", [
+          to: solver.address,
+          data: solver.interface.encodeFunctionData("fill", [
             intent.tokenOut,
-            intent.startAmountOut,
+            startAmountOut,
           ]),
-          amount: maximumAmountIn,
+          amount: maxAmountIn,
         })
       ).to.be.revertedWith("AuthorizationIsExpired");
     }
 
     // Cannot fill less at a worse rate than authorized
     {
-      const maximumAmountIn = ethers.utils.parseEther("0.3");
+      const maxAmountIn = ethers.utils.parseEther("0.3");
       await memswap.connect(bob).authorize(intent, carol.address, {
-        maximumAmountIn,
-        minimumAmountOut: intent.startAmountOut,
+        maxAmountIn,
+        minAmountOut: startAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -361,22 +372,22 @@ describe("Memswap", async () => {
 
       await expect(
         memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
-          to: filler.address,
-          data: filler.interface.encodeFunctionData("fill", [
+          to: solver.address,
+          data: solver.interface.encodeFunctionData("fill", [
             intent.tokenOut,
-            intent.startAmountOut.sub(1),
+            startAmountOut.sub(1),
           ]),
-          amount: maximumAmountIn,
+          amount: maxAmountIn,
         })
       ).to.be.revertedWith("InvalidSolution");
     }
 
     // Successful fill
     {
-      const maximumAmountIn = ethers.utils.parseEther("0.3");
+      const maxAmountIn = ethers.utils.parseEther("0.3");
       await memswap.connect(bob).authorize(intent, carol.address, {
-        maximumAmountIn,
-        minimumAmountOut: intent.endAmountOut,
+        maxAmountIn,
+        minAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -384,12 +395,12 @@ describe("Memswap", async () => {
       });
 
       await memswap.connect(carol).solveWithOnChainAuthorizationCheck(intent, {
-        to: filler.address,
-        data: filler.interface.encodeFunctionData("fill", [
+        to: solver.address,
+        data: solver.interface.encodeFunctionData("fill", [
           intent.tokenOut,
-          intent.startAmountOut,
+          startAmountOut,
         ]),
-        amount: maximumAmountIn,
+        amount: maxAmountIn,
       });
     }
   });
@@ -399,28 +410,32 @@ describe("Memswap", async () => {
       tokenIn: token0.address,
       tokenOut: token1.address,
       maker: alice.address,
-      filler: bob.address,
-      referrer: AddressZero,
-      referrerFeeBps: 0,
-      referrerSurplusBps: 0,
+      matchmaker: bob.address,
+      source: AddressZero,
+      feeBps: 0,
+      surplusBps: 0,
       deadline: (await getCurrentTimestamp()) + 60,
       isPartiallyFillable: true,
       amountIn: ethers.utils.parseEther("0.5"),
-      startAmountOut: ethers.utils.parseEther("0.3"),
-      expectedAmountOut: ethers.utils.parseEther("0.3"),
       endAmountOut: ethers.utils.parseEther("0.3"),
+      startAmountBps: 0,
+      expectedAmountBps: 0,
     };
     (intent as any).signature = await signIntent(alice, intent);
 
     await token0.connect(alice).mint(intent.amountIn);
     await token0.connect(alice).approve(memswap.address, intent.amountIn);
 
+    const startAmountOut = bn(intent.endAmountOut).add(
+      bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
+    );
+
     await expect(
       memswap.connect(carol).solve(intent, {
-        to: filler.address,
-        data: filler.interface.encodeFunctionData("fill", [
+        to: solver.address,
+        data: solver.interface.encodeFunctionData("fill", [
           intent.tokenOut,
-          intent.startAmountOut,
+          startAmountOut,
         ]),
         amount: intent.amountIn,
       })
@@ -429,26 +444,26 @@ describe("Memswap", async () => {
     const _signAuthorization = async (
       signer: SignerWithAddress,
       intent: any,
-      authorizedFiller: string,
+      authorizedSolver: string,
       auth: {
-        maximumAmountIn: BigNumberish;
-        minimumAmountOut: BigNumberish;
+        maxAmountIn: BigNumberish;
+        minAmountOut: BigNumberish;
         blockDeadline: number;
         isPartiallyFillable: boolean;
       }
     ) => {
       return signAuthorization(signer, {
         intentHash: await memswap.getIntentHash(intent),
-        authorizedFiller,
+        authorizedSolver,
         ...auth,
       });
     };
 
-    // Authorization must come from the intent filler
+    // Authorization must come from the intent solver
     {
       const auth = {
-        maximumAmountIn: ethers.utils.parseEther("0.3"),
-        minimumAmountOut: intent.endAmountOut,
+        maxAmountIn: ethers.utils.parseEther("0.3"),
+        minAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 1),
@@ -465,10 +480,10 @@ describe("Memswap", async () => {
         memswap.connect(carol).solveWithSignatureAuthorizationCheck(
           intent,
           {
-            to: filler.address,
-            data: filler.interface.encodeFunctionData("fill", [
+            to: solver.address,
+            data: solver.interface.encodeFunctionData("fill", [
               intent.tokenOut,
-              intent.startAmountOut,
+              startAmountOut,
             ]),
             amount: ethers.utils.parseEther("0.3"),
           },
@@ -478,11 +493,11 @@ describe("Memswap", async () => {
       ).to.be.revertedWith("InvalidSignature");
     }
 
-    // Authorization must be given to filler
+    // Authorization must be given to solver
     {
       const auth = {
-        maximumAmountIn: ethers.utils.parseEther("0.3"),
-        minimumAmountOut: intent.endAmountOut,
+        maxAmountIn: ethers.utils.parseEther("0.3"),
+        minAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 1),
@@ -499,10 +514,10 @@ describe("Memswap", async () => {
         memswap.connect(carol).solveWithSignatureAuthorizationCheck(
           intent,
           {
-            to: filler.address,
-            data: filler.interface.encodeFunctionData("fill", [
+            to: solver.address,
+            data: solver.interface.encodeFunctionData("fill", [
               intent.tokenOut,
-              intent.startAmountOut,
+              startAmountOut,
             ]),
             amount: ethers.utils.parseEther("0.3"),
           },
@@ -515,8 +530,8 @@ describe("Memswap", async () => {
     // Successful fill
     {
       const auth = {
-        maximumAmountIn: ethers.utils.parseEther("0.3"),
-        minimumAmountOut: intent.endAmountOut,
+        maxAmountIn: ethers.utils.parseEther("0.3"),
+        minAmountOut: intent.endAmountOut,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 1),
@@ -532,10 +547,10 @@ describe("Memswap", async () => {
       await memswap.connect(carol).solveWithSignatureAuthorizationCheck(
         intent,
         {
-          to: filler.address,
-          data: filler.interface.encodeFunctionData("fill", [
+          to: solver.address,
+          data: solver.interface.encodeFunctionData("fill", [
             intent.tokenOut,
-            intent.startAmountOut,
+            startAmountOut,
           ]),
           amount: ethers.utils.parseEther("0.3"),
         },
@@ -550,21 +565,25 @@ describe("Memswap", async () => {
       tokenIn: token0.address,
       tokenOut: token1.address,
       maker: alice.address,
-      filler: AddressZero,
-      referrer: AddressZero,
-      referrerFeeBps: 0,
-      referrerSurplusBps: 0,
+      matchmaker: AddressZero,
+      source: AddressZero,
+      feeBps: 0,
+      surplusBps: 0,
       deadline: (await getCurrentTimestamp()) + 60,
       isPartiallyFillable: true,
       amountIn: ethers.utils.parseEther("0.5"),
-      startAmountOut: ethers.utils.parseEther("0.3"),
-      expectedAmountOut: ethers.utils.parseEther("0.3"),
       endAmountOut: ethers.utils.parseEther("0.3"),
+      startAmountBps: 0,
+      expectedAmountBps: 0,
       signature: "0x",
     };
 
     await token0.connect(alice).mint(intent.amountIn);
     await token0.connect(alice).approve(memswap.address, intent.amountIn);
+
+    const startAmountOut = bn(intent.endAmountOut).add(
+      bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
+    );
 
     await expect(memswap.connect(bob).validate([intent])).to.be.revertedWith(
       "InvalidSignature"
@@ -572,10 +591,10 @@ describe("Memswap", async () => {
     await memswap.connect(alice).validate([intent]);
 
     await memswap.connect(carol).solve(intent, {
-      to: filler.address,
-      data: filler.interface.encodeFunctionData("fill", [
+      to: solver.address,
+      data: solver.interface.encodeFunctionData("fill", [
         intent.tokenOut,
-        intent.startAmountOut,
+        startAmountOut,
       ]),
       amount: intent.amountIn,
     });
@@ -586,22 +605,25 @@ describe("Memswap", async () => {
       tokenIn: token0.address,
       tokenOut: token1.address,
       maker: alice.address,
-      filler: AddressZero,
-      referrer: AddressZero,
-      referrerFeeBps: 0,
-      referrerSurplusBps: 0,
+      matchmaker: AddressZero,
+      source: AddressZero,
+      feeBps: 0,
+      surplusBps: 0,
       deadline: (await getCurrentTimestamp()) + 60,
       isPartiallyFillable: true,
       amountIn: ethers.utils.parseEther("0.5"),
-      startAmountOut: ethers.utils.parseEther("0.3"),
-      expectedAmountOut: ethers.utils.parseEther("0.3"),
       endAmountOut: ethers.utils.parseEther("0.3"),
-      signature: "0x",
+      startAmountBps: 0,
+      expectedAmountBps: 0,
     };
     (intent as any).signature = await signIntent(alice, intent);
 
     await token0.connect(alice).mint(intent.amountIn);
     await token0.connect(alice).approve(memswap.address, intent.amountIn);
+
+    const startAmountOut = bn(intent.endAmountOut).add(
+      bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
+    );
 
     await expect(memswap.connect(bob).cancel([intent])).to.be.revertedWith(
       "Unauthorized"
@@ -610,10 +632,10 @@ describe("Memswap", async () => {
 
     await expect(
       memswap.connect(carol).solve(intent, {
-        to: filler.address,
-        data: filler.interface.encodeFunctionData("fill", [
+        to: solver.address,
+        data: solver.interface.encodeFunctionData("fill", [
           intent.tokenOut,
-          intent.startAmountOut,
+          startAmountOut,
         ]),
         amount: intent.amountIn,
       })
@@ -627,16 +649,16 @@ describe("Memswap", async () => {
         tokenIn: token0.address,
         tokenOut: token1.address,
         maker: alice.address,
-        filler: AddressZero,
-        referrer: AddressZero,
-        referrerFeeBps: 0,
-        referrerSurplusBps: 0,
+        matchmaker: AddressZero,
+        source: AddressZero,
+        feeBps: 0,
+        surplusBps: 0,
         deadline: (await getCurrentTimestamp()) + 60,
         isPartiallyFillable: true,
         amountIn: ethers.utils.parseEther("0.5"),
-        startAmountOut: ethers.utils.parseEther("0.3"),
-        expectedAmountOut: ethers.utils.parseEther("0.3"),
         endAmountOut: ethers.utils.parseEther("0.3"),
+        startAmountBps: 0,
+        expectedAmountBps: 0,
       });
     }
 
@@ -645,6 +667,10 @@ describe("Memswap", async () => {
     const intent = intents[getRandomInteger(0, intents.length - 1)];
     await token0.connect(alice).mint(intent.amountIn);
     await token0.connect(alice).approve(memswap.address, intent.amountIn);
+
+    const startAmountOut = bn(intent.endAmountOut).add(
+      bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
+    );
 
     // Move to a known block timestamp
     const startTime = Math.max(
@@ -655,15 +681,15 @@ describe("Memswap", async () => {
     await time.setNextBlockTimestamp(startTime);
 
     // Compute the intent amount at above timestamp
-    const amount = bn(intent.startAmountOut).sub(
-      bn(intent.startAmountOut)
+    const amount = bn(startAmountOut).sub(
+      bn(startAmountOut)
         .sub(intent.endAmountOut)
         .div(endTime - startTime ?? 1)
     );
 
     await memswap.connect(bob).solve(intent, {
-      to: filler.address,
-      data: filler.interface.encodeFunctionData("fill", [
+      to: solver.address,
+      data: solver.interface.encodeFunctionData("fill", [
         intent.tokenOut,
         amount,
       ]),

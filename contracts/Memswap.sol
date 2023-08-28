@@ -11,16 +11,17 @@ contract Memswap is ReentrancyGuard {
         IERC20 tokenIn;
         IERC20 tokenOut;
         address maker;
-        address filler;
-        address referrer;
-        uint32 referrerFeeBps;
-        uint32 referrerSurplusBps;
+        // The address allowed to solve or authorize others to solve
+        address matchmaker;
+        address source;
+        uint16 feeBps;
+        uint16 surplusBps;
         uint32 deadline;
         bool isPartiallyFillable;
         uint128 amountIn;
-        uint128 startAmountOut;
-        uint128 expectedAmountOut;
         uint128 endAmountOut;
+        uint16 startAmountBps;
+        uint16 expectedAmountBps;
         bytes signature;
     }
 
@@ -31,8 +32,8 @@ contract Memswap is ReentrancyGuard {
     }
 
     struct Authorization {
-        uint128 maximumAmountIn;
-        uint128 minimumAmountOut;
+        uint128 maxAmountIn;
+        uint128 minAmountOut;
         uint32 blockDeadline;
         bool isPartiallyFillable;
     }
@@ -52,7 +53,7 @@ contract Memswap is ReentrancyGuard {
         address tokenIn,
         address tokenOut,
         address maker,
-        address filler,
+        address solver,
         uint128 amountIn,
         uint128 amountOut
     );
@@ -111,9 +112,9 @@ contract Memswap is ReentrancyGuard {
             abi.encodePacked(
                 "Authorization(",
                 "bytes32 intentHash,",
-                "address authorizedFiller,",
-                "uint128 maximumAmountIn,",
-                "uint128 minimumAmountOut,",
+                "address authorizedSolver,",
+                "uint128 maxAmountIn,",
+                "uint128 minAmountOut,",
                 "uint32 blockDeadline,",
                 "bool isPartiallyFillable",
                 ")"
@@ -126,16 +127,16 @@ contract Memswap is ReentrancyGuard {
                 "address tokenIn,",
                 "address tokenOut,",
                 "address maker,",
-                "address filler,",
-                "address referrer,",
-                "uint32 referrerFeeBps,",
-                "uint32 referrerSurplusBps,",
+                "address matchmaker,",
+                "address source,",
+                "uint16 feeBps,",
+                "uint16 surplusBps,",
                 "uint32 deadline,",
                 "bool isPartiallyFillable,",
                 "uint128 amountIn,",
-                "uint128 startAmountOut,",
-                "uint128 expectedAmountOut,",
-                "uint128 endAmountOut",
+                "uint128 endAmountOut,",
+                "uint16 startAmountBps,",
+                "uint16 expectedAmountBps",
                 ")"
             )
         );
@@ -151,21 +152,21 @@ contract Memswap is ReentrancyGuard {
      * @notice Authorize an address to solve a particular intent
      *
      * @param intent Intent which is being solved
-     * @param authorizedFiller The address authorized to solve the intent
+     * @param authorizedSolver The address authorized to solve the intent
      * @param auth Authorization details and conditions
      */
     function authorize(
         Intent calldata intent,
-        address authorizedFiller,
+        address authorizedSolver,
         Authorization calldata auth
     ) external {
-        if (intent.filler != msg.sender) {
+        if (intent.matchmaker != msg.sender) {
             revert Unauthorized();
         }
 
         bytes32 intentHash = getIntentHash(intent);
         bytes32 authId = keccak256(
-            abi.encodePacked(intentHash, authorizedFiller)
+            abi.encodePacked(intentHash, authorizedSolver)
         );
         authorization[authId] = auth;
     }
@@ -246,8 +247,10 @@ contract Memswap is ReentrancyGuard {
         Intent calldata intent,
         Solution calldata solution
     ) external nonReentrant {
-        // The intent must be open or tied to the current filler
-        if (intent.filler != address(0) && intent.filler != msg.sender) {
+        // The intent must be open or tied to the current solver
+        if (
+            intent.matchmaker != address(0) && intent.matchmaker != msg.sender
+        ) {
             revert Unauthorized();
         }
 
@@ -256,10 +259,10 @@ contract Memswap is ReentrancyGuard {
     }
 
     /**
-     * @notice Solve an intent with authorization (compared to the regular `solve`,
-     *         this method allows filling intents tied to another filler as long as
-     *         there is a valid authorization in-place for the current sender). The
-     *         authorization check will be done on-chain.
+     * @notice Solve an intent with authorization (compared to the regular `solve`
+     *         this method allows filling intents of a matchmaker as long as there
+     *         is a valid authorization in-place for the current solver). The auth
+     *         will be done on-chain (via a transaction from the matchmaker).
      *
      * @param intent Intent to solve
      * @param solution Solution for the intent
@@ -276,14 +279,14 @@ contract Memswap is ReentrancyGuard {
 
         // Check the authorization and solve
         _checkAuthorization(auth, solution.amount);
-        _solve(intent, solution, auth.minimumAmountOut);
+        _solve(intent, solution, auth.minAmountOut);
     }
 
     /**
-     * @notice Solve an intent with authorization (compared to the regular `solve`,
-     *         this method allows filling intents tied to another filler as long as
-     *         there is a valid authorization in-place for the current sender). The
-     *         authorization check will be done via a signature from the filler.
+     * @notice Solve an intent with authorization (compared to the regular `solve`
+     *         this method allows filling intents of a matchmaker as long as there
+     *         is a valid authorization in-place for the current solver). The auth
+     *         will be done off-chain (via a signature from the matchmaker).
      *
      * @param intent Intent to solve
      * @param solution Solution for the intent
@@ -306,7 +309,7 @@ contract Memswap is ReentrancyGuard {
         // Verify the authorization
         bytes32 digest = _getEIP712Hash(authorizationHash);
         _assertValidSignature(
-            intent.filler,
+            intent.matchmaker,
             digest,
             digest,
             signature.length,
@@ -315,7 +318,7 @@ contract Memswap is ReentrancyGuard {
 
         // Check the authorization and solve
         _checkAuthorization(auth, solution.amount);
-        _solve(intent, solution, auth.minimumAmountOut);
+        _solve(intent, solution, auth.minAmountOut);
     }
 
     // View methods
@@ -324,23 +327,23 @@ contract Memswap is ReentrancyGuard {
      * @notice Get the EIP712 struct hash for an authorization
      *
      * @param intentHash Intent EIP712 struct hash to authorize
-     * @param authorizedFiller Filler to authorize
+     * @param authorizedSolver Solver to authorize
      * @param auth Authorization details/conditions
      *
      * @return authorizationHash The EIP712 struct hash of the authorization
      */
     function getAuthorizationHash(
         bytes32 intentHash,
-        address authorizedFiller,
+        address authorizedSolver,
         Authorization memory auth
     ) public view returns (bytes32 authorizationHash) {
         authorizationHash = keccak256(
             abi.encode(
                 AUTHORIZATION_TYPEHASH,
                 intentHash,
-                authorizedFiller,
-                auth.maximumAmountIn,
-                auth.minimumAmountOut,
+                authorizedSolver,
+                auth.maxAmountIn,
+                auth.minAmountOut,
                 auth.blockDeadline,
                 auth.isPartiallyFillable
             )
@@ -363,16 +366,16 @@ contract Memswap is ReentrancyGuard {
                 intent.tokenIn,
                 intent.tokenOut,
                 intent.maker,
-                intent.filler,
-                intent.referrer,
-                intent.referrerFeeBps,
-                intent.referrerSurplusBps,
+                intent.matchmaker,
+                intent.source,
+                intent.feeBps,
+                intent.surplusBps,
                 intent.deadline,
                 intent.isPartiallyFillable,
                 intent.amountIn,
-                intent.startAmountOut,
-                intent.expectedAmountOut,
-                intent.endAmountOut
+                intent.endAmountOut,
+                intent.startAmountBps,
+                intent.expectedAmountBps
             )
         );
     }
@@ -384,12 +387,12 @@ contract Memswap is ReentrancyGuard {
      *
      * @param intent Intent to solve
      * @param solution Solution for the intent
-     * @param minimumAmountOut The minimum amount out the solution is required to fulfill
+     * @param minAmountOut The minimum amount out the solution is required to fulfill
      */
     function _solve(
         Intent calldata intent,
         Solution calldata solution,
-        uint128 minimumAmountOut
+        uint128 minAmountOut
     ) internal {
         bytes32 intentHash = getIntentHash(intent);
 
@@ -410,22 +413,28 @@ contract Memswap is ReentrancyGuard {
             _validateIntent(intentHash, intent.maker, intent.signature);
         }
 
-        // Ensure there's still some amount left to be filled
-        uint128 amountAvailable = intent.amountIn - status.amountFilled;
-        if (amountAvailable == 0) {
-            revert IntentIsFilled();
-        }
+        uint128 amountToFill;
+        // Avoid "Stack too deep" errors by wrapping inside a block
+        {
+            // Ensure there's still some amount left to be filled
+            uint128 amountAvailable = intent.amountIn - status.amountFilled;
+            if (amountAvailable == 0) {
+                revert IntentIsFilled();
+            }
 
-        // Ensure non-partially-fillable intents are fully filled
-        if (!intent.isPartiallyFillable && solution.amount < amountAvailable) {
-            revert IntentIsNotPartiallyFillable();
-        }
+            // Ensure non-partially-fillable intents are fully filled
+            if (
+                !intent.isPartiallyFillable && solution.amount < amountAvailable
+            ) {
+                revert IntentIsNotPartiallyFillable();
+            }
 
-        // Compute the amount available to fill
-        uint128 amountToFill = solution.amount > amountAvailable
-            ? amountAvailable
-            : solution.amount;
-        intentStatus[intentHash].amountFilled += amountToFill;
+            // Compute the amount available to fill
+            amountToFill = solution.amount > amountAvailable
+                ? amountAvailable
+                : solution.amount;
+            intentStatus[intentHash].amountFilled += amountToFill;
+        }
 
         // Transfer inputs to fill contract
         if (amountToFill > 0) {
@@ -438,24 +447,37 @@ contract Memswap is ReentrancyGuard {
         }
 
         // Execute solution
-        (bool result, ) = solution.to.call(solution.data);
-        if (!result) {
-            revert UnsuccessfullCall();
+        // Avoid "Stack too deep" errors by wrapping inside a block
+        {
+            (bool result, ) = solution.to.call(solution.data);
+            if (!result) {
+                revert UnsuccessfullCall();
+            }
         }
 
         // Check
+
+        uint128 endAmountOut = intent.endAmountOut;
+        uint128 startAmountOut = endAmountOut +
+            (endAmountOut * intent.startAmountBps) /
+            10000;
+        uint128 expectedAmountOut = endAmountOut +
+            (endAmountOut * intent.expectedAmountBps) /
+            10000;
 
         //                                (startAmount - endAmount)
         // requiredAmount = startAmount - -------------------------
         //                                   (deadline - now())
 
-        uint128 amountDiff = intent.startAmountOut - intent.endAmountOut;
-        uint128 timeDiff = intent.deadline - uint32(block.timestamp);
-        uint128 requiredAmountOut = intent.startAmountOut -
-            amountDiff /
-            (timeDiff > 0 ? timeDiff : 1);
+        uint128 requiredAmountOut = startAmountOut -
+            (startAmountOut - endAmountOut) /
+            (
+                intent.deadline > uint32(block.timestamp)
+                    ? intent.deadline - uint32(block.timestamp)
+                    : 1
+            );
 
-        if (requiredAmountOut < minimumAmountOut) {
+        if (requiredAmountOut < minAmountOut) {
             revert InvalidSolution();
         }
 
@@ -468,31 +490,31 @@ contract Memswap is ReentrancyGuard {
             revert InvalidSolution();
         }
 
-        if (intent.referrer != address(0)) {
+        if (intent.source != address(0)) {
             uint256 amount;
 
-            // Charge referrer fee
-            if (intent.referrerFeeBps > 0) {
-                amount += (intent.referrerFeeBps * requiredAmountOut) / 10000;
+            // Charge fee
+            if (intent.feeBps > 0) {
+                amount += (requiredAmountOut * intent.feeBps) / 10000;
             }
 
             // Charge surplus fee
             if (
-                intent.referrerSurplusBps > 0 &&
-                tokenOutBalance > intent.expectedAmountOut &&
-                intent.expectedAmountOut > requiredAmountOut
+                intent.surplusBps > 0 &&
+                tokenOutBalance > expectedAmountOut &&
+                expectedAmountOut > requiredAmountOut
             ) {
                 amount +=
-                    (intent.referrerSurplusBps *
-                        (tokenOutBalance - intent.expectedAmountOut)) /
+                    ((tokenOutBalance - expectedAmountOut) *
+                        intent.surplusBps) /
                     10000;
             }
 
-            // Transfer fees to referrer
+            // Transfer fees
             if (amount > 0) {
                 _transferToken(
                     solution.to,
-                    intent.referrer,
+                    intent.source,
                     intent.tokenOut,
                     amount
                 );
@@ -538,12 +560,12 @@ contract Memswap is ReentrancyGuard {
         }
 
         // Ensure the amount doesn't exceed the maximum authorized amount
-        if (auth.maximumAmountIn < amount) {
+        if (auth.maxAmountIn < amount) {
             revert AuthorizationIsInsufficient();
         }
 
         // Ensure non-partially-fillable authorizations are fully filled
-        if (!auth.isPartiallyFillable && auth.maximumAmountIn != amount) {
+        if (!auth.isPartiallyFillable && auth.maxAmountIn != amount) {
             revert AuthorizationIsNotPartiallyFillable();
         }
     }
@@ -726,23 +748,23 @@ contract Memswap is ReentrancyGuard {
     function _lookupBulkOrderTypehash(
         uint256 treeHeight
     ) internal pure returns (bytes32 typeHash) {
-        // kecca256("BatchIntent(Intent[2]...[2] tree)Intent(address tokenIn,address tokenOut,address maker,address filler,address referrer,uint32 referrerFeeBps,uint32 referrerSurplusBps,uint32 deadline,bool isPartiallyFillable,uint128 amountIn,uint128 startAmountOut,uint128 expectedAmountOut,uint128 endAmountOut)")
+        // kecca256("BatchIntent(Intent[2] tree)Intent(address tokenIn,address tokenOut,address maker,address matchmaker,address source,uint16 feeBps,uint16 surplusBps,uint32 deadline,bool isPartiallyFillable,uint128 amountIn,uint128 endAmountOut,uint16 startAmountBps,uint16 expectedAmountBps)")
         if (treeHeight == 1) {
-            typeHash = 0x5888ead0bee66ec5c9b976d7d5f0d5a6ddcdbcb002828fa378f6baaf167922d5;
+            typeHash = 0xa09b55b2b0f1611c4db0b312fc7063c8438a51497adc137310360981267db3ef;
         } else if (treeHeight == 2) {
-            typeHash = 0x60ae5aa548d57f8edc240ccfab272133c227a20488d90e659cc5cba57aac7dd1;
+            typeHash = 0x04440a5b85b1ac9a5931adc223455ce5ee3db7c8a2779030b9b8db54e2b85799;
         } else if (treeHeight == 3) {
-            typeHash = 0x3b37ca5e523d0714a522e69eeb94ff61f97b6b08f34b78e499bc74ce91cd880c;
+            typeHash = 0x3201a8c99184de74eeba60a0f95ba5677e2d05308248224cff5d53314a25b768;
         } else if (treeHeight == 4) {
-            typeHash = 0xcba57bc231bdd9c56613856301179eac42096dc31cc3ff76c41c2d1ecbe0e88b;
+            typeHash = 0x5f9c3a9757945e640a0e6f0fa11269b3d05f3516b8377caf06a22bcd47f19a0c;
         } else if (treeHeight == 5) {
-            typeHash = 0x368cc56a56882cf105ced7b793a3396682e29f6d63f81c3642883256b38e22ed;
+            typeHash = 0x49b5887b13176700800be2e1ec7eece8e4683eba84310a7a49f8acda23a84cc9;
         } else if (treeHeight == 6) {
-            typeHash = 0xa1dcb7e7297abf2b965bbd82354825d1ce0705a2c6533e24bec353dc5447c01e;
+            typeHash = 0x5aba5e52e068d52122f8220dda000664baf304f522ceface6940df335ca128fb;
         } else if (treeHeight == 7) {
-            typeHash = 0xe6653a68bcd0b9d6b207b8b2436e530343e63be828ced9fb0a751d1901e3ed14;
+            typeHash = 0xa004a0ff682c47acac1378afc7985f7c43efbd1adea9248e30d6afad0b0211e8;
         } else if (treeHeight == 8) {
-            typeHash = 0xfadd1d63d56ccbc53d70d60de34c8f45e85038325ecdfb8e2fba53e5846458f4;
+            typeHash = 0x0745413a2bfe7693ff806398f8d59424166d165d7c16591bcfa1d4ce7cc168f5;
         } else {
             revert MerkleTreeTooLarge();
         }

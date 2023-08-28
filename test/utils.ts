@@ -77,16 +77,16 @@ const getBulkSignatureDataWithProofs = (
     tokenIn: AddressZero,
     tokenOut: AddressZero,
     maker: AddressZero,
-    filler: AddressZero,
-    referrer: AddressZero,
-    referrerFeeBps: 0,
-    referrerSurplusBps: 0,
+    matchmaker: AddressZero,
+    source: AddressZero,
+    feeBps: 0,
+    surplusBps: 0,
     deadline: 0,
     isPartiallyFillable: false,
     amountIn: 0,
-    startAmountOut: 0,
-    expectedAmountOut: 0,
     endAmountOut: 0,
+    startAmountBps: 0,
+    expectedAmountBps: 0,
   };
   const defaultLeaf = hashElement(defaultElement);
 
@@ -152,15 +152,15 @@ export const AUTHORIZATION_EIP712_TYPES = {
       type: "bytes32",
     },
     {
-      name: "authorizedFiller",
+      name: "authorizedSolver",
       type: "address",
     },
     {
-      name: "maximumAmountIn",
+      name: "maxAmountIn",
       type: "uint128",
     },
     {
-      name: "minimumAmountOut",
+      name: "minAmountOut",
       type: "uint128",
     },
     {
@@ -189,20 +189,20 @@ export const INTENT_EIP712_HASH = {
       type: "address",
     },
     {
-      name: "filler",
+      name: "matchmaker",
       type: "address",
     },
     {
-      name: "referrer",
+      name: "source",
       type: "address",
     },
     {
-      name: "referrerFeeBps",
-      type: "uint32",
+      name: "feeBps",
+      type: "uint16",
     },
     {
-      name: "referrerSurplusBps",
-      type: "uint32",
+      name: "surplusBps",
+      type: "uint16",
     },
     {
       name: "deadline",
@@ -217,16 +217,16 @@ export const INTENT_EIP712_HASH = {
       type: "uint128",
     },
     {
-      name: "startAmountOut",
-      type: "uint128",
-    },
-    {
-      name: "expectedAmountOut",
-      type: "uint128",
-    },
-    {
       name: "endAmountOut",
       type: "uint128",
+    },
+    {
+      name: "startAmountBps",
+      type: "uint16",
+    },
+    {
+      name: "expectedAmountBps",
+      type: "uint16",
     },
   ],
 };
