@@ -4,12 +4,7 @@ import { JsonRpcProvider } from "@ethersproject/providers";
 import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 
-import {
-  MATCHMAKER,
-  MEMSWAP,
-  MEMSWAP_WETH,
-  REGULAR_WETH,
-} from "../src/common/addresses";
+import { MEMSWAP, MEMSWAP_WETH, REGULAR_WETH } from "../src/common/addresses";
 import { getEIP712Domain, getEIP712TypesForIntent } from "../src/common/utils";
 
 // Required env variables:
@@ -39,18 +34,18 @@ const main = async () => {
     tokenIn,
     tokenOut,
     maker: maker.address,
-    filler: MATCHMAKER,
-    referrer: AddressZero,
-    referrerFeeBps: 0,
-    referrerSurplusBps: 0,
+    matchmaker: AddressZero,
+    source: AddressZero,
+    feeBps: 0,
+    surplusBps: 0,
     deadline: await provider
       .getBlock("latest")
       .then((b) => b!.timestamp + 3600 * 24),
-    amountIn,
     isPartiallyFillable: false,
-    startAmountOut: amountOut,
-    expectedAmountOut: amountOut,
+    amountIn,
     endAmountOut: amountOut,
+    startAmountBps: 0,
+    expectedAmountBps: 0,
   };
   (intent as any).signature = await maker._signTypedData(
     getEIP712Domain(chainId),
@@ -73,30 +68,30 @@ const main = async () => {
           "address",
           "address",
           "address",
-          "uint32",
-          "uint32",
+          "uint16",
+          "uint16",
           "uint32",
           "bool",
           "uint128",
           "uint128",
-          "uint128",
-          "uint128",
+          "uint16",
+          "uint16",
           "bytes",
         ],
         [
           intent.tokenIn,
           intent.tokenOut,
           intent.maker,
-          intent.filler,
-          intent.referrer,
-          intent.referrerFeeBps,
-          intent.referrerSurplusBps,
+          intent.matchmaker,
+          intent.source,
+          intent.feeBps,
+          intent.surplusBps,
           intent.deadline,
           intent.isPartiallyFillable,
           intent.amountIn,
-          intent.startAmountOut,
-          intent.expectedAmountOut,
           intent.endAmountOut,
+          intent.startAmountBps,
+          intent.expectedAmountBps,
           (intent as any).signature,
         ]
       )
