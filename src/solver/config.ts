@@ -3,8 +3,8 @@ export const config = {
   wsUrl: process.env.WS_URL!,
   redisUrl: process.env.REDIS_URL!,
   flashbotsSignerPk: process.env.FLASHBOTS_SIGNER_PK!,
-  searcherPk: process.env.SEARCHER_PK!,
-  matchMakerBaseUrl: process.env.MATCHMAKER_BASE_URL!,
+  solverPk: process.env.SOLVER_PK!,
+  matchmakerBaseUrl: process.env.MATCHMAKER_BASE_URL!,
   zeroExApiKey: process.env.ZERO_EX_API_KEY!,
   port: process.env.PORT!,
 };

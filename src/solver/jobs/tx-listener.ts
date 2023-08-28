@@ -48,30 +48,31 @@ const worker = new Worker(
         "address",
         "address",
         "address",
-        "uint32",
-        "uint32",
+        "uint16",
+        "uint16",
         "uint32",
         "bool",
         "uint128",
         "uint128",
-        "uint128",
-        "uint128",
+        "uint16",
+        "uint16",
         "bytes",
       ];
 
       // Try to decode any intent appended at the end of the calldata
       let restOfCalldata: string | undefined;
-      let intentOrigin: IntentOrigin = "unknown";
+      let intentOrigin: IntentOrigin = "irrelevant";
       if (tx.data.startsWith("0x095ea7b3")) {
         const iface = new Interface([
           "function approve(address spender, uint256 amount)",
         ]);
+
         const spender = iface
           .decodeFunctionData("approve", tx.data)
           .spender.toLowerCase();
         if (spender === MEMSWAP) {
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
-          intentOrigin = "approve";
+          intentOrigin = "approval";
         }
       } else if (
         tx.data.startsWith("0x28026ace") &&
@@ -80,12 +81,13 @@ const worker = new Worker(
         const iface = new Interface([
           "function depositAndApprove(address spender, uint256 amount)",
         ]);
+
         const spender = iface
           .decodeFunctionData("depositAndApprove", tx.data)
           .spender.toLowerCase();
         if (spender === MEMSWAP) {
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
-          intentOrigin = "deposit-and-approve";
+          intentOrigin = "approval";
         }
       } else if (
         tx.data.startsWith("0x4adb41f5") &&
@@ -111,6 +113,7 @@ const worker = new Worker(
             ) intent
           )`,
         ]);
+
         const result = iface.decodeFunctionData("post", tx.data);
         restOfCalldata = defaultAbiCoder.encode(intentTypes, result.intent);
       } else {
@@ -126,16 +129,16 @@ const worker = new Worker(
             tokenIn: result[0].toLowerCase(),
             tokenOut: result[1].toLowerCase(),
             maker: result[2].toLowerCase(),
-            filler: result[3].toLowerCase(),
-            referrer: result[4].toLowerCase(),
-            referrerFeeBps: result[5],
-            referrerSurplusBps: result[6],
+            matchmaker: result[3].toLowerCase(),
+            source: result[4].toLowerCase(),
+            feeBps: result[5],
+            surplusBps: result[6],
             deadline: result[7],
             isPartiallyFillable: result[8],
             amountIn: result[9].toString(),
-            startAmountOut: result[10].toString(),
-            expectedAmountOut: result[11].toString(),
-            endAmountOut: result[12].toString(),
+            endAmountOut: result[10].toString(),
+            startAmountBps: result[11],
+            expectedAmountBps: result[12],
             signature: result[13].toLowerCase(),
           };
         } catch {
@@ -159,7 +162,7 @@ const worker = new Worker(
           return;
         }
 
-        await txSolver.addToQueue(txHash, intent, intentOrigin);
+        await txSolver.addToQueue(intent, intentOrigin, txHash);
       }
     } catch (error: any) {
       logger.error(COMPONENT, `Job failed: ${error} (${error.stack})`);

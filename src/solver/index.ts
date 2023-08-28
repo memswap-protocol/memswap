@@ -32,9 +32,15 @@ createBullBoard({
 app.use(express.json());
 app.use("/admin/bullmq", serverAdapter.getRouter());
 
-app.get("/lives", (_, res) => {
+app.get("/lives", (_req, res) => {
   return res.json({ message: "Yes" });
 });
+
+app.post("/intents", (req) => {
+  jobs.txSolver.addToQueue(req.body.intent, "irrelevant");
+});
+
+app.post("/authorizations", (req, res) => {});
 
 // Start app
 app.listen(config.port, () => {});

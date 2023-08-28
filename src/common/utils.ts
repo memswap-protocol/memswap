@@ -1,7 +1,9 @@
 import { Provider } from "@ethersproject/abstract-provider";
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
+import { _TypedDataEncoder } from "@ethersproject/hash";
 
 import { MEMSWAP } from "./addresses";
+import { Intent } from "./types";
 
 export const bn = (value: BigNumberish) => BigNumber.from(value);
 
@@ -9,6 +11,9 @@ export const now = () => Math.floor(Date.now() / 1000);
 
 export const isTxIncluded = async (txHash: string, provider: Provider) =>
   provider.getTransactionReceipt(txHash).then((tx) => tx && tx.status === 1);
+
+export const getIntentHash = (intent: Intent) =>
+  _TypedDataEncoder.hashStruct("Intent", getEIP712TypesForIntent(), intent);
 
 export const getEIP712Domain = (chainId: number) => ({
   name: "Memswap",
@@ -24,15 +29,15 @@ export const getEIP712TypesForAuthorization = () => ({
       type: "bytes32",
     },
     {
-      name: "authorizedFiller",
+      name: "authorizedSolver",
       type: "address",
     },
     {
-      name: "maximumAmountIn",
+      name: "maxAmountIn",
       type: "uint128",
     },
     {
-      name: "minimumAmountOut",
+      name: "minAmountOut",
       type: "uint128",
     },
     {
@@ -61,20 +66,20 @@ export const getEIP712TypesForIntent = () => ({
       type: "address",
     },
     {
-      name: "filler",
+      name: "matchmaker",
       type: "address",
     },
     {
-      name: "referrer",
+      name: "source",
       type: "address",
     },
     {
-      name: "referrerFeeBps",
-      type: "uint32",
+      name: "feeBps",
+      type: "uint16",
     },
     {
-      name: "referrerSurplusBps",
-      type: "uint32",
+      name: "surplusBps",
+      type: "uint16",
     },
     {
       name: "deadline",
@@ -89,16 +94,16 @@ export const getEIP712TypesForIntent = () => ({
       type: "uint128",
     },
     {
-      name: "startAmountOut",
-      type: "uint128",
-    },
-    {
-      name: "expectedAmountOut",
-      type: "uint128",
-    },
-    {
       name: "endAmountOut",
       type: "uint128",
+    },
+    {
+      name: "startAmountBps",
+      type: "uint16",
+    },
+    {
+      name: "expectedAmountBps",
+      type: "uint16",
     },
   ],
 });

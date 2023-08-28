@@ -2,7 +2,7 @@ import { Interface } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { serialize } from "@ethersproject/transactions";
-import { parseEther, parseUnits } from "@ethersproject/units";
+import { formatEther, parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import {
   FlashbotsBundleProvider,
@@ -21,8 +21,8 @@ import {
   REGULAR_WETH,
 } from "../../common/addresses";
 import { logger } from "../../common/logger";
-import { bn, isTxIncluded, now } from "../../common/utils";
 import { Intent, IntentOrigin } from "../../common/types";
+import { bn, getIntentHash, isTxIncluded, now } from "../../common/utils";
 import { config } from "../config";
 import { redis } from "../redis";
 import * as solutions from "../solutions";
@@ -41,44 +41,65 @@ export const queue = new Queue(COMPONENT, {
 const worker = new Worker(
   COMPONENT,
   async (job) => {
-    const { txHash, intent, intentOrigin } = job.data as {
-      txHash: string;
+    const { intent, intentOrigin, txHash } = job.data as {
+      txHash?: string;
       intent: Intent;
       intentOrigin: IntentOrigin;
     };
 
     try {
       const provider = new JsonRpcProvider(config.jsonUrl);
-      const searcher = new Wallet(config.searcherPk);
+      const solver = new Wallet(config.solverPk);
+
+      const intentHash = getIntentHash(intent);
 
       if (
         (intent.tokenIn === MEMSWAP_WETH && intent.tokenOut === REGULAR_WETH) ||
         (intent.tokenIn === REGULAR_WETH && intent.tokenOut === AddressZero)
       ) {
-        logger.info(COMPONENT, `[${txHash}] Attempted to wrap / unwrap WETH`);
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            intentHash,
+            txHash,
+            message: "Attempted to wrap/unwrap WETH",
+          })
+        );
         return;
       }
 
       if (intent.deadline <= now()) {
         logger.info(
           COMPONENT,
-          `[${txHash}] Intent expired: ${intent.deadline} <= ${now()}`
+          JSON.stringify({
+            intentHash,
+            txHash,
+            message: `Expired (now=${now()}, deadline=${intent.deadline})`,
+          })
         );
         return;
       }
 
-      if (![AddressZero, FILL_PROXY, MATCHMAKER].includes(intent.filler)) {
+      if (![solver.address, AddressZero].includes(intent.matchmaker)) {
         logger.info(
           COMPONENT,
-          `[${txHash}] Intent not fillable: ${intent.filler}`
+          JSON.stringify({
+            intentHash,
+            txHash,
+            message: `Unsupported matchmaker (matchmaker=${intent.matchmaker})`,
+          })
         );
         return;
       }
 
-      const tx = await provider.getTransaction(txHash);
-      logger.info(COMPONENT, `[${tx.hash}] Triggering filling`);
-
-      // TODO: Check if filler is authorized
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          intentHash,
+          txHash,
+          message: "Generating solution",
+        })
+      );
 
       const flashbotsProvider = await FlashbotsBundleProvider.create(
         provider,
@@ -87,7 +108,7 @@ const worker = new Worker(
       );
 
       const latestBlock = await provider.getBlock("latest");
-      const latestTimestamp = latestBlock.timestamp + 14;
+      const latestTimestamp = latestBlock.timestamp + 12;
       const latestBaseFee = await provider
         .getBlock("pending")
         .then((b) => b!.baseFeePerGas!);
@@ -96,8 +117,11 @@ const worker = new Worker(
       const maxPriorityFeePerGas = parseUnits("10", "gwei");
       const gasLimit = 1000000;
 
-      const minimumAmountOut = bn(intent.startAmountOut).sub(
-        bn(intent.startAmountOut)
+      const startAmountOut = bn(intent.endAmountOut).add(
+        bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
+      );
+      const minAmountOut = startAmountOut.sub(
+        startAmountOut
           .sub(intent.endAmountOut)
           .div(intent.deadline - latestTimestamp)
       );
@@ -112,18 +136,22 @@ const worker = new Worker(
       }
 
       if (solution.amountOut && solution.tokenOutToEthRate) {
-        if (bn(solution.amountOut).lt(minimumAmountOut)) {
+        if (bn(solution.amountOut).lt(minAmountOut)) {
           logger.error(
             COMPONENT,
-            `[${tx.hash}] Not enough amount out for maker (actual=${
-              solution.amountOut
-            }, minimum=${minimumAmountOut.toString()})`
+            JSON.stringify({
+              intentHash,
+              txHash,
+              message: `Solution not good enough (actualAmountOut=${
+                solution.amountOut
+              }, minAmountOut=${minAmountOut.toString()})`,
+            })
           );
           return;
         }
 
         const fillerGrossProfitInETH = bn(solution.amountOut)
-          .sub(minimumAmountOut)
+          .sub(minAmountOut)
           .mul(parseEther(solution.tokenOutToEthRate))
           .div(parseEther("1"));
         const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
@@ -132,35 +160,44 @@ const worker = new Worker(
         if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
           logger.error(
             COMPONENT,
-            `[${
-              tx.hash
-            }] Not enough amount out for filler (profit=${fillerNetProfitInETH.toString()})`
+            JSON.stringify({
+              intentHash,
+              txHash,
+              message: `Insufficient solver profit (profit=${formatEther(
+                fillerGrossProfitInETH
+              )})`,
+            })
           );
           return;
         }
       }
 
-      const originTx = {
-        signedTransaction: serialize(
-          {
-            to: tx.to,
-            nonce: tx.nonce,
-            gasLimit: tx.gasLimit,
-            data: tx.data,
-            value: tx.value,
-            chainId: tx.chainId,
-            type: tx.type,
-            accessList: tx.accessList,
-            maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
-            maxFeePerGas: tx.maxFeePerGas,
-          },
-          {
-            v: tx.v!,
-            r: tx.r!,
-            s: tx.s!,
-          }
-        ),
-      };
+      const originTx = txHash
+        ? await (async () => {
+            const tx = await provider.getTransaction(txHash);
+            return {
+              signedTransaction: serialize(
+                {
+                  to: tx.to,
+                  nonce: tx.nonce,
+                  gasLimit: tx.gasLimit,
+                  data: tx.data,
+                  value: tx.value,
+                  chainId: tx.chainId,
+                  type: tx.type,
+                  accessList: tx.accessList,
+                  maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
+                  maxFeePerGas: tx.maxFeePerGas,
+                },
+                {
+                  v: tx.v!,
+                  r: tx.r!,
+                  s: tx.s!,
+                }
+              ),
+            };
+          })()
+        : undefined;
 
       const fill = {
         to: FILL_PROXY,
@@ -172,22 +209,21 @@ const worker = new Worker(
           intent.tokenIn,
           intent.amountIn,
           intent.tokenOut,
-          minimumAmountOut,
+          minAmountOut,
         ]),
         amount: intent.amountIn,
       };
 
-      const getFillerTx = async (intent: Intent, authFromMatchMaker?: any) => {
-        const method = authFromMatchMaker
-          ? "solveWithSignatureAuthorizationCheck"
-          : intent.filler === MATCHMAKER
-          ? "solveWithOnChainAuthorizationCheck"
-          : "solve";
+      const getFillerTx = async (intent: Intent) => {
+        const method =
+          intent.matchmaker === MATCHMAKER
+            ? "solveWithOnChainAuthorizationCheck"
+            : "solve";
 
         return {
-          signer: searcher,
+          signer: solver,
           transaction: {
-            from: searcher.address,
+            from: solver.address,
             to: MEMSWAP,
             value: 0,
             data: new Interface([
@@ -197,48 +233,26 @@ const worker = new Worker(
                   address tokenIn,
                   address tokenOut,
                   address maker,
-                  address filler,
-                  address referrer,
-                  uint32 referrerFeeBps,
-                  uint32 referrerSurplusBps,
+                  address matchmaker,
+                  address source,
+                  uint16 feeBps,
+                  uint16 surplusBps,
                   uint32 deadline,
                   bool isPartiallyFillable,
                   uint128 amountIn,
-                  uint128 startAmountOut,
-                  uint128 expectedAmountOut,
                   uint128 endAmountOut,
+                  uint16 startAmountBps,
+                  uint16 expectedAmountBps,
                   bytes signature
                 ) intent,
                 (
                   address to,
                   bytes data,
                   uint128 amount
-                ) solution${
-                  authFromMatchMaker
-                    ? `,
-                        (
-                          uint128 maximumAmountIn,
-                          uint128 minimumAmountOut,
-                          uint32 blockDeadline,
-                          bool isPartiallyFillable
-                        ),
-                        bytes signature
-                      `
-                    : ""
-                }
+                ) solution
               )
             `,
-            ]).encodeFunctionData(
-              method,
-              authFromMatchMaker
-                ? [
-                    intent,
-                    fill,
-                    authFromMatchMaker,
-                    authFromMatchMaker?.signature,
-                  ]
-                : [intent, fill]
-            ),
+            ]).encodeFunctionData(method, [intent, fill]),
             type: 2,
             gasLimit,
             chainId: await provider.getNetwork().then((n) => n.chainId),
@@ -248,41 +262,10 @@ const worker = new Worker(
         };
       };
 
-      let authFromMatchMaker: any;
-      if (intent.filler === MATCHMAKER) {
-        const signedFillerTx = await searcher.signTransaction(
-          await getFillerTx(intent).then((tx) => tx.transaction)
-        );
-
-        let done = false;
-        while (!done) {
-          const response = await axios.post(
-            `${config.matchMakerBaseUrl}/fills`,
-            {
-              intent,
-              txs: [originTx.signedTransaction, signedFillerTx],
-            }
-          );
-
-          if (response.data.recheckIn) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, response.data.recheckIn * 1000)
-            );
-          } else {
-            authFromMatchMaker = response.data.auth;
-            done = true;
-          }
-        }
-
-        if (!authFromMatchMaker) {
-          throw new Error("No auth received");
-        }
-      }
-
-      if (intent.filler !== MATCHMAKER || authFromMatchMaker) {
+      if (intent.matchmaker !== MATCHMAKER) {
         const skipOriginTransaction =
-          intentOrigin === "approve" || intentOrigin === "deposit-and-approve"
-            ? await isTxIncluded(tx.hash, provider)
+          txHash && originTx && intentOrigin === "approval"
+            ? await isTxIncluded(txHash, provider)
             : true;
 
         let useFlashbots = true;
@@ -293,17 +276,10 @@ const worker = new Worker(
           useFlashbots = true;
         }
 
-        logger.info(
-          COMPONENT,
-          `[${txHash}] ${
-            useFlashbots ? "Using flashbots" : "Using a regular transaction"
-          }`
-        );
-
-        const fillerTx = await getFillerTx(intent, authFromMatchMaker);
+        const fillerTx = await getFillerTx(intent);
         if (useFlashbots) {
           const signedBundle = await flashbotsProvider.signBundle(
-            skipOriginTransaction ? [fillerTx] : [originTx, fillerTx]
+            skipOriginTransaction ? [fillerTx] : [originTx!, fillerTx]
           );
 
           const targetBlock =
@@ -317,10 +293,13 @@ const worker = new Worker(
           if (simulationResult.results.some((r) => r.error)) {
             logger.error(
               COMPONENT,
-              `[${tx.hash}] Simulation failed: ${JSON.stringify({
+              JSON.stringify({
+                txHash,
+                intentHash,
+                message: "Simulation failed",
                 simulationResult,
                 fillerTx,
-              })}`
+              })
             );
 
             // We retry jobs for which the simulation failed
@@ -329,9 +308,11 @@ const worker = new Worker(
 
           logger.info(
             COMPONENT,
-            `[${tx.hash}] Trying to send bundle (${
-              skipOriginTransaction ? "fill" : "approve-and-fill"
-            }) for block ${targetBlock}`
+            JSON.stringify({
+              intentHash,
+              txHash,
+              message: `Relaying solution using flashbots (targetBlock=${targetBlock})`,
+            })
           );
 
           const receipt = await flashbotsProvider.sendRawBundle(
@@ -342,7 +323,11 @@ const worker = new Worker(
 
           logger.info(
             COMPONENT,
-            `[${tx.hash}] Bundle ${hash} submitted for block ${targetBlock}, waiting...`
+            JSON.stringify({
+              intentHash,
+              txHash,
+              message: `Solution relayed using flashbots (targetBlock=${targetBlock}, bundleHash=${hash})`,
+            })
           );
 
           const waitResponse = await (receipt as any).wait();
@@ -352,38 +337,71 @@ const worker = new Worker(
           ) {
             logger.info(
               COMPONENT,
-              `[${tx.hash}] Bundle ${hash} included in block ${targetBlock} (${
-                waitResponse === FlashbotsBundleResolution.BundleIncluded
-                  ? "BundleIncluded"
-                  : "AccountNonceTooHigh"
-              })`
+              JSON.stringify({
+                intentHash,
+                txHash,
+                message: `Solution included (targetBlock=${targetBlock}, bundleHash=${hash})`,
+              })
             );
           } else {
-            throw new Error(
-              `[${tx.hash}] Bundle ${hash} not included in block`
+            logger.info(
+              COMPONENT,
+              JSON.stringify({
+                intentHash,
+                txHash,
+                message: `Solution not included (targetBlock=${targetBlock}, bundleHash=${hash})`,
+              })
             );
           }
         } else {
-          await txSimulator.getCallResult(
-            {
-              from: fillerTx.transaction.from,
-              to: fillerTx.transaction.to,
-              data: fillerTx.transaction.data,
-              value: fillerTx.transaction.value,
-              gas: fillerTx.transaction.gasLimit,
-              gasPrice: fillerTx.transaction.maxFeePerGas,
-            },
-            provider
-          );
+          try {
+            await txSimulator.getCallResult(
+              {
+                from: fillerTx.transaction.from,
+                to: fillerTx.transaction.to,
+                data: fillerTx.transaction.data,
+                value: fillerTx.transaction.value,
+                gas: fillerTx.transaction.gasLimit,
+                gasPrice: fillerTx.transaction.maxFeePerGas,
+              },
+              provider
+            );
+          } catch {
+            logger.error(
+              COMPONENT,
+              JSON.stringify({
+                txHash,
+                intentHash,
+                message: "Simulation failed",
+                fillerTx,
+              })
+            );
+
+            // We retry jobs for which the simulation failed
+            throw new Error("Simulation failed");
+          }
 
           logger.info(
             COMPONENT,
-            `[${tx.hash}] Trying to send solve transaction`
+            JSON.stringify({
+              intentHash,
+              txHash,
+              message: "Relaying solution using regular transaction",
+            })
           );
 
-          await searcher
+          const txResponse = await solver
             .connect(provider)
             .sendTransaction(fillerTx.transaction);
+
+          logger.info(
+            COMPONENT,
+            JSON.stringify({
+              intentHash,
+              txHash,
+              message: `Solution included (txHash=${txResponse.hash})`,
+            })
+          );
         }
       }
     } catch (error: any) {
@@ -403,7 +421,7 @@ worker.on("error", (error) => {
 });
 
 export const addToQueue = async (
-  txHash: string,
   intent: Intent,
-  intentOrigin: IntentOrigin
-) => queue.add(randomUUID(), { txHash, intent, intentOrigin });
+  intentOrigin: IntentOrigin,
+  txHash?: string
+) => queue.add(randomUUID(), { intent, intentOrigin, txHash });
