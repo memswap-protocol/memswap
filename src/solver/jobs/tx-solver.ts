@@ -352,6 +352,8 @@ const worker = new Worker(
                 message: `Solution not included (targetBlock=${targetBlock}, bundleHash=${hash})`,
               })
             );
+
+            throw new Error("Solution not included");
           }
         } else {
           try {
