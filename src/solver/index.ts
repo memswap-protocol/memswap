@@ -54,7 +54,7 @@ app.post("/authorizations", async (req, res) => {
     .get(uuid)
     .then((r) => (r ? JSON.parse(r) : undefined));
   if (!cachedSolution) {
-    return res.status(400).json({ error: "Could not find request" });
+    return res.status(400).json({ error: `Could not find request ${uuid}` });
   }
 
   logger.info(
