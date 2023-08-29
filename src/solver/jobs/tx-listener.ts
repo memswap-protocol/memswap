@@ -162,7 +162,9 @@ const worker = new Worker(
           return;
         }
 
-        await txSolver.addToQueue(intent, { approvalTxHash });
+        await txSolver.addToQueue(intent, {
+          approvalTxOrTxHash: approvalTxHash,
+        });
       }
     } catch (error: any) {
       logger.error(COMPONENT, `Job failed: ${error} (${error.stack})`);
