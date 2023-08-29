@@ -560,7 +560,7 @@ const relayViaFlashbots = async (
     })
   );
 
-  const receipt = await flashbotsProvider.pri.sendRawBundle(
+  const receipt = await flashbotsProvider.sendRawBundle(
     signedBundle,
     targetBlock
   );
