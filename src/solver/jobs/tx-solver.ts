@@ -238,7 +238,7 @@ const worker = new Worker(
         if (intent.matchmaker === MATCHMAKER && authorization) {
           // For relaying
           method = "solveWithSignatureAuthorizationCheck";
-        } else if (intent.matchmaker) {
+        } else if (intent.matchmaker === MATCHMAKER) {
           // For matchmaker submission
           method = "solveWithOnChainAuthorizationCheck";
         } else {
