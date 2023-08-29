@@ -400,6 +400,13 @@ const worker = new Worker(
             intent,
             txs,
           });
+
+          // Add a delayed job to retry in case we didn't receive the matchmaker authorization
+          await addToQueue(
+            intent,
+            { approvalTxHash, existingSolution, authorization },
+            10 * 1000
+          );
         } else {
           // We do have an authorization so all we have to do is relay the transaction
 
@@ -450,14 +457,21 @@ export const addToQueue = async (
     approvalTxHash?: string;
     existingSolution?: Solution;
     authorization?: Authorization;
-  }
+  },
+  delay?: number
 ) =>
-  queue.add(randomUUID(), {
-    intent,
-    approvalTxHash: options?.approvalTxHash,
-    existingSolution: options?.existingSolution,
-    authorization: options?.authorization,
-  });
+  queue.add(
+    randomUUID(),
+    {
+      intent,
+      approvalTxHash: options?.approvalTxHash,
+      existingSolution: options?.existingSolution,
+      authorization: options?.authorization,
+    },
+    {
+      delay: delay ? delay * 1000 : undefined,
+    }
+  );
 
 // Relay methods
 
