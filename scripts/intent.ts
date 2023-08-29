@@ -11,6 +11,7 @@ import {
   REGULAR_WETH,
 } from "../src/common/addresses";
 import { getEIP712Domain, getEIP712TypesForIntent } from "../src/common/utils";
+import axios from "axios";
 
 // Required env variables:
 // - JSON_URL: url for the http provider
@@ -45,8 +46,8 @@ const main = async () => {
       .getBlock("latest")
       .then((b) => b!.timestamp + 3600 * 24),
     isPartiallyFillable: false,
-    amountIn,
-    endAmountOut: amountOut,
+    amountIn: amountIn.toString(),
+    endAmountOut: amountOut.toString(),
     startAmountBps: 0,
     expectedAmountBps: 0,
   };
@@ -113,6 +114,24 @@ const main = async () => {
   });
 
   console.log(`Approval transaction relayed: ${tx.hash}`);
+
+  // const tx = await maker.connect(provider).signTransaction({
+  //   from: maker.address,
+  //   to: tokenIn,
+  //   data,
+  //   value: approveMethod === "depositAndApprove" ? amountIn : 0,
+  //   maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas),
+  //   maxPriorityFeePerGas: maxPriorityFeePerGas,
+  //   type: 2,
+  //   nonce: await provider.getTransactionCount(maker.address),
+  //   gasLimit: 100000,
+  //   chainId,
+  // });
+
+  // await axios.post("", {
+  //   intent,
+  //   approvalTxOrTxHash: tx,
+  // });
 };
 
 main();

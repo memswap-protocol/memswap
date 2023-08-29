@@ -8,7 +8,6 @@ import {
   FlashbotsBundleProvider,
   FlashbotsBundleRawTransaction,
   FlashbotsBundleResolution,
-  FlashbotsBundleTransaction,
 } from "@flashbots/ethers-provider-bundle";
 import * as txSimulator from "@georgeroman/evm-tx-simulator";
 import axios from "axios";
@@ -42,7 +41,7 @@ const BLOCK_TIME = 15;
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
   defaultJobOptions: {
-    attempts: 2,
+    attempts: 10,
     removeOnComplete: 10000,
     removeOnFail: 10000,
   },
@@ -549,10 +548,9 @@ const relayViaFlashbots = async (
 ) => {
   const signedBundle = await flashbotsProvider.signBundle(txs);
 
-  const simulationResult: { results: [{ error?: string }] } =
+  const simulationResult: { error?: string; results: [{ error?: string }] } =
     (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
-  console.log(JSON.stringify(simulationResult));
-  if (simulationResult.results.some((r) => r.error)) {
+  if (simulationResult.error || simulationResult.results.some((r) => r.error)) {
     logger.error(
       COMPONENT,
       JSON.stringify({
