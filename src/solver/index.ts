@@ -49,12 +49,18 @@ app.post("/intents", async (req, res) => {
 app.post("/authorizations", async (req, res) => {
   const uuid = req.body.uuid as string | undefined;
   const intent = req.body.intent as Intent | undefined;
+  const approvalTxOrTxHash = req.body.approvalTxOrTxHash as string | undefined;
   const authorization = req.body.authorization as Authorization;
 
   if ((uuid && intent) || (!uuid && !intent)) {
     return res
       .status(400)
       .send({ error: "Must specify only one of `intent` or `uuid`" });
+  }
+  if (uuid && approvalTxOrTxHash) {
+    return res.status(400).send({
+      error: "Cannot specify `approvalTxOrTxHash` and `uuid` together",
+    });
   }
 
   logger.info(
@@ -63,6 +69,7 @@ app.post("/authorizations", async (req, res) => {
       uuid,
       intent,
       authorization,
+      approvalTxOrTxHash,
       message: "Received authorization from matchmaker",
     })
   );
@@ -81,7 +88,10 @@ app.post("/authorizations", async (req, res) => {
       authorization,
     });
   } else if (intent) {
-    await jobs.txSolver.addToQueue(intent, { authorization });
+    await jobs.txSolver.addToQueue(intent, {
+      approvalTxOrTxHash,
+      authorization,
+    });
   }
 
   // TODO: Respond with signed transaction instead
