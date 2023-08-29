@@ -17,6 +17,7 @@ import {
 import { config } from "../config";
 import * as jobs from "../jobs";
 import { redis } from "../redis";
+import { Solution } from "../types";
 
 const COMPONENT = "solution-process";
 
@@ -205,7 +206,7 @@ export const processSolution = async (
         authorizedSolver,
         maxAmountIn: intent.amountIn,
         minAmountOut: amountReceived,
-      })
+      } as Solution)
     );
 
     // Put a delayed job to release the signatures

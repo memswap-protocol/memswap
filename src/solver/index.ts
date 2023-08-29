@@ -47,30 +47,42 @@ app.post("/intents", async (req, res) => {
 });
 
 app.post("/authorizations", async (req, res) => {
-  const uuid = req.body.uuid as string;
+  const uuid = req.body.uuid as string | undefined;
+  const intent = req.body.intent as Intent | undefined;
   const authorization = req.body.authorization as Authorization;
 
-  const cachedSolution: CachedSolution | undefined = await redis
-    .get(`solver:${uuid}`)
-    .then((r) => (r ? JSON.parse(r) : undefined));
-  if (!cachedSolution) {
-    return res.status(400).json({ error: `Could not find request ${uuid}` });
+  if ((uuid && intent) || (!uuid && !intent)) {
+    return res
+      .status(400)
+      .send({ error: "Must specify only one of `intent` or `uuid`" });
   }
 
   logger.info(
     "authorizations",
     JSON.stringify({
       uuid,
+      intent,
       authorization,
       message: "Received authorization from matchmaker",
     })
   );
 
-  await jobs.txSolver.addToQueue(cachedSolution.intent, {
-    approvalTxHash: cachedSolution.approvalTxHash,
-    existingSolution: cachedSolution.solution,
-    authorization,
-  });
+  if (uuid) {
+    const cachedSolution: CachedSolution | undefined = await redis
+      .get(`solver:${uuid}`)
+      .then((r) => (r ? JSON.parse(r) : undefined));
+    if (!cachedSolution) {
+      return res.status(400).send({ error: `Could not find uuid ${uuid}` });
+    }
+
+    await jobs.txSolver.addToQueue(cachedSolution.intent, {
+      approvalTxHash: cachedSolution.approvalTxHash,
+      existingSolution: cachedSolution.solution,
+      authorization,
+    });
+  } else if (intent) {
+    await jobs.txSolver.addToQueue(intent, { authorization });
+  }
 
   // TODO: Respond with signed transaction instead
   return res.json({ message: "Success" });
