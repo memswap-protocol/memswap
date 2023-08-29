@@ -76,7 +76,7 @@ app.post("/authorizations", async (req, res) => {
     }
 
     await jobs.txSolver.addToQueue(cachedSolution.intent, {
-      approvalTxHash: cachedSolution.approvalTxHash,
+      approvalTxOrTxHash: cachedSolution.approvalTxOrTxHash,
       existingSolution: cachedSolution.solution,
       authorization,
     });

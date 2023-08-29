@@ -10,5 +10,5 @@ export type SolutionDetails = {
 export type CachedSolution = {
   intent: Intent;
   solution: Solution;
-  approvalTxHash?: string;
+  approvalTxOrTxHash?: string;
 };

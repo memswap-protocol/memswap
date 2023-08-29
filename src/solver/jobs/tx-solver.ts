@@ -51,10 +51,10 @@ export const queue = new Queue(COMPONENT, {
 const worker = new Worker(
   COMPONENT,
   async (job) => {
-    const { intent, approvalTxHash, existingSolution, authorization } =
+    const { intent, approvalTxOrTxHash, existingSolution, authorization } =
       job.data as {
         intent: Intent;
-        approvalTxHash?: string;
+        approvalTxOrTxHash?: string;
         existingSolution?: Solution;
         authorization?: Authorization;
       };
@@ -77,7 +77,7 @@ const worker = new Worker(
           COMPONENT,
           JSON.stringify({
             intentHash,
-            txHash: approvalTxHash,
+            approvalTxOrTxHash,
             message: "Filled",
           })
         );
@@ -106,7 +106,7 @@ const worker = new Worker(
             COMPONENT,
             JSON.stringify({
               intentHash,
-              txHash: approvalTxHash,
+              approvalTxOrTxHash,
               message: "Attempted to wrap/unwrap WETH",
             })
           );
@@ -118,7 +118,7 @@ const worker = new Worker(
             COMPONENT,
             JSON.stringify({
               intentHash,
-              txHash: approvalTxHash,
+              approvalTxOrTxHash,
               message: `Expired (now=${now()}, deadline=${intent.deadline})`,
             })
           );
@@ -134,7 +134,7 @@ const worker = new Worker(
             COMPONENT,
             JSON.stringify({
               intentHash,
-              txHash: approvalTxHash,
+              approvalTxOrTxHash,
               message: `Unsupported matchmaker (matchmaker=${intent.matchmaker})`,
             })
           );
@@ -145,7 +145,7 @@ const worker = new Worker(
           COMPONENT,
           JSON.stringify({
             intentHash,
-            txHash: approvalTxHash,
+            approvalTxOrTxHash,
             message: "Generating solution",
           })
         );
@@ -177,7 +177,7 @@ const worker = new Worker(
               COMPONENT,
               JSON.stringify({
                 intentHash,
-                txHash: approvalTxHash,
+                approvalTxOrTxHash,
                 message: `Solution not good enough (actualAmountOut=${
                   solutionDetails.amountOut
                 }, minAmountOut=${minAmountOut.toString()})`,
@@ -198,7 +198,7 @@ const worker = new Worker(
               COMPONENT,
               JSON.stringify({
                 intentHash,
-                txHash: approvalTxHash,
+                approvalTxOrTxHash,
                 message: `Insufficient solver profit (profit=${formatEther(
                   fillerGrossProfitInETH
                 )})`,
@@ -224,32 +224,38 @@ const worker = new Worker(
         };
       }
 
-      const approvalTx = approvalTxHash
-        ? await (async () => {
-            const tx = await provider.getTransaction(approvalTxHash);
-            return {
-              signedTransaction: serialize(
-                {
-                  to: tx.to,
-                  nonce: tx.nonce,
-                  gasLimit: tx.gasLimit,
-                  data: tx.data,
-                  value: tx.value,
-                  chainId: tx.chainId,
-                  type: tx.type,
-                  accessList: tx.accessList,
-                  maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
-                  maxFeePerGas: tx.maxFeePerGas,
-                },
-                {
-                  v: tx.v!,
-                  r: tx.r!,
-                  s: tx.s!,
-                }
-              ),
-            };
-          })()
-        : undefined;
+      let approvalTx: FlashbotsBundleRawTransaction | undefined;
+      let approvalTxHash: string | undefined;
+      if (approvalTxOrTxHash && approvalTxOrTxHash.length === 66) {
+        // We have a transaction hash
+        const tx = await provider.getTransaction(approvalTxOrTxHash);
+        approvalTx = {
+          signedTransaction: serialize(
+            {
+              to: tx.to,
+              nonce: tx.nonce,
+              gasLimit: tx.gasLimit,
+              data: tx.data,
+              value: tx.value,
+              chainId: tx.chainId,
+              type: tx.type,
+              accessList: tx.accessList,
+              maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
+              maxFeePerGas: tx.maxFeePerGas,
+            },
+            {
+              v: tx.v!,
+              r: tx.r!,
+              s: tx.s!,
+            }
+          ),
+        };
+        approvalTxHash = approvalTxOrTxHash;
+      } else if (approvalTxOrTxHash) {
+        // We have a signed transaction
+        approvalTx = { signedTransaction: approvalTxOrTxHash };
+        approvalTxHash = parse(approvalTxOrTxHash).hash!;
+      }
 
       const latestBaseFee = await provider
         .getBlock("pending")
@@ -332,7 +338,7 @@ const worker = new Worker(
 
       // Whether to include the approval transaction in the bundle
       const includeApprovalTx =
-        approvalTx && !(await isTxIncluded(approvalTxHash!, provider));
+        approvalTxHash && !(await isTxIncluded(approvalTxHash, provider));
 
       // If specified and the conditions allow it, use direct transactions rather than flashbots
       let useFlashbots = true;
@@ -349,7 +355,7 @@ const worker = new Worker(
         if (useFlashbots) {
           // If the approval transaction is still pending, include it in the bundle
           const fillerTx = await getFillerTx(intent);
-          const txs = includeApprovalTx ? [approvalTx, fillerTx] : [fillerTx];
+          const txs = includeApprovalTx ? [approvalTx!, fillerTx] : [fillerTx];
 
           // Relay
           await relayViaFlashbots(
@@ -387,7 +393,7 @@ const worker = new Worker(
 
           const fillerTx = await getFillerTx(intent);
           const txs = includeApprovalTx
-            ? [approvalTx.signedTransaction, fillerTx.signedTransaction]
+            ? [approvalTx!.signedTransaction, fillerTx.signedTransaction]
             : [fillerTx.signedTransaction];
 
           // Generate a random uuid for the request
@@ -410,7 +416,7 @@ const worker = new Worker(
           // Add a delayed job to retry in case we didn't receive the matchmaker authorization
           await addToQueue(
             intent,
-            { approvalTxHash, existingSolution, authorization },
+            { approvalTxOrTxHash, existingSolution, authorization },
             20
           );
         } else {
@@ -419,7 +425,9 @@ const worker = new Worker(
           if (useFlashbots) {
             // If the approval transaction is still pending, include it in the bundle
             const fillerTx = await getFillerTx(intent, authorization);
-            const txs = includeApprovalTx ? [approvalTx, fillerTx] : [fillerTx];
+            const txs = includeApprovalTx
+              ? [approvalTx!, fillerTx]
+              : [fillerTx];
 
             // Relay
             await relayViaFlashbots(
@@ -461,7 +469,7 @@ worker.on("error", (error) => {
 export const addToQueue = async (
   intent: Intent,
   options?: {
-    approvalTxHash?: string;
+    approvalTxOrTxHash?: string;
     existingSolution?: Solution;
     authorization?: Authorization;
   },
@@ -471,7 +479,7 @@ export const addToQueue = async (
     randomUUID(),
     {
       intent,
-      approvalTxHash: options?.approvalTxHash,
+      approvalTxOrTxHash: options?.approvalTxOrTxHash,
       existingSolution: options?.existingSolution,
       authorization: options?.authorization,
     },
