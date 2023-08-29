@@ -1,4 +1,5 @@
 export const config = {
+  chainId: Number(process.env.CHAIN_ID),
   jsonUrl: process.env.JSON_URL!,
   wsUrl: process.env.WS_URL!,
   redisUrl: process.env.REDIS_URL!,

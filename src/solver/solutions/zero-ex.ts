@@ -10,7 +10,9 @@ export const solve = async (
   amountIn: string
 ): Promise<SolutionDetails> => {
   const { data: swapData } = await axios.get(
-    "https://goerli.api.0x.org/swap/v1/quote",
+    config.chainId === 1
+      ? "https://api.0x.org/swap/v1/quote"
+      : "https://goerli.api.0x.org/swap/v1/quote",
     {
       params: {
         buyToken: tokenOut,

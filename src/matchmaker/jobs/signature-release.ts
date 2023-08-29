@@ -36,8 +36,6 @@ const worker = new Worker(
       const provider = new JsonRpcProvider(config.jsonUrl);
       const matchmaker = new Wallet(config.matchmakerPk);
 
-      const chainId = await provider.getNetwork().then((n) => n.chainId);
-
       const components = solutionKey.split(":");
       const deadlineBlock = Number(components[components.length - 1]);
       const latestBlock = await provider
@@ -82,7 +80,7 @@ const worker = new Worker(
               };
               (authorization as any).signature =
                 await matchmaker._signTypedData(
-                  getEIP712Domain(chainId),
+                  getEIP712Domain(config.chainId),
                   getEIP712TypesForAuthorization(),
                   authorization
                 );

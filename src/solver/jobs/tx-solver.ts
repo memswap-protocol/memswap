@@ -64,7 +64,9 @@ const worker = new Worker(
       const flashbotsProvider = await FlashbotsBundleProvider.create(
         provider,
         new Wallet(config.flashbotsSignerPk),
-        "https://relay-goerli.flashbots.net"
+        config.chainId === 1
+          ? "https://relay.flashbots.net"
+          : "https://relay-goerli.flashbots.net"
       );
 
       const solver = new Wallet(config.solverPk);
@@ -318,7 +320,7 @@ const worker = new Worker(
             type: 2,
             nonce: await provider.getTransactionCount(solver.address),
             gasLimit,
-            chainId: await provider.getNetwork().then((n) => n.chainId),
+            chainId: config.chainId,
             maxFeePerGas: latestBaseFee.add(maxPriorityFeePerGas).toString(),
             maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
           }),

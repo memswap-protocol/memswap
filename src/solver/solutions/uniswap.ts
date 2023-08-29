@@ -14,6 +14,7 @@ import {
 import { AlphaRouter, SwapType } from "@uniswap/smart-order-router";
 
 import { MEMSWAP_WETH, REGULAR_WETH } from "../../common/addresses";
+import { config } from "../config";
 import { SolutionDetails } from "../types";
 
 const getToken = async (
@@ -26,12 +27,10 @@ const getToken = async (
     provider
   );
 
-  const chainId = await provider.getNetwork().then((n) => n.chainId);
-
   // The core Uniswap SDK misses the WETH9 address for some chains (eg. Sepolia)
-  if (!WETH9[chainId]) {
-    WETH9[chainId] = new Token(
-      chainId,
+  if (!WETH9[config.chainId]) {
+    WETH9[config.chainId] = new Token(
+      config.chainId,
       REGULAR_WETH,
       await contract.decimals(),
       "WETH",
@@ -40,8 +39,8 @@ const getToken = async (
   }
 
   return [MEMSWAP_WETH, AddressZero].includes(address)
-    ? Ether.onChain(chainId)
-    : new Token(chainId, address, await contract.decimals());
+    ? Ether.onChain(config.chainId)
+    : new Token(config.chainId, address, await contract.decimals());
 };
 
 export const solve = async (
@@ -50,9 +49,8 @@ export const solve = async (
   amountIn: string,
   provider: Provider
 ): Promise<SolutionDetails> => {
-  const chainId = await provider.getNetwork().then((n) => n.chainId);
   const router = new AlphaRouter({
-    chainId,
+    chainId: config.chainId,
     provider: provider as any,
   });
 

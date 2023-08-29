@@ -149,7 +149,7 @@ const worker = new Worker(
       if (intent) {
         // Check the signature first
         const signer = verifyTypedData(
-          getEIP712Domain(await provider.getNetwork().then((n) => n.chainId)),
+          getEIP712Domain(config.chainId),
           getEIP712TypesForIntent(),
           intent,
           intent.signature
