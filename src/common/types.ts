@@ -22,6 +22,7 @@ export type Authorization = {
   minAmountOut: string;
   blockDeadline: number;
   isPartiallyFillable: boolean;
+  signature?: string;
 };
 
 export type Solution = {

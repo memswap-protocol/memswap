@@ -24,12 +24,20 @@ import {
 } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { Authorization, Intent, Solution } from "../../common/types";
-import { bn, getIntentHash, isTxIncluded, now } from "../../common/utils";
+import {
+  bn,
+  getIntentHash,
+  isIntentFilled,
+  isTxIncluded,
+  now,
+} from "../../common/utils";
 import { config } from "../config";
 import { redis } from "../redis";
 import * as solutions from "../solutions";
 
 const COMPONENT = "tx-solver";
+
+const BLOCK_TIME = 15;
 
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
@@ -61,6 +69,18 @@ const worker = new Worker(
 
       const solver = new Wallet(config.solverPk);
       const intentHash = getIntentHash(intent);
+
+      if (await isIntentFilled(intent, provider)) {
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            intentHash,
+            txHash: approvalTxHash,
+            message: "Filled",
+          })
+        );
+        return;
+      }
 
       // TODO: Compute both of these dynamically
       const maxPriorityFeePerGas = parseUnits("10", "gwei");
@@ -289,7 +309,12 @@ const worker = new Worker(
                   }
                 )
               `,
-            ]).encodeFunctionData(method, [intent, solution]),
+            ]).encodeFunctionData(
+              method,
+              method === "solveWithSignatureAuthorizationCheck"
+                ? [intent, solution, authorization, authorization!.signature!]
+                : [intent, solution]
+            ),
             type: 2,
             nonce: await provider.getTransactionCount(solver.address),
             gasLimit,
@@ -345,8 +370,19 @@ const worker = new Worker(
         if (!authorization) {
           // We don't have an authorization so first we must request it
 
+          logger.error(
+            COMPONENT,
+            JSON.stringify({
+              intentHash,
+              txHash: approvalTxHash,
+              message: "Submitting solution to matchmaker",
+            })
+          );
+
           const fillerTx = await getFillerTx(intent);
-          const txs = includeApprovalTx ? [approvalTx, fillerTx] : [fillerTx];
+          const txs = includeApprovalTx
+            ? [approvalTx.signedTransaction, fillerTx.signedTransaction]
+            : [fillerTx.signedTransaction];
 
           // Generate a random uuid for the request
           const uuid = randomUUID();
@@ -355,11 +391,12 @@ const worker = new Worker(
             uuid,
             JSON.stringify({ intent, approvalTxHash, solution }),
             "EX",
-            12
+            BLOCK_TIME
           );
 
           await axios.post(`${config.matchmakerBaseUrl}/solutions`, {
             uuid,
+            baseUrl: config.solverBaseUrl,
             intent,
             txs,
           });
@@ -376,7 +413,7 @@ const worker = new Worker(
               intentHash,
               flashbotsProvider,
               txs,
-              (await provider.getBlock("latest").then((b) => b.number)) + 1
+              authorization.blockDeadline
             );
           } else {
             // At this point, for sure the approval transaction was already included, so we can skip it
@@ -401,7 +438,7 @@ const worker = new Worker(
       throw error;
     }
   },
-  { connection: redis.duplicate() }
+  { connection: redis.duplicate(), concurrency: 10 }
 );
 worker.on("error", (error) => {
   logger.error(COMPONENT, JSON.stringify({ data: `Worker errored: ${error}` }));
@@ -418,6 +455,8 @@ export const addToQueue = async (
   queue.add(randomUUID(), {
     intent,
     approvalTxHash: options?.approvalTxHash,
+    existingSolution: options?.existingSolution,
+    authorization: options?.authorization,
   });
 
 // Relay methods

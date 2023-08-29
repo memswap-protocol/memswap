@@ -4,7 +4,12 @@ import { JsonRpcProvider } from "@ethersproject/providers";
 import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 
-import { MEMSWAP, MEMSWAP_WETH, REGULAR_WETH } from "../src/common/addresses";
+import {
+  MATCHMAKER,
+  MEMSWAP,
+  MEMSWAP_WETH,
+  REGULAR_WETH,
+} from "../src/common/addresses";
 import { getEIP712Domain, getEIP712TypesForIntent } from "../src/common/utils";
 
 // Required env variables:
@@ -34,7 +39,7 @@ const main = async () => {
     tokenIn,
     tokenOut,
     maker: maker.address,
-    matchmaker: AddressZero,
+    matchmaker: MATCHMAKER,
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,

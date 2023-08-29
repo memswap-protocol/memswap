@@ -1,5 +1,7 @@
+import { Interface } from "@ethersproject/abi";
 import { Provider } from "@ethersproject/abstract-provider";
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
+import { Contract } from "@ethersproject/contracts";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 
 import { MEMSWAP } from "./addresses";
@@ -11,6 +13,30 @@ export const now = () => Math.floor(Date.now() / 1000);
 
 export const isTxIncluded = async (txHash: string, provider: Provider) =>
   provider.getTransactionReceipt(txHash).then((tx) => tx && tx.status === 1);
+
+export const isIntentFilled = async (intent: Intent, provider: Provider) => {
+  const memswap = new Contract(
+    MEMSWAP,
+    new Interface([
+      `function intentStatus(bytes32 intentHash) view returns (
+        (
+          bool isValidated,
+          bool isCancelled,
+          uint128 amountFilled
+        )
+      )`,
+    ]),
+    provider
+  );
+
+  const intentHash = getIntentHash(intent);
+  const result = await memswap.intentStatus(intentHash);
+  if (result.amountFilled.gte(intent.amountIn)) {
+    return true;
+  }
+
+  return false;
+};
 
 export const getIntentHash = (intent: Intent) =>
   _TypedDataEncoder.hashStruct("Intent", getEIP712TypesForIntent(), intent);

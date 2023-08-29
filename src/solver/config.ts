@@ -5,6 +5,7 @@ export const config = {
   flashbotsSignerPk: process.env.FLASHBOTS_SIGNER_PK!,
   solverPk: process.env.SOLVER_PK!,
   matchmakerBaseUrl: process.env.MATCHMAKER_BASE_URL!,
+  solverBaseUrl: process.env.SOLVER_BASE_URL!,
   zeroExApiKey: process.env.ZERO_EX_API_KEY!,
   port: process.env.PORT!,
 };

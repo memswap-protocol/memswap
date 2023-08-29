@@ -1,11 +1,13 @@
 import { createBullBoard } from "@bull-board/api";
+import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
 import express from "express";
 
 import { logger } from "../common/logger";
 import { Intent } from "../common/types";
 import { config } from "./config";
-import { handle } from "./solutions";
+import * as jobs from "./jobs";
+import { processSolution } from "./solutions";
 
 // Log unhandled errors
 process.on("unhandledRejection", (error) => {
@@ -22,7 +24,7 @@ const app = express();
 const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath("/admin/bullmq");
 createBullBoard({
-  queues: [],
+  queues: [new BullMQAdapter(jobs.signatureRelease.queue)],
   serverAdapter: serverAdapter,
 });
 
@@ -33,23 +35,24 @@ app.get("/lives", (_, res) => {
   return res.json({ message: "yes" });
 });
 
-app.post("/fills", async (req, res) => {
-  const { intent, txs } = req.body as {
+app.post("/solutions", async (req, res) => {
+  const { uuid, baseUrl, intent, txs } = req.body as {
+    uuid: string;
+    baseUrl: string;
     intent: Intent;
     txs: string[];
   };
 
-  if (!txs?.length) {
-    return res.status(400).json({ message: "Invalid params" });
+  if (!uuid || !baseUrl || !intent || !txs?.length) {
+    return res.status(400).json({ message: "Invalid parameters" });
   }
 
-  const result = await handle(intent, txs);
+  const result = await processSolution(uuid, baseUrl, intent, txs);
   if (result.status === "error") {
     return res.status(400).json({ error: result.error });
   } else if (result.status === "success") {
     return res.status(200).json({
-      recheckIn: result.recheckIn,
-      auth: result.auth,
+      message: "Success",
     });
   }
 

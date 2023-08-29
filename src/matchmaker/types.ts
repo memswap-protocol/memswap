@@ -1,4 +1,8 @@
 export type Solution = {
-  txs: string[];
-  amountReceived: string;
+  uuid: string;
+  baseUrl: string;
+  intentHash: string;
+  maxAmountIn: string;
+  minAmountOut: string;
+  authorizedSolver: string;
 };
