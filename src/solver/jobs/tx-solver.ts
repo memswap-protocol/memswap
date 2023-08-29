@@ -349,6 +349,7 @@ const worker = new Worker(
           // Relay
           await relayViaFlashbots(
             intentHash,
+            provider,
             flashbotsProvider,
             txs,
             (await provider.getBlock("latest").then((b) => b.number)) + 1
@@ -418,6 +419,7 @@ const worker = new Worker(
             // Relay
             await relayViaFlashbots(
               intentHash,
+              provider,
               flashbotsProvider,
               txs,
               authorization.blockDeadline
@@ -527,6 +529,7 @@ const relayViaTransaction = async (
 
 const relayViaFlashbots = async (
   intentHash: string,
+  provider: JsonRpcProvider,
   flashbotsProvider: FlashbotsBundleProvider,
   txs: FlashbotsBundleRawTransaction[],
   targetBlock: number
@@ -557,7 +560,7 @@ const relayViaFlashbots = async (
     })
   );
 
-  const receipt = await flashbotsProvider.sendRawBundle(
+  const receipt = await flashbotsProvider.pri.sendRawBundle(
     signedBundle,
     targetBlock
   );
@@ -579,7 +582,7 @@ const relayViaFlashbots = async (
     if (
       await isTxIncluded(
         parse(txs[txs.length - 1].signedTransaction).hash!,
-        flashbotsProvider
+        provider
       )
     ) {
       logger.info(
