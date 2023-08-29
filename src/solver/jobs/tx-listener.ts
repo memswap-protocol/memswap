@@ -70,13 +70,13 @@ const worker = new Worker(
         const spender = iface
           .decodeFunctionData("approve", tx.data)
           .spender.toLowerCase();
-        if (spender === MEMSWAP) {
+        if (spender === MEMSWAP[config.chainId]) {
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
           approvalTxHash = txHash;
         }
       } else if (
         tx.data.startsWith("0x28026ace") &&
-        tx.to?.toLowerCase() === MEMSWAP_WETH
+        tx.to?.toLowerCase() === MEMSWAP_WETH[config.chainId]
       ) {
         const iface = new Interface([
           "function depositAndApprove(address spender, uint256 amount)",
@@ -85,13 +85,13 @@ const worker = new Worker(
         const spender = iface
           .decodeFunctionData("depositAndApprove", tx.data)
           .spender.toLowerCase();
-        if (spender === MEMSWAP) {
+        if (spender === MEMSWAP[config.chainId]) {
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
           approvalTxHash = txHash;
         }
       } else if (
         tx.data.startsWith("0x4adb41f5") &&
-        tx.to?.toLowerCase() === MEMSWAP
+        tx.to?.toLowerCase() === MEMSWAP[config.chainId]
       ) {
         const iface = new Interface([
           `function post(

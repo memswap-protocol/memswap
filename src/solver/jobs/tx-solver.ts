@@ -72,7 +72,7 @@ const worker = new Worker(
       const solver = new Wallet(config.solverPk);
       const intentHash = getIntentHash(intent);
 
-      if (await isIntentFilled(intent, provider)) {
+      if (await isIntentFilled(intent, config.chainId, provider)) {
         logger.info(
           COMPONENT,
           JSON.stringify({
@@ -97,9 +97,10 @@ const worker = new Worker(
         // Check and generate solution
 
         if (
-          (intent.tokenIn === MEMSWAP_WETH &&
-            intent.tokenOut === REGULAR_WETH) ||
-          (intent.tokenIn === REGULAR_WETH && intent.tokenOut === AddressZero)
+          (intent.tokenIn === MEMSWAP_WETH[config.chainId] &&
+            intent.tokenOut === REGULAR_WETH[config.chainId]) ||
+          (intent.tokenIn === REGULAR_WETH[config.chainId] &&
+            intent.tokenOut === AddressZero)
         ) {
           logger.info(
             COMPONENT,
@@ -125,7 +126,9 @@ const worker = new Worker(
         }
 
         if (
-          ![solver.address, AddressZero, MATCHMAKER].includes(intent.matchmaker)
+          ![solver.address, AddressZero, MATCHMAKER[config.chainId]].includes(
+            intent.matchmaker
+          )
         ) {
           logger.info(
             COMPONENT,
@@ -206,7 +209,7 @@ const worker = new Worker(
         }
 
         solution = {
-          to: FILL_PROXY,
+          to: FILL_PROXY[config.chainId],
           data: new Interface([
             "function fill(address to, bytes data, address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut)",
           ]).encodeFunctionData("fill", [
@@ -257,10 +260,10 @@ const worker = new Worker(
         authorization?: Authorization
       ) => {
         let method: string;
-        if (intent.matchmaker === MATCHMAKER && authorization) {
+        if (intent.matchmaker === MATCHMAKER[config.chainId] && authorization) {
           // For relaying
           method = "solveWithSignatureAuthorizationCheck";
-        } else if (intent.matchmaker === MATCHMAKER) {
+        } else if (intent.matchmaker === MATCHMAKER[config.chainId]) {
           // For matchmaker submission
           method = "solveWithOnChainAuthorizationCheck";
         } else {
@@ -271,7 +274,7 @@ const worker = new Worker(
         return {
           signedTransaction: await solver.signTransaction({
             from: solver.address,
-            to: MEMSWAP,
+            to: MEMSWAP[config.chainId],
             value: 0,
             data: new Interface([
               `
@@ -340,7 +343,7 @@ const worker = new Worker(
         useFlashbots = false;
       }
 
-      if (intent.matchmaker !== MATCHMAKER) {
+      if (intent.matchmaker !== MATCHMAKER[config.chainId]) {
         // Solve directly
 
         if (useFlashbots) {

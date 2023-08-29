@@ -66,7 +66,7 @@ export const processSolution = async (
     }
 
     // TODO: Return early if intent is filled
-    if (await isIntentFilled(intent, provider)) {
+    if (await isIntentFilled(intent, config.chainId, provider)) {
       const message = "Filled";
       logger.info(
         COMPONENT,
@@ -114,7 +114,7 @@ export const processSolution = async (
       // Authorization transaction
       {
         from: matchmaker.address,
-        to: MEMSWAP,
+        to: MEMSWAP[config.chainId],
         data: new Interface([
           `
             function authorize(

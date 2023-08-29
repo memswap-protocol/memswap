@@ -17,7 +17,7 @@ export const solve = async (
       params: {
         buyToken: tokenOut,
         sellToken:
-          tokenIn === MEMSWAP_WETH
+          tokenIn === MEMSWAP_WETH[config.chainId]
             ? "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
             : tokenIn,
         sellAmount: amountIn,

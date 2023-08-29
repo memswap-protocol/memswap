@@ -31,14 +31,14 @@ const getToken = async (
   if (!WETH9[config.chainId]) {
     WETH9[config.chainId] = new Token(
       config.chainId,
-      REGULAR_WETH,
+      REGULAR_WETH[config.chainId],
       await contract.decimals(),
       "WETH",
       "Wrapped Ether"
     );
   }
 
-  return [MEMSWAP_WETH, AddressZero].includes(address)
+  return [MEMSWAP_WETH[config.chainId], AddressZero].includes(address)
     ? Ether.onChain(config.chainId)
     : new Token(config.chainId, address, await contract.decimals());
 };

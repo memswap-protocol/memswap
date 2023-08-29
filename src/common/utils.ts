@@ -14,9 +14,13 @@ export const now = () => Math.floor(Date.now() / 1000);
 export const isTxIncluded = async (txHash: string, provider: Provider) =>
   provider.getTransactionReceipt(txHash).then((tx) => tx && tx.status === 1);
 
-export const isIntentFilled = async (intent: Intent, provider: Provider) => {
+export const isIntentFilled = async (
+  intent: Intent,
+  chainId: number,
+  provider: Provider
+) => {
   const memswap = new Contract(
-    MEMSWAP,
+    MEMSWAP[chainId],
     new Interface([
       `function intentStatus(bytes32 intentHash) view returns (
         (
@@ -45,7 +49,7 @@ export const getEIP712Domain = (chainId: number) => ({
   name: "Memswap",
   version: "1.0",
   chainId,
-  verifyingContract: MEMSWAP,
+  verifyingContract: MEMSWAP[chainId],
 });
 
 export const getEIP712TypesForAuthorization = () => ({
