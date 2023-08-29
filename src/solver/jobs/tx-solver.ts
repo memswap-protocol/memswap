@@ -528,7 +528,7 @@ const relayViaTransaction = async (
 const relayViaFlashbots = async (
   intentHash: string,
   flashbotsProvider: FlashbotsBundleProvider,
-  txs: (FlashbotsBundleTransaction | FlashbotsBundleRawTransaction)[],
+  txs: FlashbotsBundleRawTransaction[],
   targetBlock: number
 ) => {
   const signedBundle = await flashbotsProvider.signBundle(txs);
@@ -576,13 +576,30 @@ const relayViaFlashbots = async (
     waitResponse === FlashbotsBundleResolution.BundleIncluded ||
     waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
   ) {
-    logger.info(
-      COMPONENT,
-      JSON.stringify({
-        intentHash,
-        message: `Bundle included (targetBlock=${targetBlock}, bundleHash=${hash})`,
-      })
-    );
+    if (
+      await isTxIncluded(
+        parse(txs[txs.length - 1].signedTransaction).hash!,
+        flashbotsProvider
+      )
+    ) {
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          intentHash,
+          message: `Bundle included (targetBlock=${targetBlock}, bundleHash=${hash})`,
+        })
+      );
+    } else {
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          intentHash,
+          message: `Bundle not included (targetBlock=${targetBlock}, bundleHash=${hash})`,
+        })
+      );
+
+      throw new Error("Bundle not included");
+    }
   } else {
     logger.info(
       COMPONENT,
