@@ -291,6 +291,7 @@ const worker = new Worker(
               `,
             ]).encodeFunctionData(method, [intent, solution]),
             type: 2,
+            nonce: await provider.getTransactionCount(solver.address),
             gasLimit,
             chainId: await provider.getNetwork().then((n) => n.chainId),
             maxFeePerGas: latestBaseFee.add(maxPriorityFeePerGas).toString(),
