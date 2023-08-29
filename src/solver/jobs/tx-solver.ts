@@ -405,7 +405,7 @@ const worker = new Worker(
           await addToQueue(
             intent,
             { approvalTxHash, existingSolution, authorization },
-            10
+            20
           );
         } else {
           // We do have an authorization so all we have to do is relay the transaction
