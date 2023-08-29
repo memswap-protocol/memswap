@@ -51,7 +51,7 @@ app.post("/authorizations", async (req, res) => {
   const authorization = req.body.authorization as Authorization;
 
   const cachedSolution: CachedSolution | undefined = await redis
-    .get(uuid)
+    .get(`solver:${uuid}`)
     .then((r) => (r ? JSON.parse(r) : undefined));
   if (!cachedSolution) {
     return res.status(400).json({ error: `Could not find request ${uuid}` });

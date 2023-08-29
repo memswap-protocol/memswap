@@ -391,7 +391,7 @@ const worker = new Worker(
           const uuid = randomUUID();
 
           await redis.set(
-            uuid,
+            `solver:${uuid}`,
             JSON.stringify({ intent, approvalTxHash, solution }),
             "EX",
             BLOCK_TIME
