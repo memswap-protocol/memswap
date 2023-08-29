@@ -16,24 +16,22 @@ import { getEIP712Domain, getEIP712TypesForIntent } from "../src/common/utils";
 // - JSON_URL: url for the http provider
 // - MAKER_PK: private key of the maker
 
-const CURRENCIES = {
-  ETH: MEMSWAP_WETH,
-  WETH: REGULAR_WETH,
-  USDC: "0x07865c6e87b9f70255377e024ace6630c1eaa37f",
-};
-
 const main = async () => {
   const provider = new JsonRpcProvider(process.env.JSON_URL!);
   const maker = new Wallet(process.env.MAKER_PK!);
+
+  const chainId = await provider.getNetwork().then((n) => n.chainId);
+  const CURRENCIES = {
+    ETH: MEMSWAP_WETH[chainId],
+    WETH: REGULAR_WETH[chainId],
+    USDC: "0x07865c6e87b9f70255377e024ace6630c1eaa37f",
+  };
 
   const tokenIn = CURRENCIES.ETH;
   const tokenOut = CURRENCIES.USDC;
 
   const amountIn = parseEther("0.001");
   const amountOut = parseUnits("10000", 6);
-
-  const chainId = await provider.getNetwork().then((n) => n.chainId);
-
   // Create intent
   const intent = {
     tokenIn,
