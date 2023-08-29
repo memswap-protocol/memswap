@@ -370,7 +370,7 @@ const worker = new Worker(
         if (!authorization) {
           // We don't have an authorization so first we must request it
 
-          logger.error(
+          logger.info(
             COMPONENT,
             JSON.stringify({
               intentHash,
