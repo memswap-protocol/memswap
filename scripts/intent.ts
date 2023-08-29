@@ -37,7 +37,7 @@ const main = async () => {
     tokenIn,
     tokenOut,
     maker: maker.address,
-    matchmaker: MATCHMAKER,
+    matchmaker: MATCHMAKER[chainId],
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,
@@ -58,11 +58,11 @@ const main = async () => {
 
   // Generate approval transaction
   const approveMethod =
-    tokenIn === MEMSWAP_WETH ? "depositAndApprove" : "approve";
+    tokenIn === MEMSWAP_WETH[chainId] ? "depositAndApprove" : "approve";
   const data =
     new Interface([
       `function ${approveMethod}(address spender, uint256 amount)`,
-    ]).encodeFunctionData(approveMethod, [MEMSWAP, amountIn]) +
+    ]).encodeFunctionData(approveMethod, [MEMSWAP[chainId], amountIn]) +
     defaultAbiCoder
       .encode(
         [
