@@ -151,7 +151,7 @@ const worker = new Worker(
         );
 
         const latestBlock = await provider.getBlock("latest");
-        const latestTimestamp = latestBlock.timestamp + 12;
+        const latestTimestamp = latestBlock.timestamp + BLOCK_TIME;
         const latestBaseFee = await provider
           .getBlock("pending")
           .then((b) => b!.baseFeePerGas!);
@@ -460,7 +460,7 @@ const worker = new Worker(
       throw error;
     }
   },
-  { connection: redis.duplicate(), concurrency: 10 }
+  { connection: redis.duplicate(), concurrency: 1 }
 );
 worker.on("error", (error) => {
   logger.error(COMPONENT, JSON.stringify({ data: `Worker errored: ${error}` }));

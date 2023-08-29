@@ -10,6 +10,7 @@ import { MEMSWAP } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { Intent } from "../../common/types";
 import {
+  BLOCK_TIME,
   getEIP712TypesForIntent,
   isIntentFilled,
   now,
@@ -20,8 +21,6 @@ import { redis } from "../redis";
 import { Solution } from "../types";
 
 const COMPONENT = "solution-process";
-
-const RELEASE_DURATION = 3;
 
 export const processSolution = async (
   uuid: string,
@@ -86,12 +85,12 @@ export const processSolution = async (
     // Determine the target block for the solution
     const latestBlock = await provider.getBlock("latest");
     let targetBlockNumber = latestBlock.number + 1;
-    let targetBlockTimestamp = latestBlock.timestamp + 12;
+    let targetBlockTimestamp = latestBlock.timestamp + BLOCK_TIME;
     if (targetBlockTimestamp - now() < 6) {
       // If there is less than 6 seconds until the next block inclusion
       // then the solution will have to wait until the block after that
       targetBlockNumber += 1;
-      targetBlockTimestamp += 12;
+      targetBlockTimestamp += BLOCK_TIME;
     }
 
     // Return early if the submission period is already over (for the current target block)

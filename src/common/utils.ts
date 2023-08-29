@@ -7,6 +7,8 @@ import { _TypedDataEncoder } from "@ethersproject/hash";
 import { MEMSWAP } from "./addresses";
 import { Intent } from "./types";
 
+export const BLOCK_TIME = 12;
+
 export const bn = (value: BigNumberish) => BigNumber.from(value);
 
 export const now = () => Math.floor(Date.now() / 1000);

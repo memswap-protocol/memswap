@@ -35,6 +35,54 @@ app.get("/lives", (_, res) => {
   return res.json({ message: "yes" });
 });
 
+app.post("/intents/private", async (req, res) => {
+  const { approvalTxOrTxHash, intent } = req.body as {
+    approvalTxOrTxHash?: string;
+    intent: Intent;
+  };
+
+  if (!config.knownSolvers.length) {
+    return res.status(400).json({ error: "No known solvers" });
+  }
+
+  // Send to a single solver
+  await jobs.signatureRelease.submitDirectlyToSolver(
+    config.knownSolvers.slice(0, 1).map((s) => {
+      const [address, baseUrl] = s.split(" ");
+      return { address, baseUrl };
+    }),
+    intent,
+    approvalTxOrTxHash
+  );
+
+  return res.json({ message: "Success" });
+});
+
+app.post("/intents/public", async (req, res) => {
+  const { approvalTxOrTxHash, intent } = req.body as {
+    approvalTxOrTxHash?: string;
+    intent: Intent;
+  };
+
+  if (!config.knownSolvers.length) {
+    return res.status(400).json({ error: "No known solvers" });
+  }
+
+  // Send to all solvers
+  await jobs.signatureRelease.submitDirectlyToSolver(
+    config.knownSolvers.map((s) => {
+      const [address, baseUrl] = s.split(" ");
+      return { address, baseUrl };
+    }),
+    intent,
+    approvalTxOrTxHash
+  );
+
+  // TODO: Relay via bloxroute
+
+  return res.json({ message: "Success" });
+});
+
 app.post("/solutions", async (req, res) => {
   const { uuid, baseUrl, intent, txs } = req.body as {
     uuid: string;
