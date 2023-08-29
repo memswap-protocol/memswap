@@ -6,7 +6,7 @@ import { randomUUID } from "crypto";
 
 import { MEMSWAP, MEMSWAP_WETH } from "../../common/addresses";
 import { logger } from "../../common/logger";
-import { Intent, IntentOrigin } from "../../common/types";
+import { Intent } from "../../common/types";
 import { getEIP712Domain, getEIP712TypesForIntent } from "../../common/utils";
 import { config } from "../config";
 import { redis } from "../redis";
@@ -61,7 +61,7 @@ const worker = new Worker(
 
       // Try to decode any intent appended at the end of the calldata
       let restOfCalldata: string | undefined;
-      let intentOrigin: IntentOrigin = "irrelevant";
+      let approvalTxHash: string | undefined;
       if (tx.data.startsWith("0x095ea7b3")) {
         const iface = new Interface([
           "function approve(address spender, uint256 amount)",
@@ -72,7 +72,7 @@ const worker = new Worker(
           .spender.toLowerCase();
         if (spender === MEMSWAP) {
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
-          intentOrigin = "approval";
+          approvalTxHash = txHash;
         }
       } else if (
         tx.data.startsWith("0x28026ace") &&
@@ -87,7 +87,7 @@ const worker = new Worker(
           .spender.toLowerCase();
         if (spender === MEMSWAP) {
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
-          intentOrigin = "approval";
+          approvalTxHash = txHash;
         }
       } else if (
         tx.data.startsWith("0x4adb41f5") &&
@@ -162,7 +162,7 @@ const worker = new Worker(
           return;
         }
 
-        await txSolver.addToQueue(intent, intentOrigin, txHash);
+        await txSolver.addToQueue(intent, { approvalTxHash });
       }
     } catch (error: any) {
       logger.error(COMPONENT, `Job failed: ${error} (${error.stack})`);

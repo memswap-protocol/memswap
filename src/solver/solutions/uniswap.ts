@@ -14,7 +14,7 @@ import {
 import { AlphaRouter, SwapType } from "@uniswap/smart-order-router";
 
 import { MEMSWAP_WETH, REGULAR_WETH } from "../../common/addresses";
-import { Solution } from "../types";
+import { SolutionDetails } from "../types";
 
 const getToken = async (
   address: string,
@@ -49,7 +49,7 @@ export const solve = async (
   tokenOut: string,
   amountIn: string,
   provider: Provider
-): Promise<Solution | undefined> => {
+): Promise<SolutionDetails> => {
   const chainId = await provider.getNetwork().then((n) => n.chainId);
   const router = new AlphaRouter({
     chainId,

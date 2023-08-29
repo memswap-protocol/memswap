@@ -15,7 +15,20 @@ export type Intent = {
   signature: string;
 };
 
-export type IntentOrigin = "approval" | "irrelevant";
+export type Authorization = {
+  intentHash: string;
+  authorizedSolver: string;
+  maxAmountIn: string;
+  minAmountOut: string;
+  blockDeadline: number;
+  isPartiallyFillable: boolean;
+};
+
+export type Solution = {
+  to: string;
+  data: string;
+  amount: string;
+};
 
 export type TxData = {
   from: string;

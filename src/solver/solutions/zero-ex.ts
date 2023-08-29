@@ -2,13 +2,13 @@ import axios from "axios";
 
 import { MEMSWAP_WETH } from "../../common/addresses";
 import { config } from "../config";
-import { Solution } from "../types";
+import { SolutionDetails } from "../types";
 
 export const solve = async (
   tokenIn: string,
   tokenOut: string,
   amountIn: string
-): Promise<Solution> => {
+): Promise<SolutionDetails> => {
   const { data: swapData } = await axios.get(
     "https://goerli.api.0x.org/swap/v1/quote",
     {
