@@ -42,6 +42,18 @@ export const processSolution = async (
       intent
     );
 
+    logger.info(
+      COMPONENT,
+      JSON.stringify({
+        intentHash,
+        message: "Processing solution",
+        uuid,
+        baseUrl,
+        intent,
+        txs,
+      })
+    );
+
     // Return early if the intent is expired
     if (intent.deadline < now()) {
       const message = "Intent is expired";

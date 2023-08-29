@@ -39,7 +39,6 @@ const worker = new Worker(
       const chainId = await provider.getNetwork().then((n) => n.chainId);
 
       const components = solutionKey.split(":");
-
       const deadlineBlock = Number(components[components.length - 1]);
       const latestBlock = await provider
         .getBlock("latest")
@@ -92,6 +91,14 @@ const worker = new Worker(
                 uuid,
                 authorization,
               });
+
+              logger.info(
+                COMPONENT,
+                JSON.stringify({
+                  intentHash,
+                  message: `Submitted authorization to solver (baseUrl=${baseUrl})`,
+                })
+              );
             } catch (error: any) {
               logger.error(
                 COMPONENT,

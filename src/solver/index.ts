@@ -57,6 +57,15 @@ app.post("/authorizations", async (req, res) => {
     return res.status(400).json({ error: "Could not find request" });
   }
 
+  logger.info(
+    "authorizations",
+    JSON.stringify({
+      uuid,
+      authorization,
+      message: "Received authorization from matchmaker",
+    })
+  );
+
   await jobs.txSolver.addToQueue(cachedSolution.intent, {
     approvalTxHash: cachedSolution.approvalTxHash,
     existingSolution: cachedSolution.solution,
