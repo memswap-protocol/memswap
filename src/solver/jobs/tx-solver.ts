@@ -551,6 +551,7 @@ const relayViaFlashbots = async (
 
   const simulationResult: { results: [{ error?: string }] } =
     (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
+  console.log(JSON.stringify(simulationResult));
   if (simulationResult.results.some((r) => r.error)) {
     logger.error(
       COMPONENT,
