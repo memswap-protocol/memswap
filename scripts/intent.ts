@@ -123,7 +123,7 @@ const main = async () => {
   const currentBaseFee = await provider
     .getBlock("pending")
     .then((b) => b!.baseFeePerGas!);
-  const maxPriorityFeePerGas = parseUnits("0.01", "gwei");
+  const maxPriorityFeePerGas = parseUnits("0.02", "gwei");
 
   const tx = await maker.connect(provider).sendTransaction({
     to: tokenIn,

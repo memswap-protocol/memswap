@@ -157,7 +157,7 @@ const worker = new Worker(
         const latestTimestamp = latestBlock.timestamp + BLOCK_TIME;
         const latestBaseFee = await provider
           .getBlock("pending")
-          .then((b) => b!.baseFeePerGas!);
+          .then((b) => b!.baseFeePerGas!.add(parseUnits("0.5", "gwei")));
 
         const startAmountOut = bn(intent.endAmountOut).add(
           bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
