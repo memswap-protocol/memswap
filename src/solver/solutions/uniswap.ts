@@ -2,6 +2,7 @@ import { Interface } from "@ethersproject/abi";
 import { Provider } from "@ethersproject/abstract-provider";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
+import { parseUnits } from "@ethersproject/units";
 import {
   WETH9,
   Currency,
@@ -54,21 +55,38 @@ export const solve = async (
     provider: provider as any,
   });
 
+  const ethToken = await getToken(AddressZero, provider);
   const fromToken = await getToken(tokenIn, provider);
   const toToken = await getToken(tokenOut, provider);
 
-  const route = await router.route(
-    CurrencyAmount.fromRawAmount(fromToken, amountIn),
-    toToken,
-    TradeType.EXACT_INPUT,
-    {
-      type: SwapType.UNIVERSAL_ROUTER,
-      slippageTolerance: new Percent(5, 100),
-    }
-  );
+  const [actualRoute, ethRoute] = await Promise.all([
+    router.route(
+      CurrencyAmount.fromRawAmount(fromToken, amountIn),
+      toToken,
+      TradeType.EXACT_INPUT,
+      {
+        type: SwapType.UNIVERSAL_ROUTER,
+        slippageTolerance: new Percent(5, 100),
+      }
+    ),
+    router.route(
+      CurrencyAmount.fromRawAmount(ethToken, parseUnits("1", 18).toString()),
+      fromToken,
+      TradeType.EXACT_INPUT,
+      {
+        type: SwapType.UNIVERSAL_ROUTER,
+        slippageTolerance: new Percent(5, 100),
+      }
+    ),
+  ]);
 
   return {
-    to: route!.methodParameters!.to,
-    data: route!.methodParameters!.calldata,
+    to: actualRoute!.methodParameters!.to,
+    data: actualRoute!.methodParameters!.calldata,
+    amountOut: parseUnits(
+      actualRoute!.quote.toExact(),
+      actualRoute!.quote.currency.decimals
+    ).toString(),
+    tokenOutToEthRate: ethRoute!.quote.toFixed(),
   };
 };
