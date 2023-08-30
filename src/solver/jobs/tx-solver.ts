@@ -442,13 +442,6 @@ const worker = new Worker(
             intent,
             txs,
           });
-
-          // Add a delayed job to retry in case we didn't receive the matchmaker authorization
-          await addToQueue(
-            intent,
-            { approvalTxOrTxHash, existingSolution, authorization },
-            60
-          );
         } else {
           // We do have an authorization so all we have to do is relay the transaction
 
@@ -527,6 +520,7 @@ export const addToQueue = async (
     },
     {
       delay: delay ? delay * 1000 : undefined,
+      jobId: getIntentHash(intent),
     }
   );
 
