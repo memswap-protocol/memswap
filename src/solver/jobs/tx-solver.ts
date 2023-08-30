@@ -13,6 +13,7 @@ import * as txSimulator from "@georgeroman/evm-tx-simulator";
 import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
+import { MEVBundleSubmitter } from "mev-bundle-submitter";
 
 import {
   SOLUTION_PROXY,
@@ -372,19 +373,23 @@ const worker = new Worker(
       const includeApprovalTx =
         approvalTxHash && !(await isTxIncluded(approvalTxHash, provider));
 
-      // If specified and the conditions allow it, use direct transactions rather than flashbots
-      let useFlashbots = true;
+      // If specified and the conditions allow it, use direct transactions rather than bundles
+      let useBundles = true;
       if (
         !includeApprovalTx &&
         Boolean(Number(process.env.RELAY_DIRECTLY_WHEN_POSSIBLE))
       ) {
-        useFlashbots = false;
+        useBundles = false;
       }
+
+      const relayMethod = process.env.BLOXROUTE_AUTH
+        ? relayViaBloxroute
+        : relayViaFlashbots;
 
       if (intent.matchmaker !== MATCHMAKER[config.chainId]) {
         // Solve directly
 
-        if (useFlashbots) {
+        if (useBundles) {
           // If the approval transaction is still pending, include it in the bundle
           const fillerTx = await getFillerTx(intent);
           const txs = includeApprovalTx ? [approvalTx!, fillerTx] : [fillerTx];
@@ -393,7 +398,7 @@ const worker = new Worker(
             (await provider.getBlock("latest").then((b) => b.number)) + 1;
 
           // Relay
-          await relayViaFlashbots(
+          await relayMethod(
             intentHash,
             provider,
             flashbotsProvider,
@@ -462,7 +467,7 @@ const worker = new Worker(
             throw new Error("Authorization deadline exceeded");
           }
 
-          if (useFlashbots) {
+          if (useBundles) {
             // If the approval transaction is still pending, include it in the bundle
             const fillerTx = await getFillerTx(intent, authorization);
             const txs = includeApprovalTx
@@ -470,7 +475,7 @@ const worker = new Worker(
               : [fillerTx];
 
             // Relay
-            await relayViaFlashbots(
+            await relayMethod(
               intentHash,
               provider,
               flashbotsProvider,
@@ -692,4 +697,62 @@ const relayViaFlashbots = async (
 
     throw new Error("Bundle not included");
   }
+};
+
+const relayViaBloxroute = async (
+  intentHash: string,
+  provider: JsonRpcProvider,
+  flashbotsProvider: FlashbotsBundleProvider,
+  txs: FlashbotsBundleRawTransaction[],
+  targetBlock: number
+) => {
+  // Simulate via flashbots
+  const signedBundle = await flashbotsProvider.signBundle(txs);
+  const simulationResult: { error?: string; results: [{ error?: string }] } =
+    (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
+  if (simulationResult.error || simulationResult.results.some((r) => r.error)) {
+    logger.error(
+      COMPONENT,
+      JSON.stringify({
+        msg: "Bundle simulation failed",
+        intentHash,
+        simulationResult,
+        txs,
+      })
+    );
+
+    throw new Error("Bundle simulation failed");
+  }
+
+  logger.info(
+    COMPONENT,
+    JSON.stringify({
+      msg: "Relaying bundle using bloxroute",
+      intentHash,
+      targetBlock,
+    })
+  );
+
+  // Relay via as many relays as possible
+  const submitter = new MEVBundleSubmitter({
+    bloxrouteAuth: process.env.BLOXROUTE_AUTH,
+    provider: provider,
+  });
+
+  const response = await submitter.submitToAll({
+    bundle: {
+      transactions: txs.map((tx) => tx.signedTransaction),
+      blockNumber: targetBlock,
+    },
+  });
+
+  logger.info(
+    COMPONENT,
+    JSON.stringify({
+      msg: "Bundle relayed using bloxroute",
+      intentHash,
+      targetBlock,
+      response,
+    })
+  );
 };
