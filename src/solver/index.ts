@@ -63,17 +63,6 @@ app.post("/authorizations", async (req, res) => {
     });
   }
 
-  logger.info(
-    "authorizations",
-    JSON.stringify({
-      uuid,
-      intent,
-      authorization,
-      approvalTxOrTxHash,
-      message: "Received authorization from matchmaker",
-    })
-  );
-
   if (uuid) {
     const cachedSolution: CachedSolution | undefined = await redis
       .get(`solver:${uuid}`)
@@ -87,11 +76,31 @@ app.post("/authorizations", async (req, res) => {
       existingSolution: cachedSolution.solution,
       authorization,
     });
+
+    logger.info(
+      "authorizations",
+      JSON.stringify({
+        uuid,
+        ...cachedSolution,
+        message: "Received authorization from matchmaker",
+      })
+    );
   } else if (intent) {
     await jobs.txSolver.addToQueue(intent, {
       approvalTxOrTxHash,
       authorization,
     });
+
+    logger.info(
+      "authorizations",
+      JSON.stringify({
+        uuid,
+        intent,
+        authorization,
+        approvalTxOrTxHash,
+        message: "Received authorization from matchmaker",
+      })
+    );
   }
 
   // TODO: Respond with signed transaction instead
