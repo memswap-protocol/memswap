@@ -449,7 +449,7 @@ const worker = new Worker(
             (await provider.getBlock("latest").then((b) => b.number)) + 1;
           if (targetBlock > authorization.blockDeadline) {
             // If the authorization deadline was exceeded we need to request another authorization
-            job.updateData({
+            await job.updateData({
               ...job.data,
               authorization: undefined,
             });
