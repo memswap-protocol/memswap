@@ -192,7 +192,7 @@ const worker = new Worker(
           const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
             latestBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
           );
-          if (fillerNetProfitInETH.lt(parseEther("0.00001"))) {
+          if (fillerNetProfitInETH.gt(0)) {
             logger.error(
               COMPONENT,
               JSON.stringify({
