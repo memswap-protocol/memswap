@@ -250,7 +250,7 @@ export const processSolution = async (
     logger.info(
       COMPONENT,
       JSON.stringify({
-        msg: "matchmaker-process-solution-performance",
+        msg: "Performance measurements for process-solution",
         time1: (perfTime2 - perfTime1) / 1000,
         time2: (perfTime3 - perfTime2) / 1000,
         time3: (perfTime4 - perfTime3) / 1000,

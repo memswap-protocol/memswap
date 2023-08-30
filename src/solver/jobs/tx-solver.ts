@@ -179,62 +179,65 @@ const worker = new Worker(
           provider
         );
 
-        if (solutionDetails.amountOut && solutionDetails.tokenOutToEthRate) {
-          const gasConsumed = bn(memswapGas)
-            .add(solutionDetails.gasUsed ?? defaultGas)
-            .toString();
+        const gasConsumed = bn(memswapGas)
+          .add(solutionDetails.gasUsed ?? defaultGas)
+          .toString();
 
-          if (bn(solutionDetails.amountOut).lt(minAmountOut)) {
-            logger.error(
-              COMPONENT,
-              JSON.stringify({
-                msg: "Solution not good enough",
-                solutionAmountOut: solutionDetails.amountOut,
-                minAmountOut: minAmountOut.toString(),
-                intentHash,
-                approvalTxOrTxHash,
-              })
-            );
-            return;
-          }
-
-          const grossProfitInTokenOut = bn(solutionDetails.amountOut).sub(
-            minAmountOut
+        if (bn(solutionDetails.amountOut).lt(minAmountOut)) {
+          logger.error(
+            COMPONENT,
+            JSON.stringify({
+              msg: "Solution not good enough",
+              solutionAmountOut: solutionDetails.amountOut,
+              minAmountOut: minAmountOut.toString(),
+              intentHash,
+              approvalTxOrTxHash,
+            })
           );
-          const grossProfitInETH = grossProfitInTokenOut
-            .mul(parseEther("1"))
-            .div(
-              parseUnits(
-                solutionDetails.tokenOutToEthRate,
-                await solutions.uniswap
-                  .getToken(intent.tokenOut, provider)
-                  .then((t) => t.decimals)
-              )
-            );
+          return;
+        }
 
-          const gasFee = latestBaseFee
-            .add(maxPriorityFeePerGas)
-            .mul(gasConsumed);
-          const netProfitInETH = grossProfitInETH.sub(gasFee);
+        const grossProfitInTokenOut = bn(solutionDetails.amountOut).sub(
+          minAmountOut
+        );
+        const grossProfitInETH = grossProfitInTokenOut
+          .mul(parseEther("1"))
+          .div(
+            parseUnits(
+              solutionDetails.tokenOutToEthRate,
+              await solutions.uniswap
+                .getToken(intent.tokenOut, provider)
+                .then((t) => t.decimals)
+            )
+          );
 
-          if (netProfitInETH.lte(0)) {
-            logger.error(
-              COMPONENT,
-              JSON.stringify({
-                msg: "Insufficient solver profit",
-                intentHash,
-                approvalTxOrTxHash,
-                solutionDetails,
-                minAmountOut: minAmountOut.toString(),
-                grossProfitInTokenOut: grossProfitInTokenOut.toString(),
-                grossProfitInETH: grossProfitInETH.toString(),
-                netProfitInETH: netProfitInETH.toString(),
-                gasConsumed,
-                gasFee: gasFee.toString(),
-              })
-            );
-            return;
-          }
+        const gasFee = latestBaseFee.add(maxPriorityFeePerGas).mul(gasConsumed);
+        const netProfitInETH = grossProfitInETH.sub(gasFee);
+
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            msg: "Profit breakdown",
+            solutionDetails,
+            minAmountOut: minAmountOut.toString(),
+            grossProfitInTokenOut: grossProfitInTokenOut.toString(),
+            grossProfitInETH: grossProfitInETH.toString(),
+            netProfitInETH: netProfitInETH.toString(),
+            gasConsumed,
+            gasFee: gasFee.toString(),
+          })
+        );
+
+        if (netProfitInETH.lte(0)) {
+          logger.error(
+            COMPONENT,
+            JSON.stringify({
+              msg: "Insufficient solver profit",
+              intentHash,
+              approvalTxOrTxHash,
+            })
+          );
+          return;
         }
 
         solution = {
