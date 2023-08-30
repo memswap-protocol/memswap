@@ -86,7 +86,10 @@ const worker = new Worker(
       // TODO: Compute both of these dynamically
       const maxPriorityFeePerGas = parseUnits("1", "gwei");
       const gasLimit = 1000000;
-      const avgGasUsed = 400000;
+
+      // Approximations for gas used by memswap logic and gas used by swap logic
+      const memswapGas = 200000;
+      const defaultGas = 200000;
 
       let solution: Solution;
       if (existingSolution) {
@@ -173,15 +176,20 @@ const worker = new Worker(
         );
 
         if (solutionDetails.amountOut && solutionDetails.tokenOutToEthRate) {
+          const gasConsumed = bn(memswapGas)
+            .add(solutionDetails.gasUsed ?? defaultGas)
+            .toString();
+
           logger.info(
             COMPONENT,
             JSON.stringify({
               solutionDetails,
               minAmountOut,
-              ethOnGas: latestBaseFee
+              gasConsumed: latestBaseFee
                 .add(maxPriorityFeePerGas)
-                .mul(avgGasUsed)
+                .mul(gasConsumed)
                 .toString(),
+              message: "Funds breakdown",
             })
           );
 
@@ -204,7 +212,7 @@ const worker = new Worker(
             .mul(parseEther(solutionDetails.tokenOutToEthRate))
             .div(parseEther("1"));
           const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
-            latestBaseFee.add(maxPriorityFeePerGas).mul(avgGasUsed)
+            latestBaseFee.add(maxPriorityFeePerGas).mul(gasConsumed)
           );
           if (fillerNetProfitInETH.lte(0)) {
             logger.error(

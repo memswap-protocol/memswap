@@ -5,6 +5,7 @@ export type SolutionDetails = {
   data: string;
   amountOut?: string;
   tokenOutToEthRate?: string;
+  gasUsed?: string;
 };
 
 export type CachedSolution = {

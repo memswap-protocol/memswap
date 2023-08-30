@@ -34,5 +34,6 @@ export const solve = async (
     data: swapData.data,
     amountOut: swapData.buyAmount,
     tokenOutToEthRate: swapData.buyTokenToEthRate,
+    gasUsed: swapData.estimatedGas,
   };
 };

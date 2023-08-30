@@ -99,5 +99,6 @@ export const solve = async (
       actualRoute!.quote.currency.decimals
     ).toString(),
     tokenOutToEthRate,
+    gasUsed: actualRoute!.estimatedGasUsed.toString(),
   };
 };
