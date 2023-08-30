@@ -84,7 +84,7 @@ const worker = new Worker(
       }
 
       // TODO: Compute both of these dynamically
-      const maxPriorityFeePerGas = parseUnits("10", "gwei");
+      const maxPriorityFeePerGas = parseUnits("1", "gwei");
       const gasLimit = 1000000;
       const avgGasUsed = 400000;
 
