@@ -25,10 +25,15 @@ const deployContract = async (
 
 const main = async () => {
   const [deployer] = await ethers.getSigners();
+  const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
 
   // await deployContract(deployer, "Memswap");
   // await deployContract(deployer, "WETH2");
-  // await deployContract(deployer, "FillProxy", [SOLVER, MEMSWAP, MEMSWAP_WETH]);
+  // await deployContract(deployer, "FillProxy", [
+  //   SOLVER[chainId],
+  //   MEMSWAP[chainId],
+  //   MEMSWAP_WETH[chainId],
+  // ]);
 };
 
 main()
