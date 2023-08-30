@@ -715,22 +715,30 @@ const relayViaBloxroute = async (
   }
 
   // Relay via bloxroute
-  await axios.post("https://mev.api.blxrbdn.com", {
-    id: "1",
-    method: "blxr_submit_bundle",
-    params: {
-      transaction: txs.map((tx) => tx.signedTransaction.slice(2)),
-      block_number: targetBlock,
-      mev_builders: {
-        bloxroute: "",
-        flashbots: "",
-        builder0x69: "",
-        beaverbuild: "",
-        buildai: "",
-        all: "",
+  await axios.post(
+    "https://mev.api.blxrbdn.com",
+    {
+      id: "1",
+      method: "blxr_submit_bundle",
+      params: {
+        transaction: txs.map((tx) => tx.signedTransaction.slice(2)),
+        block_number: targetBlock,
+        mev_builders: {
+          bloxroute: "",
+          flashbots: "",
+          builder0x69: "",
+          beaverbuild: "",
+          buildai: "",
+          all: "",
+        },
       },
     },
-  });
+    {
+      headers: {
+        Authorization: process.env.BLOXROUTE_AUTH,
+      },
+    }
+  );
 
   logger.info(
     COMPONENT,
