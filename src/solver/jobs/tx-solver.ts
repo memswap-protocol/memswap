@@ -180,19 +180,6 @@ const worker = new Worker(
             .add(solutionDetails.gasUsed ?? defaultGas)
             .toString();
 
-          logger.info(
-            COMPONENT,
-            JSON.stringify({
-              solutionDetails,
-              minAmountOut,
-              gasConsumed: latestBaseFee
-                .add(maxPriorityFeePerGas)
-                .mul(gasConsumed)
-                .toString(),
-              message: "Funds breakdown",
-            })
-          );
-
           if (bn(solutionDetails.amountOut).lt(minAmountOut)) {
             logger.error(
               COMPONENT,
@@ -220,6 +207,12 @@ const worker = new Worker(
               JSON.stringify({
                 intentHash,
                 approvalTxOrTxHash,
+                solutionDetails,
+                minAmountOut,
+                gasConsumed: latestBaseFee
+                  .add(maxPriorityFeePerGas)
+                  .mul(gasConsumed)
+                  .toString(),
                 message: `Insufficient solver profit (profit=${formatEther(
                   fillerNetProfitInETH
                 )})`,
