@@ -41,7 +41,7 @@ const worker = new Worker(
       const matchmaker = new Wallet(config.matchmakerPk);
 
       const components = solutionKey.split(":");
-      const deadlineBlock = Number(components[components.length - 1]);
+      const deadlineBlock = Number(components[components.length - 1]) + 5;
       const latestBlock = await provider
         .getBlock("latest")
         .then((b) => b.number);
