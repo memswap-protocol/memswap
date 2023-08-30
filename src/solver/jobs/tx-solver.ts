@@ -168,10 +168,11 @@ const worker = new Worker(
             .div(intent.deadline - latestTimestamp)
         );
 
-        const solutionDetails = await solutions.zeroEx.solve(
+        const solutionDetails = await solutions.uniswap.solve(
           intent.tokenIn,
           intent.tokenOut,
-          intent.amountIn
+          intent.amountIn,
+          provider
         );
 
         if (solutionDetails.amountOut && solutionDetails.tokenOutToEthRate) {
