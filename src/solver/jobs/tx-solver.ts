@@ -192,19 +192,19 @@ const worker = new Worker(
           const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
             latestBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
           );
-          if (fillerNetProfitInETH.lte(0)) {
-            logger.error(
-              COMPONENT,
-              JSON.stringify({
-                intentHash,
-                approvalTxOrTxHash,
-                message: `Insufficient solver profit (profit=${formatEther(
-                  fillerNetProfitInETH
-                )})`,
-              })
-            );
-            return;
-          }
+          // if (fillerNetProfitInETH.lte(0)) {
+          //   logger.error(
+          //     COMPONENT,
+          //     JSON.stringify({
+          //       intentHash,
+          //       approvalTxOrTxHash,
+          //       message: `Insufficient solver profit (profit=${formatEther(
+          //         fillerNetProfitInETH
+          //       )})`,
+          //     })
+          //   );
+          //   return;
+          // }
         }
 
         solution = {
