@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {WETH2} from "../WETH2.sol";
 
-contract FillProxy {
+contract SolutionProxy {
     // --- Errors ---
 
     error Unauthorized();
@@ -67,8 +67,21 @@ contract FillProxy {
             if (!success) {
                 revert UnsuccessfulCall();
             }
+
+            uint256 amountLeft = address(this).balance;
+            if (amountLeft > 0) {
+                (success, ) = owner.call{value: amountLeft}("");
+                if (!success) {
+                    revert UnsuccessfulCall();
+                }
+            }
         } else {
             tokenOut.approve(memswap, amountOut);
+
+            uint256 amountLeft = tokenOut.balanceOf(address(this)) - amountOut;
+            if (amountLeft > 0) {
+                tokenOut.transfer(owner, amountLeft);
+            }
         }
     }
 

@@ -29,7 +29,7 @@ const main = async () => {
 
   // await deployContract(deployer, "Memswap");
   // await deployContract(deployer, "WETH2");
-  // await deployContract(deployer, "FillProxy", [
+  // await deployContract(deployer, "SolutionProxy", [
   //   SOLVER[chainId],
   //   MEMSWAP[chainId],
   //   MEMSWAP_WETH[chainId],

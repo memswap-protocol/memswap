@@ -47,7 +47,7 @@ describe("Memswap", async () => {
       .getContractFactory("WETH2")
       .then((factory) => factory.deploy());
     solver = await ethers
-      .getContractFactory("MockFiller")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy());
     token0 = await ethers
       .getContractFactory("MockERC20")

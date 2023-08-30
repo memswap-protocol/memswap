@@ -15,7 +15,7 @@ import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
 import {
-  FILL_PROXY,
+  SOLUTION_PROXY,
   MATCHMAKER,
   MEMSWAP,
   MEMSWAP_WETH,
@@ -208,7 +208,7 @@ const worker = new Worker(
         }
 
         solution = {
-          to: FILL_PROXY[config.chainId],
+          to: SOLUTION_PROXY[config.chainId],
           data: new Interface([
             "function fill(address to, bytes data, address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut)",
           ]).encodeFunctionData("fill", [

@@ -8,7 +8,7 @@ interface IMintableERC20 is IERC20 {
     function mint(uint256 amount) external;
 }
 
-contract MockFiller {
+contract MockSolutionProxy {
     receive() external payable {}
 
     function fill(IERC20 tokenOut, uint256 amount) external payable {

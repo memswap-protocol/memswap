@@ -25,14 +25,17 @@ const main = async () => {
   const CURRENCIES = {
     ETH: MEMSWAP_WETH[chainId],
     WETH: REGULAR_WETH[chainId],
-    USDC: "0x07865c6e87b9f70255377e024ace6630c1eaa37f",
+    USDC:
+      chainId === 1
+        ? "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        : "0x07865c6e87b9f70255377e024ace6630c1eaa37f",
   };
 
   const tokenIn = CURRENCIES.ETH;
   const tokenOut = CURRENCIES.USDC;
 
   const amountIn = parseEther("0.001");
-  const amountOut = parseUnits("10000", 6);
+  const amountOut = parseUnits("1.7", 6);
   // Create intent
   const intent = {
     tokenIn,
@@ -105,6 +108,7 @@ const main = async () => {
     .getBlock("pending")
     .then((b) => b!.baseFeePerGas!);
   const maxPriorityFeePerGas = parseUnits("1", "gwei");
+
   const tx = await maker.connect(provider).sendTransaction({
     to: tokenIn,
     data,
@@ -128,7 +132,7 @@ const main = async () => {
   //   chainId,
   // });
 
-  // await axios.post("", {
+  // await axios.post(`${process.env.MATCHMAKER_BASE_URL}/intents/private`, {
   //   intent,
   //   approvalTxOrTxHash: tx,
   // });
