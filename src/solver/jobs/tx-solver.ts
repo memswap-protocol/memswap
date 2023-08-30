@@ -194,27 +194,32 @@ const worker = new Worker(
             return;
           }
 
-          const fillerGrossProfitInETH = bn(solutionDetails.amountOut)
-            .sub(minAmountOut)
+          const grossProfitInTokenOut = bn(solutionDetails.amountOut).sub(
+            minAmountOut
+          );
+          const grossProfitInETH = grossProfitInTokenOut
             .mul(parseEther(solutionDetails.tokenOutToEthRate))
             .div(parseEther("1"));
-          const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
-            latestBaseFee.add(maxPriorityFeePerGas).mul(gasConsumed)
-          );
-          if (fillerNetProfitInETH.lte(0)) {
+
+          const gasFee = latestBaseFee
+            .add(maxPriorityFeePerGas)
+            .mul(gasConsumed);
+          const netProfitInETH = grossProfitInETH.sub(gasFee);
+
+          if (netProfitInETH.lte(0)) {
             logger.error(
               COMPONENT,
               JSON.stringify({
                 intentHash,
                 approvalTxOrTxHash,
                 solutionDetails,
-                minAmountOut,
-                gasConsumed: latestBaseFee
-                  .add(maxPriorityFeePerGas)
-                  .mul(gasConsumed)
-                  .toString(),
+                grossProfitInTokenOut: grossProfitInTokenOut.toString(),
+                grossProfitInETH: grossProfitInETH.toString(),
+                netProfitInETH: netProfitInETH.toString(),
+                gasConsumed,
+                gasFee: gasFee.toString(),
                 message: `Insufficient solver profit (profit=${formatEther(
-                  fillerNetProfitInETH
+                  netProfitInETH
                 )})`,
               })
             );
