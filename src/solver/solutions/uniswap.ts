@@ -18,7 +18,7 @@ import { MEMSWAP_WETH, REGULAR_WETH } from "../../common/addresses";
 import { config } from "../config";
 import { SolutionDetails } from "../types";
 
-const getToken = async (
+export const getToken = async (
   address: string,
   provider: Provider
 ): Promise<Currency> => {

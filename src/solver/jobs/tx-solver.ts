@@ -198,8 +198,15 @@ const worker = new Worker(
             minAmountOut
           );
           const grossProfitInETH = grossProfitInTokenOut
-            .mul(parseEther(solutionDetails.tokenOutToEthRate))
-            .div(parseEther("1"));
+            .mul(parseEther("1"))
+            .div(
+              parseUnits(
+                solutionDetails.tokenOutToEthRate,
+                await solutions.uniswap
+                  .getToken(intent.tokenOut, provider)
+                  .then((t) => t.decimals)
+              )
+            );
 
           const gasFee = latestBaseFee
             .add(maxPriorityFeePerGas)
