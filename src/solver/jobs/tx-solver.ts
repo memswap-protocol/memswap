@@ -199,7 +199,7 @@ const worker = new Worker(
                 intentHash,
                 approvalTxOrTxHash,
                 message: `Insufficient solver profit (profit=${formatEther(
-                  fillerGrossProfitInETH
+                  fillerNetProfitInETH
                 )})`,
               })
             );
