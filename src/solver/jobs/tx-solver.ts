@@ -42,7 +42,7 @@ const BLOCK_TIME = 15;
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
   defaultJobOptions: {
-    attempts: 10,
+    attempts: 20,
     removeOnComplete: 10000,
     removeOnFail: 10000,
   },
