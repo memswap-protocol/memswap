@@ -213,6 +213,7 @@ const worker = new Worker(
                 intentHash,
                 approvalTxOrTxHash,
                 solutionDetails,
+                minAmountOut: minAmountOut.toString(),
                 grossProfitInTokenOut: grossProfitInTokenOut.toString(),
                 grossProfitInETH: grossProfitInETH.toString(),
                 netProfitInETH: netProfitInETH.toString(),

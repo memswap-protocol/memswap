@@ -73,7 +73,7 @@ export const solve = async (
       MEMSWAP_WETH[config.chainId],
       REGULAR_WETH[config.chainId],
       AddressZero,
-    ].includes(tokenIn)
+    ].includes(tokenOut)
       ? "1"
       : router
           .route(
@@ -81,7 +81,7 @@ export const solve = async (
               ethToken,
               parseUnits("1", 18).toString()
             ),
-            fromToken,
+            toToken,
             TradeType.EXACT_INPUT,
             {
               type: SwapType.UNIVERSAL_ROUTER,
