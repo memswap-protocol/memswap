@@ -63,6 +63,17 @@ app.post("/authorizations", async (req, res) => {
     });
   }
 
+  logger.info(
+    "authorizations",
+    JSON.stringify({
+      uuid,
+      intent,
+      authorization,
+      approvalTxOrTxHash,
+      message: "Received authorization from matchmaker",
+    })
+  );
+
   if (uuid) {
     const cachedSolution: CachedSolution | undefined = await redis
       .get(`solver:${uuid}`)
@@ -82,7 +93,7 @@ app.post("/authorizations", async (req, res) => {
       JSON.stringify({
         uuid,
         ...cachedSolution,
-        message: "Received authorization from matchmaker",
+        message: "Handled authorization from matchmaker",
       })
     );
   } else if (intent) {
@@ -98,7 +109,7 @@ app.post("/authorizations", async (req, res) => {
         intent,
         authorization,
         approvalTxOrTxHash,
-        message: "Received authorization from matchmaker",
+        message: "Handled authorization from matchmaker",
       })
     );
   }
