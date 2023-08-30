@@ -433,7 +433,7 @@ const worker = new Worker(
             `solver:${uuid}`,
             JSON.stringify({ intent, approvalTxHash, solution }),
             "EX",
-            BLOCK_TIME
+            BLOCK_TIME * 4
           );
 
           await axios.post(`${config.matchmakerBaseUrl}/solutions`, {
