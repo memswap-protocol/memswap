@@ -2,7 +2,7 @@ import { Interface } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { parse, serialize } from "@ethersproject/transactions";
-import { formatEther, parseEther, parseUnits } from "@ethersproject/units";
+import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import {
   FlashbotsBundleProvider,
@@ -13,7 +13,6 @@ import * as txSimulator from "@georgeroman/evm-tx-simulator";
 import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
-import { MEVBundleSubmitter } from "mev-bundle-submitter";
 
 import {
   SOLUTION_PROXY,
@@ -373,13 +372,13 @@ const worker = new Worker(
       const includeApprovalTx =
         approvalTxHash && !(await isTxIncluded(approvalTxHash, provider));
 
-      // If specified and the conditions allow it, use direct transactions rather than bundles
-      let useBundles = true;
+      // If specified and the conditions allow it, use direct transactions rather than relays
+      let useRelay = true;
       if (
         !includeApprovalTx &&
         Boolean(Number(process.env.RELAY_DIRECTLY_WHEN_POSSIBLE))
       ) {
-        useBundles = false;
+        useRelay = false;
       }
 
       const relayMethod = process.env.BLOXROUTE_AUTH
@@ -389,7 +388,7 @@ const worker = new Worker(
       if (intent.matchmaker !== MATCHMAKER[config.chainId]) {
         // Solve directly
 
-        if (useBundles) {
+        if (useRelay) {
           // If the approval transaction is still pending, include it in the bundle
           const fillerTx = await getFillerTx(intent);
           const txs = includeApprovalTx ? [approvalTx!, fillerTx] : [fillerTx];
@@ -467,7 +466,7 @@ const worker = new Worker(
             throw new Error("Authorization deadline exceeded");
           }
 
-          if (useBundles) {
+          if (useRelay) {
             // If the approval transaction is still pending, include it in the bundle
             const fillerTx = await getFillerTx(intent, authorization);
             const txs = includeApprovalTx
@@ -626,15 +625,6 @@ const relayViaFlashbots = async (
     throw new Error("Bundle simulation failed");
   }
 
-  logger.info(
-    COMPONENT,
-    JSON.stringify({
-      msg: "Relaying bundle using flashbots",
-      intentHash,
-      targetBlock,
-    })
-  );
-
   const receipt = await flashbotsProvider.sendRawBundle(
     signedBundle,
     targetBlock
@@ -724,25 +714,21 @@ const relayViaBloxroute = async (
     throw new Error("Bundle simulation failed");
   }
 
-  logger.info(
-    COMPONENT,
-    JSON.stringify({
-      msg: "Relaying bundle using bloxroute",
-      intentHash,
-      targetBlock,
-    })
-  );
-
-  // Relay via as many relays as possible
-  const submitter = new MEVBundleSubmitter({
-    bloxrouteAuth: process.env.BLOXROUTE_AUTH,
-    provider: provider,
-  });
-
-  const response = await submitter.submitToAll({
-    bundle: {
-      transactions: txs.map((tx) => tx.signedTransaction),
-      blockNumber: targetBlock,
+  // Relay via bloxroute
+  await axios.post("https://mev.api.blxrbdn.com", {
+    id: "1",
+    method: "blxr_submit_bundle",
+    params: {
+      transaction: txs.map((tx) => tx.signedTransaction.slice(2)),
+      block_number: targetBlock,
+      mev_builders: {
+        bloxroute: "",
+        flashbots: "",
+        builder0x69: "",
+        beaverbuild: "",
+        buildai: "",
+        all: "",
+      },
     },
   });
 
@@ -752,7 +738,6 @@ const relayViaBloxroute = async (
       msg: "Bundle relayed using bloxroute",
       intentHash,
       targetBlock,
-      response,
     })
   );
 };

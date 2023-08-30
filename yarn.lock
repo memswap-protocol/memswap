@@ -3972,14 +3972,6 @@ methods@~1.1.2:
   resolved "https://registry.yarnpkg.com/methods/-/methods-1.1.2.tgz#5529a4d67654134edcc5266656835b0f851afcee"
   integrity sha512-iclAHeNqNm68zFtnZ0e+1L2yUIdvzNoauKU4WBA3VvH/vPFieF7qfRlwUZU+DA9P9bPXIS90ulxoUoCH23sV2w==
 
-mev-bundle-submitter@^0.1.1:
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/mev-bundle-submitter/-/mev-bundle-submitter-0.1.1.tgz#754a9e9d0a9cfbffbd7d75462c5c6a5fe2764d69"
-  integrity sha512-J+NherumHqM5Z92+keP6AXiYQ3eQTkrFp8s2B1k1GwHj3VyKdxaVi7mefiURcTkJLeJCiZ3U8+gsxLDUjJa8fw==
-  dependencies:
-    "@flashbots/ethers-provider-bundle" "^0.6.2"
-    ethers "^5.7.2"
-
 micro-ftch@^0.3.1:
   version "0.3.1"
   resolved "https://registry.yarnpkg.com/micro-ftch/-/micro-ftch-0.3.1.tgz#6cb83388de4c1f279a034fb0cf96dfc050853c5f"
