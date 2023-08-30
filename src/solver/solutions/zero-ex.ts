@@ -1,8 +1,11 @@
+import { AddressZero } from "@ethersproject/constants";
 import axios from "axios";
 
 import { MEMSWAP_WETH } from "../../common/addresses";
 import { config } from "../config";
 import { SolutionDetails } from "../types";
+
+const ZEROEX_ETH = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 
 export const solve = async (
   tokenIn: string,
@@ -15,11 +18,9 @@ export const solve = async (
       : "https://goerli.api.0x.org/swap/v1/quote",
     {
       params: {
-        buyToken: tokenOut,
+        buyToken: tokenOut === AddressZero ? ZEROEX_ETH : tokenOut,
         sellToken:
-          tokenIn === MEMSWAP_WETH[config.chainId]
-            ? "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-            : tokenIn,
+          tokenIn === MEMSWAP_WETH[config.chainId] ? ZEROEX_ETH : tokenIn,
         sellAmount: amountIn,
       },
       headers: {

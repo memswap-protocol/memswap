@@ -31,11 +31,11 @@ const main = async () => {
         : "0x07865c6e87b9f70255377e024ace6630c1eaa37f",
   };
 
-  const tokenIn = CURRENCIES.ETH;
-  const tokenOut = CURRENCIES.USDC;
+  const tokenIn = CURRENCIES.USDC;
+  const tokenOut = AddressZero;
 
-  const amountIn = parseEther("0.001");
-  const amountOut = parseUnits("1.7", 6);
+  const amountIn = parseUnits("100", 6);
+  const amountOut = parseUnits("0.001", 18);
   // Create intent
   const intent = {
     tokenIn,
