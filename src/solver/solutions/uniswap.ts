@@ -59,7 +59,7 @@ export const solve = async (
   const fromToken = await getToken(tokenIn, provider);
   const toToken = await getToken(tokenOut, provider);
 
-  const [actualRoute, ethRoute] = await Promise.all([
+  const [actualRoute, tokenOutToEthRate] = await Promise.all([
     router.route(
       CurrencyAmount.fromRawAmount(fromToken, amountIn),
       toToken,
@@ -69,15 +69,26 @@ export const solve = async (
         slippageTolerance: new Percent(5, 100),
       }
     ),
-    router.route(
-      CurrencyAmount.fromRawAmount(ethToken, parseUnits("1", 18).toString()),
-      fromToken,
-      TradeType.EXACT_INPUT,
-      {
-        type: SwapType.UNIVERSAL_ROUTER,
-        slippageTolerance: new Percent(5, 100),
-      }
-    ),
+    [
+      MEMSWAP_WETH[config.chainId],
+      REGULAR_WETH[config.chainId],
+      AddressZero,
+    ].includes(tokenIn)
+      ? "1"
+      : router
+          .route(
+            CurrencyAmount.fromRawAmount(
+              ethToken,
+              parseUnits("1", 18).toString()
+            ),
+            fromToken,
+            TradeType.EXACT_INPUT,
+            {
+              type: SwapType.UNIVERSAL_ROUTER,
+              slippageTolerance: new Percent(5, 100),
+            }
+          )
+          .then((r) => r!.quote.toFixed()),
   ]);
 
   return {
@@ -87,6 +98,6 @@ export const solve = async (
       actualRoute!.quote.toExact(),
       actualRoute!.quote.currency.decimals
     ).toString(),
-    tokenOutToEthRate: ethRoute!.quote.toFixed(),
+    tokenOutToEthRate,
   };
 };
