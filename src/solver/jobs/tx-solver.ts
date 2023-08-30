@@ -25,6 +25,7 @@ import { logger } from "../../common/logger";
 import { Authorization, Intent, Solution } from "../../common/types";
 import {
   bn,
+  getAuthorizationHash,
   getIntentHash,
   isIntentFilled,
   isTxIncluded,
@@ -520,7 +521,11 @@ export const addToQueue = async (
     },
     {
       delay: delay ? delay * 1000 : undefined,
-      jobId: getIntentHash(intent),
+      jobId:
+        getIntentHash(intent) +
+        (options?.authorization
+          ? getAuthorizationHash(options.authorization)
+          : ""),
     }
   );
 

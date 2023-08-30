@@ -5,7 +5,7 @@ import { Contract } from "@ethersproject/contracts";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 
 import { MEMSWAP } from "./addresses";
-import { Intent } from "./types";
+import { Authorization, Intent } from "./types";
 
 export const BLOCK_TIME = 12;
 
@@ -43,6 +43,13 @@ export const isIntentFilled = async (
 
   return false;
 };
+
+export const getAuthorizationHash = (authorization: Authorization) =>
+  _TypedDataEncoder.hashStruct(
+    "Authorization",
+    getEIP712TypesForAuthorization(),
+    authorization
+  );
 
 export const getIntentHash = (intent: Intent) =>
   _TypedDataEncoder.hashStruct("Intent", getEIP712TypesForIntent(), intent);
