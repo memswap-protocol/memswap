@@ -356,13 +356,16 @@ const worker = new Worker(
           const fillerTx = await getFillerTx(intent);
           const txs = includeApprovalTx ? [approvalTx!, fillerTx] : [fillerTx];
 
+          const targetBlock =
+            (await provider.getBlock("latest").then((b) => b.number)) + 1;
+
           // Relay
           await relayViaFlashbots(
             intentHash,
             provider,
             flashbotsProvider,
             txs,
-            (await provider.getBlock("latest").then((b) => b.number)) + 1
+            targetBlock
           );
         } else {
           // At this point, for sure the approval transaction was already included, so we can skip it
@@ -421,6 +424,18 @@ const worker = new Worker(
         } else {
           // We do have an authorization so all we have to do is relay the transaction
 
+          const targetBlock =
+            (await provider.getBlock("latest").then((b) => b.number)) + 1;
+          if (targetBlock > authorization.blockDeadline) {
+            // If the authorization deadline was exceeded we need to request another authorization
+            job.updateData({
+              ...job.data,
+              authorization: undefined,
+            });
+
+            throw new Error("Authorization deadline exceeded");
+          }
+
           if (useFlashbots) {
             // If the approval transaction is still pending, include it in the bundle
             const fillerTx = await getFillerTx(intent, authorization);
@@ -434,7 +449,7 @@ const worker = new Worker(
               provider,
               flashbotsProvider,
               txs,
-              authorization.blockDeadline
+              targetBlock
             );
           } else {
             // At this point, for sure the approval transaction was already included, so we can skip it
