@@ -45,8 +45,8 @@ export const processSolution = async (
     logger.info(
       COMPONENT,
       JSON.stringify({
+        msg: "Processing solution",
         intentHash,
-        message: "Processing solution",
         uuid,
         baseUrl,
         intent,
@@ -54,33 +54,45 @@ export const processSolution = async (
       })
     );
 
+    const perfTime1 = performance.now();
+
     // Return early if the intent is expired
     if (intent.deadline < now()) {
-      const message = "Intent is expired";
-      logger.info(COMPONENT, JSON.stringify({ intentHash, message }));
-
-      return {
-        status: "error",
-        error: message,
-      };
-    }
-
-    // TODO: Return early if intent is filled
-    if (await isIntentFilled(intent, config.chainId, provider)) {
-      const message = "Filled";
+      const msg = "Intent is expired";
       logger.info(
         COMPONENT,
         JSON.stringify({
+          msg,
           intentHash,
-          message,
         })
       );
 
       return {
         status: "error",
-        error: message,
+        error: msg,
       };
     }
+
+    const perfTime2 = performance.now();
+
+    // TODO: Return early if intent is filled
+    if (await isIntentFilled(intent, config.chainId, provider)) {
+      const msg = "Filled";
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          msg,
+          intentHash,
+        })
+      );
+
+      return {
+        status: "error",
+        error: msg,
+      };
+    }
+
+    const perfTime3 = performance.now();
 
     // Determine the target block for the solution
     const latestBlock = await provider.getBlock("latest");
@@ -93,17 +105,27 @@ export const processSolution = async (
       targetBlockTimestamp += BLOCK_TIME;
     }
 
+    const perfTime4 = performance.now();
+
     // Return early if the submission period is already over (for the current target block)
     const solutionKey = `matchmaker:solutions:${intentHash}:${targetBlockNumber}`;
     if (await jobs.signatureRelease.isLocked(solutionKey)) {
-      const message = "Submission period is over";
-      logger.info(COMPONENT, JSON.stringify({ intentHash, message }));
+      const msg = "Submission period is over";
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          msg,
+          intentHash,
+        })
+      );
 
       return {
         status: "error",
-        error: message,
+        error: msg,
       };
     }
+
+    const perfTime5 = performance.now();
 
     // Assume the solution transaction is the last one in the list
     const parsedSolutionTx = parse(txs[txs.length - 1]);
@@ -170,20 +192,29 @@ export const processSolution = async (
         };
       }),
     ];
+
+    const perfTime6 = performance.now();
+
     const traces = await getCallTraces(txsToSimulate, provider);
+
+    const perfTime7 = performance.now();
 
     // Make sure the solution transaction didn't reverted
     const solveTrace = traces[traces.length - 1];
     if (solveTrace.error) {
-      const message = "Solution transaction reverted";
+      const msg = "Solution transaction reverted";
       logger.info(
         COMPONENT,
-        JSON.stringify({ intentHash, message, txsToSimulate })
+        JSON.stringify({
+          msg,
+          intentHash,
+          txsToSimulate,
+        })
       );
 
       return {
         status: "error",
-        error: message,
+        error: msg,
       };
     }
 
@@ -214,9 +245,32 @@ export const processSolution = async (
       targetBlockTimestamp - now()
     );
 
+    const perfTime8 = performance.now();
+
+    logger.info(
+      COMPONENT,
+      JSON.stringify({
+        msg: "matchmaker-process-solution-performance",
+        time1: (perfTime2 - perfTime1) / 1000,
+        time2: (perfTime3 - perfTime2) / 1000,
+        time3: (perfTime4 - perfTime3) / 1000,
+        time4: (perfTime5 - perfTime4) / 1000,
+        time5: (perfTime6 - perfTime5) / 1000,
+        time6: (perfTime7 - perfTime6) / 1000,
+        time7: (perfTime8 - perfTime7) / 1000,
+      })
+    );
+
     return { status: "success" };
   } catch (error: any) {
-    logger.error(COMPONENT, JSON.stringify({ error, stack: error.stack }));
+    logger.error(
+      COMPONENT,
+      JSON.stringify({
+        msg: "Unknown error",
+        error,
+        stack: error.stack,
+      })
+    );
 
     return {
       status: "error",

@@ -157,7 +157,10 @@ const worker = new Worker(
         if (signer.toLowerCase() !== intent.maker) {
           logger.info(
             COMPONENT,
-            `Invalid intent signature in transaction ${txHash}`
+            JSON.stringify({
+              msg: "Invalid intent signature in transaction",
+              txHash,
+            })
           );
           return;
         }
@@ -167,14 +170,17 @@ const worker = new Worker(
         });
       }
     } catch (error: any) {
-      logger.error(COMPONENT, `Job failed: ${error} (${error.stack})`);
+      logger.error(
+        COMPONENT,
+        JSON.stringify({ msg: "Job failed", error, stack: error.stack })
+      );
       throw error;
     }
   },
   { connection: redis.duplicate(), concurrency: 500 }
 );
 worker.on("error", (error) => {
-  logger.error(COMPONENT, JSON.stringify({ data: `Worker errored: ${error}` }));
+  logger.error(COMPONENT, JSON.stringify({ msg: "Worker errored", error }));
 });
 
 export const addToQueue = async (txHash: string) =>

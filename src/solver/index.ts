@@ -66,11 +66,11 @@ app.post("/authorizations", async (req, res) => {
   logger.info(
     "authorizations",
     JSON.stringify({
+      msg: "Received authorization from matchmaker",
       uuid,
       intent,
       authorization,
       approvalTxOrTxHash,
-      message: "Received authorization from matchmaker",
     })
   );
 
@@ -91,9 +91,9 @@ app.post("/authorizations", async (req, res) => {
     logger.info(
       "authorizations",
       JSON.stringify({
+        msg: "Handled authorization from matchmaker",
         uuid,
         ...cachedSolution,
-        message: "Handled authorization from matchmaker",
       })
     );
   } else if (intent) {
@@ -105,11 +105,11 @@ app.post("/authorizations", async (req, res) => {
     logger.info(
       "authorizations",
       JSON.stringify({
+        msg: "Handled authorization from matchmaker",
         uuid,
         intent,
         authorization,
         approvalTxOrTxHash,
-        message: "Handled authorization from matchmaker",
       })
     );
   }

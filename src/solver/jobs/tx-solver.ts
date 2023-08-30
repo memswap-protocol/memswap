@@ -76,16 +76,16 @@ const worker = new Worker(
         logger.info(
           COMPONENT,
           JSON.stringify({
+            msg: "Filled",
             intentHash,
             approvalTxOrTxHash,
-            message: "Filled",
           })
         );
         return;
       }
 
       // TODO: Compute both of these dynamically
-      const maxPriorityFeePerGas = parseUnits("2", "gwei");
+      const maxPriorityFeePerGas = parseUnits("1", "gwei");
       const gasLimit = 1000000;
 
       // Approximations for gas used by memswap logic and gas used by swap logic
@@ -109,9 +109,9 @@ const worker = new Worker(
           logger.info(
             COMPONENT,
             JSON.stringify({
+              msg: "Attempted to wrap/unwrap WETH",
               intentHash,
               approvalTxOrTxHash,
-              message: "Attempted to wrap/unwrap WETH",
             })
           );
           return;
@@ -121,9 +121,11 @@ const worker = new Worker(
           logger.info(
             COMPONENT,
             JSON.stringify({
+              msg: "Expired",
+              now: now(),
+              deadline: intent.deadline,
               intentHash,
               approvalTxOrTxHash,
-              message: `Expired (now=${now()}, deadline=${intent.deadline})`,
             })
           );
           return;
@@ -137,9 +139,10 @@ const worker = new Worker(
           logger.info(
             COMPONENT,
             JSON.stringify({
+              msg: "Unsupported matchmaker",
+              matchmaker: intent.matchmaker,
               intentHash,
               approvalTxOrTxHash,
-              message: `Unsupported matchmaker (matchmaker=${intent.matchmaker})`,
             })
           );
           return;
@@ -148,9 +151,9 @@ const worker = new Worker(
         logger.info(
           COMPONENT,
           JSON.stringify({
+            msg: "Generating solution",
             intentHash,
             approvalTxOrTxHash,
-            message: "Generating solution",
           })
         );
 
@@ -185,11 +188,11 @@ const worker = new Worker(
             logger.error(
               COMPONENT,
               JSON.stringify({
+                msg: "Solution not good enough",
+                solutionAmountOut: solutionDetails.amountOut,
+                minAmountOut: minAmountOut.toString(),
                 intentHash,
                 approvalTxOrTxHash,
-                message: `Solution not good enough (actualAmountOut=${
-                  solutionDetails.amountOut
-                }, minAmountOut=${minAmountOut.toString()})`,
               })
             );
             return;
@@ -218,6 +221,7 @@ const worker = new Worker(
             logger.error(
               COMPONENT,
               JSON.stringify({
+                msg: "Insufficient solver profit",
                 intentHash,
                 approvalTxOrTxHash,
                 solutionDetails,
@@ -227,9 +231,6 @@ const worker = new Worker(
                 netProfitInETH: netProfitInETH.toString(),
                 gasConsumed,
                 gasFee: gasFee.toString(),
-                message: `Insufficient solver profit (profit=${formatEther(
-                  netProfitInETH
-                )})`,
               })
             );
             return;
@@ -416,9 +417,9 @@ const worker = new Worker(
           logger.info(
             COMPONENT,
             JSON.stringify({
+              msg: "Submitting solution to matchmaker",
               intentHash,
               txHash: approvalTxHash,
-              message: "Submitting solution to matchmaker",
             })
           );
 
@@ -489,9 +490,13 @@ const worker = new Worker(
     } catch (error: any) {
       logger.error(
         COMPONENT,
-        `Job failed: ${
-          error.response?.data ? JSON.stringify(error.response.data) : error
-        } (${error.stack})`
+        JSON.stringify({
+          msg: "Job failed",
+          error: error.response?.data
+            ? JSON.stringify(error.response.data)
+            : error,
+          stack: error.stack,
+        })
       );
       throw error;
     }
@@ -499,7 +504,13 @@ const worker = new Worker(
   { connection: redis.duplicate(), concurrency: 10 }
 );
 worker.on("error", (error) => {
-  logger.error(COMPONENT, JSON.stringify({ data: `Worker errored: ${error}` }));
+  logger.error(
+    COMPONENT,
+    JSON.stringify({
+      msg: "Worker errored",
+      error,
+    })
+  );
 });
 
 export const addToQueue = async (
@@ -553,8 +564,8 @@ const relayViaTransaction = async (
     logger.error(
       COMPONENT,
       JSON.stringify({
+        msg: "Simulation failed",
         intentHash,
-        message: "Simulation failed",
         parsedTx,
       })
     );
@@ -565,18 +576,19 @@ const relayViaTransaction = async (
   logger.info(
     COMPONENT,
     JSON.stringify({
+      msg: "Relaying using regular transaction",
       intentHash,
-      message: "Relaying using regular transaction",
     })
   );
 
-  const txResponse = await provider.sendTransaction(tx);
+  const txResponse = await provider.sendTransaction(tx).then((tx) => tx.wait());
 
   logger.info(
     COMPONENT,
     JSON.stringify({
+      msg: "Transaction included",
       intentHash,
-      message: `Transaction included (txHash=${txResponse.hash})`,
+      txHash: txResponse.transactionHash,
     })
   );
 };
@@ -596,8 +608,8 @@ const relayViaFlashbots = async (
     logger.error(
       COMPONENT,
       JSON.stringify({
+        msg: "Bundle simulation failed",
         intentHash,
-        message: "Bundle simulation failed",
         simulationResult,
         txs,
       })
@@ -609,8 +621,9 @@ const relayViaFlashbots = async (
   logger.info(
     COMPONENT,
     JSON.stringify({
+      msg: "Relaying bundle using flashbots",
       intentHash,
-      message: `Relaying bundle using flashbots (targetBlock=${targetBlock})`,
+      targetBlock,
     })
   );
 
@@ -623,8 +636,10 @@ const relayViaFlashbots = async (
   logger.info(
     COMPONENT,
     JSON.stringify({
+      msg: "Bundle relayed using flashbots",
       intentHash,
-      message: `Bundle relayed using flashbots (targetBlock=${targetBlock}, bundleHash=${hash})`,
+      targetBlock,
+      bundleHash: hash,
     })
   );
 
@@ -642,16 +657,20 @@ const relayViaFlashbots = async (
       logger.info(
         COMPONENT,
         JSON.stringify({
+          msg: "Bundle included",
           intentHash,
-          message: `Bundle included (targetBlock=${targetBlock}, bundleHash=${hash})`,
+          targetBlock,
+          bundleHash: hash,
         })
       );
     } else {
       logger.info(
         COMPONENT,
         JSON.stringify({
+          msg: "Bundle not included",
           intentHash,
-          message: `Bundle not included (targetBlock=${targetBlock}, bundleHash=${hash})`,
+          targetBlock,
+          bundleHash: hash,
         })
       );
 
@@ -661,8 +680,10 @@ const relayViaFlashbots = async (
     logger.info(
       COMPONENT,
       JSON.stringify({
+        msg: "Bundle not included",
         intentHash,
-        message: `Bundle not included (targetBlock=${targetBlock}, bundleHash=${hash})`,
+        targetBlock,
+        bundleHash: hash,
       })
     );
 

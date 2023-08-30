@@ -97,15 +97,17 @@ const worker = new Worker(
               logger.info(
                 COMPONENT,
                 JSON.stringify({
+                  msg: "Submitted authorization to solver",
                   intentHash,
-                  message: `Submitted authorization to solver (baseUrl=${baseUrl})`,
+                  baseUrl,
                 })
               );
             } catch (error: any) {
               logger.error(
                 COMPONENT,
                 JSON.stringify({
-                  message: `Error submitting authorization to solver (baseUrl=${baseUrl})`,
+                  msg: "Error submitting authorization to solver",
+                  baseUrl,
                   error: error.response?.data ?? error,
                 })
               );
@@ -114,14 +116,27 @@ const worker = new Worker(
         )
       );
     } catch (error: any) {
-      logger.error(COMPONENT, `Job failed: ${error} (${error.stack})`);
+      logger.error(
+        COMPONENT,
+        JSON.stringify({
+          msg: "Job failed",
+          error,
+          stack: error.stack,
+        })
+      );
       throw error;
     }
   },
   { connection: redis.duplicate(), concurrency: 500 }
 );
 worker.on("error", (error) => {
-  logger.error(COMPONENT, JSON.stringify({ data: `Worker errored: ${error}` }));
+  logger.error(
+    COMPONENT,
+    JSON.stringify({
+      msg: "Worker errored",
+      error,
+    })
+  );
 });
 
 export const addToQueue = async (solutionKey: string, delay: number) => {
@@ -189,8 +204,10 @@ export const submitDirectlyToSolver = async (
       logger.info(
         COMPONENT,
         JSON.stringify({
+          msg: "Submitted authorization directly to solver",
           intentHash,
-          message: `Submitted authorization to solver (solver=${address} baseUrl=${baseUrl})`,
+          address,
+          baseUrl,
         })
       );
     })
