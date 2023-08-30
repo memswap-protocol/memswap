@@ -1,5 +1,6 @@
 import { Interface, defaultAbiCoder } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
+import { Contract } from "@ethersproject/contracts";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
@@ -36,7 +37,7 @@ const main = async () => {
   const tokenOut = CURRENCIES.USDC;
 
   const amountIn = parseUnits("0.01", 18);
-  const amountOut = parseUnits("10", 6);
+  const amountOut = parseUnits("5", 6);
   // Create intent
   const intent = {
     tokenIn,
@@ -61,13 +62,27 @@ const main = async () => {
     intent
   );
 
+  const memswapWeth = new Contract(
+    MEMSWAP_WETH[chainId],
+    new Interface([
+      "function balanceOf(address owner) view returns (uint256)",
+      "function approve(address spender, uint256 amount)",
+      "function depositAndApprove(address spender, uint256 amount)",
+    ]),
+    provider
+  );
+
   // Generate approval transaction
   const approveMethod =
-    tokenIn === MEMSWAP_WETH[chainId] ? "depositAndApprove" : "approve";
+    tokenIn === MEMSWAP_WETH[chainId] &&
+    (await memswapWeth.balanceOf(maker.address)).lt(amountIn)
+      ? "depositAndApprove"
+      : "approve";
   const data =
-    new Interface([
-      `function ${approveMethod}(address spender, uint256 amount)`,
-    ]).encodeFunctionData(approveMethod, [MEMSWAP[chainId], amountIn]) +
+    memswapWeth.interface.encodeFunctionData(approveMethod, [
+      MEMSWAP[chainId],
+      amountIn,
+    ]) +
     defaultAbiCoder
       .encode(
         [
