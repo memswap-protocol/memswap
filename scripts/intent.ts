@@ -1,8 +1,9 @@
 import { Interface, defaultAbiCoder } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import { JsonRpcProvider } from "@ethersproject/providers";
-import { parseEther, parseUnits } from "@ethersproject/units";
+import { parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
+import axios from "axios";
 
 import {
   MATCHMAKER,
@@ -11,7 +12,6 @@ import {
   REGULAR_WETH,
 } from "../src/common/addresses";
 import { getEIP712Domain, getEIP712TypesForIntent } from "../src/common/utils";
-import axios from "axios";
 
 // Required env variables:
 // - JSON_URL: url for the http provider
@@ -23,7 +23,8 @@ const main = async () => {
 
   const chainId = await provider.getNetwork().then((n) => n.chainId);
   const CURRENCIES = {
-    ETH: MEMSWAP_WETH[chainId],
+    ETH_IN: MEMSWAP_WETH[chainId],
+    ETH_OUT: AddressZero,
     WETH: REGULAR_WETH[chainId],
     USDC:
       chainId === 1
@@ -32,7 +33,7 @@ const main = async () => {
   };
 
   const tokenIn = CURRENCIES.USDC;
-  const tokenOut = AddressZero;
+  const tokenOut = CURRENCIES.ETH_OUT;
 
   const amountIn = parseUnits("100", 6);
   const amountOut = parseUnits("0.001", 18);
