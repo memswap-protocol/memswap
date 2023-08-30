@@ -84,7 +84,7 @@ const worker = new Worker(
       }
 
       // TODO: Compute both of these dynamically
-      const maxPriorityFeePerGas = parseUnits("1", "gwei");
+      const maxPriorityFeePerGas = parseUnits("2", "gwei");
       const gasLimit = 1000000;
 
       // Approximations for gas used by memswap logic and gas used by swap logic
