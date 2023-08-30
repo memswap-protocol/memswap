@@ -714,6 +714,29 @@ const relayViaBloxroute = async (
     throw new Error("Bundle simulation failed");
   }
 
+  logger.info(
+    COMPONENT,
+    JSON.stringify({
+      msg: "Bloxroute debug",
+      params: {
+        id: "1",
+        method: "blxr_submit_bundle",
+        params: {
+          transaction: txs.map((tx) => tx.signedTransaction.slice(2)),
+          block_number: bn(targetBlock).toHexString(),
+          mev_builders: {
+            bloxroute: "",
+            flashbots: "",
+            builder0x69: "",
+            beaverbuild: "",
+            buildai: "",
+            all: "",
+          },
+        },
+      },
+    })
+  );
+
   // Relay via bloxroute
   await axios.post(
     "https://mev.api.blxrbdn.com",

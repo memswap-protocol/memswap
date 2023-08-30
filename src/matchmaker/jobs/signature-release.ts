@@ -166,7 +166,7 @@ export const submitDirectlyToSolver = async (
   const provider = new JsonRpcProvider(config.jsonUrl);
   const matchmaker = new Wallet(config.matchmakerPk);
 
-  const blocksCount = 10;
+  const blocksCount = 20;
 
   const latestBlock = await provider.getBlock("latest");
   const timestamp = latestBlock.timestamp + blocksCount * BLOCK_TIME;
