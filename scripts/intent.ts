@@ -35,8 +35,8 @@ const main = async () => {
   const tokenIn = CURRENCIES.USDC;
   const tokenOut = CURRENCIES.ETH_OUT;
 
-  const amountIn = parseUnits("10000", 6);
-  const amountOut = parseUnits("0.0000001", 18);
+  const amountIn = parseUnits("10", 6);
+  const amountOut = parseUnits("0.0001", 18);
   // Create intent
   const intent = {
     tokenIn,
@@ -110,33 +110,33 @@ const main = async () => {
     .then((b) => b!.baseFeePerGas!);
   const maxPriorityFeePerGas = parseUnits("1", "gwei");
 
-  const tx = await maker.connect(provider).sendTransaction({
-    to: tokenIn,
-    data,
-    value: approveMethod === "depositAndApprove" ? amountIn : 0,
-    maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas),
-    maxPriorityFeePerGas: maxPriorityFeePerGas,
-  });
-
-  console.log(`Approval transaction relayed: ${tx.hash}`);
-
-  // const tx = await maker.connect(provider).signTransaction({
-  //   from: maker.address,
+  // const tx = await maker.connect(provider).sendTransaction({
   //   to: tokenIn,
   //   data,
   //   value: approveMethod === "depositAndApprove" ? amountIn : 0,
   //   maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas),
   //   maxPriorityFeePerGas: maxPriorityFeePerGas,
-  //   type: 2,
-  //   nonce: await provider.getTransactionCount(maker.address),
-  //   gasLimit: 100000,
-  //   chainId,
   // });
 
-  // await axios.post(`${process.env.MATCHMAKER_BASE_URL}/intents/private`, {
-  //   intent,
-  //   approvalTxOrTxHash: tx,
-  // });
+  // console.log(`Approval transaction relayed: ${tx.hash}`);
+
+  const tx = await maker.connect(provider).signTransaction({
+    from: maker.address,
+    to: tokenIn,
+    data,
+    value: approveMethod === "depositAndApprove" ? amountIn : 0,
+    maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas),
+    maxPriorityFeePerGas: maxPriorityFeePerGas,
+    type: 2,
+    nonce: await provider.getTransactionCount(maker.address),
+    gasLimit: 100000,
+    chainId,
+  });
+
+  await axios.post(`${process.env.MATCHMAKER_BASE_URL}/intents/private`, {
+    intent,
+    approvalTxOrTxHash: tx,
+  });
 };
 
 main();

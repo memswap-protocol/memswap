@@ -86,6 +86,7 @@ const worker = new Worker(
       // TODO: Compute both of these dynamically
       const maxPriorityFeePerGas = parseUnits("10", "gwei");
       const gasLimit = 1000000;
+      const avgGasUsed = 400000;
 
       let solution: Solution;
       if (existingSolution) {
@@ -190,7 +191,7 @@ const worker = new Worker(
             .mul(parseEther(solutionDetails.tokenOutToEthRate))
             .div(parseEther("1"));
           const fillerNetProfitInETH = fillerGrossProfitInETH.sub(
-            latestBaseFee.add(maxPriorityFeePerGas).mul(gasLimit)
+            latestBaseFee.add(maxPriorityFeePerGas).mul(avgGasUsed)
           );
           if (fillerNetProfitInETH.lte(0)) {
             logger.error(
