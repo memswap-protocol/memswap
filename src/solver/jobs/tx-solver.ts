@@ -172,6 +172,18 @@ const worker = new Worker(
         );
 
         if (solutionDetails.amountOut && solutionDetails.tokenOutToEthRate) {
+          logger.info(
+            COMPONENT,
+            JSON.stringify({
+              solutionDetails,
+              minAmountOut,
+              ethOnGas: latestBaseFee
+                .add(maxPriorityFeePerGas)
+                .mul(avgGasUsed)
+                .toString(),
+            })
+          );
+
           if (bn(solutionDetails.amountOut).lt(minAmountOut)) {
             logger.error(
               COMPONENT,
