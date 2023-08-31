@@ -45,7 +45,7 @@ const BLOCK_TIME = 15;
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
   defaultJobOptions: {
-    attempts: 4,
+    attempts: 10,
     removeOnComplete: 10000,
     removeOnFail: 10000,
   },
@@ -231,17 +231,17 @@ const worker = new Worker(
           })
         );
 
-        // if (netProfitInETH.lte(0)) {
-        //   logger.error(
-        //     COMPONENT,
-        //     JSON.stringify({
-        //       msg: "Insufficient solver profit",
-        //       intentHash,
-        //       approvalTxOrTxHash,
-        //     })
-        //   );
-        //   return;
-        // }
+        if (netProfitInETH.lte(0)) {
+          logger.error(
+            COMPONENT,
+            JSON.stringify({
+              msg: "Insufficient solver profit",
+              intentHash,
+              approvalTxOrTxHash,
+            })
+          );
+          return;
+        }
 
         solution = {
           to: SOLUTION_PROXY[config.chainId],
