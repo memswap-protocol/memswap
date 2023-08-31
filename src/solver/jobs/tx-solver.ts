@@ -175,7 +175,7 @@ const worker = new Worker(
         const startAmountOut = bn(intent.endAmountOut).add(
           bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
         );
-        const minAmountOut = startAmountOut.sub(
+        let minAmountOut = startAmountOut.sub(
           startAmountOut
             .sub(intent.endAmountOut)
             .div(intent.deadline - latestTimestamp)
@@ -205,19 +205,15 @@ const worker = new Worker(
           return;
         }
 
+        const tokenOutDecimals = await solutions.uniswap
+          .getToken(intent.tokenOut, provider)
+          .then((t) => t.decimals);
         const grossProfitInTokenOut = bn(solutionDetails.minAmountOut).sub(
           minAmountOut
         );
         const grossProfitInETH = grossProfitInTokenOut
           .mul(parseEther("1"))
-          .div(
-            parseUnits(
-              solutionDetails.tokenOutToEthRate,
-              await solutions.uniswap
-                .getToken(intent.tokenOut, provider)
-                .then((t) => t.decimals)
-            )
-          );
+          .div(parseUnits(solutionDetails.tokenOutToEthRate, tokenOutDecimals));
 
         const gasFee = latestBaseFee.add(maxPriorityFeePerGas).mul(gasConsumed);
         const netProfitInETH = grossProfitInETH.sub(gasFee);
@@ -253,11 +249,29 @@ const worker = new Worker(
         // This will also result in the bundles being included faster.
         const minTipIncrement = parseUnits("0.01", "gwei");
         const gasPerTipIncrement = minTipIncrement.mul(gasConsumed);
-        // Keep 50% of the profit, while deducting from the rest of 50%
+
+        // Deduct from the 40% of the profit
         const minTipUnits = netProfitInETH
-          .mul(5000)
+          .mul(4000)
           .div(10000)
           .div(gasPerTipIncrement);
+        maxPriorityFeePerGas = maxPriorityFeePerGas.add(
+          minTipIncrement.mul(minTipUnits)
+        );
+
+        // Give 50% of the profit back to the user
+        minAmountOut = minAmountOut.add(
+          netProfitInETH
+            .mul(5000)
+            .div(10000)
+            .mul(
+              parseUnits(solutionDetails.tokenOutToEthRate, tokenOutDecimals)
+            )
+            .div(parseEther("1"))
+        );
+
+        // The rest of 10% from the profit is kept
+
         logger.info(
           COMPONENT,
           JSON.stringify({
@@ -270,9 +284,6 @@ const worker = new Worker(
               .add(minTipIncrement.mul(minTipUnits))
               .toString(),
           })
-        );
-        maxPriorityFeePerGas = maxPriorityFeePerGas.add(
-          minTipIncrement.mul(minTipUnits)
         );
 
         solution = {
