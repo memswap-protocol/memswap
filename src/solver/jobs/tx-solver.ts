@@ -256,9 +256,9 @@ const worker = new Worker(
         // This will also result in the bundles being included faster.
         const minTipIncrement = parseUnits("0.01", "gwei");
         const gasPerTipIncrement = minTipIncrement.mul(gasConsumed);
-        // Keep 20% of the profit, while deducting from the rest of 80%
+        // Keep 50% of the profit, while deducting from the rest of 50%
         const minTipUnits = netProfitInETH
-          .mul(8000)
+          .mul(5000)
           .div(10000)
           .div(gasPerTipIncrement);
         logger.info(
@@ -274,9 +274,9 @@ const worker = new Worker(
               .toString(),
           })
         );
-        // maxPriorityFeePerGas = maxPriorityFeePerGas.add(
-        //   minTipIncrement.mul(minTipUnits)
-        // );
+        maxPriorityFeePerGas = maxPriorityFeePerGas.add(
+          minTipIncrement.mul(minTipUnits)
+        );
 
         solution = {
           to: SOLUTION_PROXY[config.chainId],
