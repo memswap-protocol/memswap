@@ -181,11 +181,10 @@ const worker = new Worker(
             .div(intent.deadline - latestTimestamp)
         );
 
-        const solutionDetails = await solutions.uniswap.solve(
+        const solutionDetails = await solutions.zeroEx.solve(
           intent.tokenIn,
           intent.tokenOut,
-          intent.amountIn,
-          provider
+          intent.amountIn
         );
 
         const gasConsumed = bn(memswapGas)
