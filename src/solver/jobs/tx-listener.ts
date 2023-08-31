@@ -63,7 +63,7 @@ const worker = new Worker(
 
       // Try to decode any intent appended at the end of the calldata
       let restOfCalldata: string | undefined;
-      let approvalTxHash: string | undefined;
+      let approvalTxOrTxHash: string | undefined;
       if (tx.data.startsWith("0x095ea7b3")) {
         const iface = new Interface([
           "function approve(address spender, uint256 amount)",
@@ -74,7 +74,7 @@ const worker = new Worker(
           .spender.toLowerCase();
         if (spender === MEMSWAP[config.chainId]) {
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
-          approvalTxHash = txHash;
+          approvalTxOrTxHash = txHash;
         }
       } else if (
         tx.data.startsWith("0x28026ace") &&
@@ -89,7 +89,7 @@ const worker = new Worker(
           .spender.toLowerCase();
         if (spender === MEMSWAP[config.chainId]) {
           restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
-          approvalTxHash = txHash;
+          approvalTxOrTxHash = txHash;
         }
       } else if (
         tx.data.startsWith("0x4adb41f5") &&
@@ -168,7 +168,7 @@ const worker = new Worker(
         }
 
         await txSolver.addToQueue(intent, {
-          approvalTxOrTxHash: approvalTxHash,
+          approvalTxOrTxHash,
         });
       }
     } catch (error: any) {

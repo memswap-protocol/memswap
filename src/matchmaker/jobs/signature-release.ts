@@ -205,6 +205,7 @@ export const submitDirectlyToSolver = async (
         COMPONENT,
         JSON.stringify({
           msg: "Submitted authorization directly to solver",
+          approvalTxOrTxHash,
           intentHash,
           address,
           baseUrl,

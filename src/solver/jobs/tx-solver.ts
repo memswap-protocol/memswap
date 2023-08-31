@@ -492,7 +492,7 @@ const worker = new Worker(
 
           await redis.set(
             `solver:${uuid}`,
-            JSON.stringify({ intent, approvalTxHash, solution }),
+            JSON.stringify({ intent, approvalTxOrTxHash, solution }),
             "EX",
             BLOCK_TIME * 4
           );
