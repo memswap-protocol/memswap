@@ -126,33 +126,33 @@ const main = async () => {
   const nextBaseFee = currentBaseFee.add(currentBaseFee.mul(2500).div(10000));
   const maxPriorityFeePerGas = parseUnits("0.02", "gwei");
 
-  const tx = await maker.connect(provider).sendTransaction({
-    to: tokenIn,
-    data,
-    value: approveMethod === "depositAndApprove" ? amountIn : 0,
-    maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
-    maxPriorityFeePerGas: maxPriorityFeePerGas,
-  });
-
-  console.log(`Approval transaction relayed: ${tx.hash}`);
-
-  // const tx = await maker.connect(provider).signTransaction({
-  //   from: maker.address,
+  // const tx = await maker.connect(provider).sendTransaction({
   //   to: tokenIn,
   //   data,
   //   value: approveMethod === "depositAndApprove" ? amountIn : 0,
   //   maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
   //   maxPriorityFeePerGas: maxPriorityFeePerGas,
-  //   type: 2,
-  //   nonce: await provider.getTransactionCount(maker.address),
-  //   gasLimit: 100000,
-  //   chainId,
   // });
 
-  // await axios.post(`${process.env.MATCHMAKER_BASE_URL}/intents/private`, {
-  //   intent,
-  //   approvalTxOrTxHash: tx,
-  // });
+  // console.log(`Approval transaction relayed: ${tx.hash}`);
+
+  const tx = await maker.connect(provider).signTransaction({
+    from: maker.address,
+    to: tokenIn,
+    data,
+    value: approveMethod === "depositAndApprove" ? amountIn : 0,
+    maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
+    maxPriorityFeePerGas: maxPriorityFeePerGas,
+    type: 2,
+    nonce: await provider.getTransactionCount(maker.address),
+    gasLimit: 100000,
+    chainId,
+  });
+
+  await axios.post(`${process.env.MATCHMAKER_BASE_URL}/intents/private`, {
+    intent,
+    approvalTxOrTxHash: tx,
+  });
 };
 
 main();
