@@ -87,8 +87,10 @@ const worker = new Worker(
         return;
       }
 
-      // TODO: Compute both of these dynamically
-      const maxPriorityFeePerGas = parseUnits("1", "gwei");
+      // Starting tip is 1 gwei
+      let maxPriorityFeePerGas = parseUnits("1", "gwei");
+
+      // TODO: Compute this dynamically
       const gasLimit = 1000000;
 
       // Approximations for gas used by memswap logic and gas used by swap logic
@@ -242,6 +244,33 @@ const worker = new Worker(
           );
           return;
         }
+
+        // Assume other solvers compete for the same intent and so increase the
+        // tip to the block builder as much as possible while we're profitable.
+        // This will also result in the bundles being included faster.
+        const minTipIncrement = parseUnits("0.01", "gwei");
+        const gasPerTipIncrement = minTipIncrement.mul(gasConsumed);
+        // Keep 20% of the profit, while deducting from the rest of 80%
+        const minTipUnits = netProfitInETH
+          .mul(8000)
+          .div(10000)
+          .div(gasPerTipIncrement);
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            msg: "Tip increment",
+            intentHash,
+            gasPerTipIncrement: gasPerTipIncrement.toString(),
+            minTipUnits: minTipUnits.toString(),
+            maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
+            newMaxPriorityFeePerGas: maxPriorityFeePerGas
+              .add(minTipIncrement.mul(minTipUnits))
+              .toString(),
+          })
+        );
+        // maxPriorityFeePerGas = maxPriorityFeePerGas.add(
+        //   minTipIncrement.mul(minTipUnits)
+        // );
 
         solution = {
           to: SOLUTION_PROXY[config.chainId],
