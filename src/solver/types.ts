@@ -1,10 +1,14 @@
 import { Intent, Solution } from "../common/types";
 
-export type SolutionDetails = {
-  callTo: string;
-  approveTo: string;
+export type Call = {
+  to: string;
   data: string;
-  amountOut: string;
+  value: string;
+};
+
+export type SolutionDetails = {
+  calls: Call[];
+  minAmountOut: string;
   tokenOutToEthRate: string;
   gasUsed: string;
 };

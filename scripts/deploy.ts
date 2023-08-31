@@ -32,7 +32,6 @@ const main = async () => {
   // await deployContract(deployer, "SolutionProxy", [
   //   SOLVER[chainId],
   //   MEMSWAP[chainId],
-  //   MEMSWAP_WETH[chainId],
   // ]);
 };
 

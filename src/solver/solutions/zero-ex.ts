@@ -1,3 +1,4 @@
+import { Interface } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import axios from "axios";
 
@@ -12,6 +13,8 @@ export const solve = async (
   tokenOut: string,
   amountIn: string
 ): Promise<SolutionDetails> => {
+  const inETH = tokenIn === MEMSWAP_WETH[config.chainId];
+
   const { data: swapData } = await axios.get(
     config.chainId === 1
       ? "https://api.0x.org/swap/v1/quote"
@@ -19,8 +22,7 @@ export const solve = async (
     {
       params: {
         buyToken: tokenOut === AddressZero ? ZEROEX_ETH : tokenOut,
-        sellToken:
-          tokenIn === MEMSWAP_WETH[config.chainId] ? ZEROEX_ETH : tokenIn,
+        sellToken: inETH ? ZEROEX_ETH : tokenIn,
         sellAmount: amountIn,
       },
       headers: {
@@ -30,10 +32,25 @@ export const solve = async (
   );
 
   return {
-    callTo: swapData.to,
-    approveTo: swapData.to,
-    data: swapData.data,
-    amountOut: swapData.buyAmount,
+    calls: [
+      {
+        to: tokenIn,
+        data: new Interface([
+          "function approve(address spender, uint256 amount)",
+          "function withdraw(uint256 amount)",
+        ]).encodeFunctionData(
+          inETH ? "withdraw" : "approve",
+          inETH ? [amountIn] : [swapData.to, amountIn]
+        ),
+        value: "0",
+      },
+      {
+        to: swapData.to,
+        data: swapData.data,
+        value: inETH ? amountIn : "0",
+      },
+    ],
+    minAmountOut: swapData.buyAmount,
     tokenOutToEthRate: swapData.buyTokenToEthRate,
     gasUsed: swapData.estimatedGas,
   };

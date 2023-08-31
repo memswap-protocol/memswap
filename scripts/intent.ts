@@ -37,7 +37,7 @@ const main = async () => {
   const tokenOut = CURRENCIES.ETH_OUT;
 
   const amountIn = parseUnits("16", 6);
-  const amountOut = parseUnits("0.004", 18);
+  const amountOut = parseUnits("0.002", 18);
   // Create intent
   const intent = {
     tokenIn,

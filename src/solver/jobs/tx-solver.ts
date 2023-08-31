@@ -186,12 +186,12 @@ const worker = new Worker(
           .add(solutionDetails.gasUsed ?? defaultGas)
           .toString();
 
-        if (bn(solutionDetails.amountOut).lt(minAmountOut)) {
+        if (bn(solutionDetails.minAmountOut).lt(minAmountOut)) {
           logger.error(
             COMPONENT,
             JSON.stringify({
               msg: "Solution not good enough",
-              solutionAmountOut: solutionDetails.amountOut,
+              solutionAmountOut: solutionDetails.minAmountOut,
               minAmountOut: minAmountOut.toString(),
               intentHash,
               approvalTxOrTxHash,
@@ -200,7 +200,7 @@ const worker = new Worker(
           return;
         }
 
-        const grossProfitInTokenOut = bn(solutionDetails.amountOut).sub(
+        const grossProfitInTokenOut = bn(solutionDetails.minAmountOut).sub(
           minAmountOut
         );
         const grossProfitInETH = grossProfitInTokenOut
@@ -231,38 +231,34 @@ const worker = new Worker(
           })
         );
 
-        if (netProfitInETH.lte(0)) {
-          logger.error(
-            COMPONENT,
-            JSON.stringify({
-              msg: "Insufficient solver profit",
-              intentHash,
-              approvalTxOrTxHash,
-            })
-          );
-          return;
-        }
+        // if (netProfitInETH.lte(0)) {
+        //   logger.error(
+        //     COMPONENT,
+        //     JSON.stringify({
+        //       msg: "Insufficient solver profit",
+        //       intentHash,
+        //       approvalTxOrTxHash,
+        //     })
+        //   );
+        //   return;
+        // }
 
         solution = {
           to: SOLUTION_PROXY[config.chainId],
           data: new Interface([
             `
               function fill(
-                address callTo,
-                address approveTo,
-                bytes data,
-                address tokenIn,
-                uint256 amountIn,
+                (
+                  address to,
+                  bytes data,
+                  uint256 value
+                )[] calls,
                 address tokenOut,
-                uint256 amountOut
+                uint256 minAmountOut
               )
             `,
           ]).encodeFunctionData("fill", [
-            solutionDetails.callTo,
-            solutionDetails.approveTo,
-            solutionDetails.data,
-            intent.tokenIn,
-            intent.amountIn,
+            solutionDetails.calls,
             intent.tokenOut,
             minAmountOut,
           ]),

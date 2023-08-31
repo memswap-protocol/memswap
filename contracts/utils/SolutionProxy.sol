@@ -6,6 +6,14 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {WETH2} from "../WETH2.sol";
 
 contract SolutionProxy {
+    // --- Structs ---
+
+    struct Call {
+        address to;
+        bytes data;
+        uint256 value;
+    }
+
     // --- Errors ---
 
     error Unauthorized();
@@ -15,18 +23,12 @@ contract SolutionProxy {
 
     address public immutable owner;
     address public immutable memswap;
-    address public immutable weth2;
 
     // --- Constructor ---
 
-    constructor(
-        address ownerAddress,
-        address memswapAddress,
-        address weth2Address
-    ) {
+    constructor(address ownerAddress, address memswapAddress) {
         owner = ownerAddress;
         memswap = memswapAddress;
-        weth2 = weth2Address;
     }
 
     // --- Fallback ---
@@ -36,68 +38,42 @@ contract SolutionProxy {
     // --- Public methods ---
 
     function fill(
-        address callTo,
-        address approveTo,
-        bytes calldata data,
-        IERC20 tokenIn,
-        uint256 amountIn,
+        Call[] calldata calls,
         IERC20 tokenOut,
-        uint256 amountOut
+        uint256 minAmountOut
     ) external {
-        if (msg.sender != memswap) {
-            revert Unauthorized();
-        }
+        uint256 length = calls.length;
+        for (uint256 i; i < length; ) {
+            makeCall(calls[i]);
 
-        bool success;
-
-        bool inputETH = address(tokenIn) == address(weth2);
-        if (inputETH) {
-            WETH2(payable(weth2)).withdraw(amountIn);
-        } else {
-            tokenIn.approve(approveTo, amountIn);
-        }
-
-        (success, ) = callTo.call{value: inputETH ? amountIn : 0}(data);
-        if (!success) {
-            revert UnsuccessfulCall();
+            unchecked {
+                ++i;
+            }
         }
 
         bool outputETH = address(tokenOut) == address(0);
         if (outputETH) {
-            (success, ) = memswap.call{value: amountOut}("");
-            if (!success) {
-                revert UnsuccessfulCall();
-            }
+            makeCall(Call(memswap, "", minAmountOut));
 
             uint256 amountLeft = address(this).balance;
             if (amountLeft > 0) {
-                (success, ) = owner.call{value: amountLeft}("");
-                if (!success) {
-                    revert UnsuccessfulCall();
-                }
+                makeCall(Call(owner, "", amountLeft));
             }
         } else {
-            tokenOut.approve(memswap, amountOut);
+            tokenOut.approve(memswap, minAmountOut);
 
-            uint256 amountLeft = tokenOut.balanceOf(address(this)) - amountOut;
+            uint256 amountLeft = tokenOut.balanceOf(address(this)) -
+                minAmountOut;
             if (amountLeft > 0) {
                 tokenOut.transfer(owner, amountLeft);
             }
         }
     }
 
-    // --- Restricted methods ---
+    // --- Internal methods ---
 
-    function ownerCall(
-        address to,
-        bytes calldata data,
-        uint256 value
-    ) external payable {
-        if (msg.sender != owner) {
-            revert Unauthorized();
-        }
-
-        (bool success, ) = to.call{value: value}(data);
+    function makeCall(Call memory call) internal {
+        (bool success, ) = call.to.call{value: call.value}(call.data);
         if (!success) {
             revert UnsuccessfulCall();
         }

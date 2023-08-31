@@ -15,8 +15,9 @@ import {
 import { AlphaRouter, SwapType } from "@uniswap/smart-order-router";
 
 import { MEMSWAP_WETH, PERMIT2, REGULAR_WETH } from "../../common/addresses";
+import { now } from "../../common/utils";
 import { config } from "../config";
-import { SolutionDetails } from "../types";
+import { Call, SolutionDetails } from "../types";
 
 export const getToken = async (
   address: string,
@@ -50,6 +51,8 @@ export const solve = async (
   amountIn: string,
   provider: Provider
 ): Promise<SolutionDetails> => {
+  const inETH = tokenIn === MEMSWAP_WETH[config.chainId];
+
   const router = new AlphaRouter({
     chainId: config.chainId,
     provider: provider as any,
@@ -92,10 +95,39 @@ export const solve = async (
   ]);
 
   return {
-    callTo: actualRoute!.methodParameters!.to,
-    approveTo: PERMIT2[config.chainId],
-    data: actualRoute!.methodParameters!.calldata,
-    amountOut: parseUnits(
+    calls: [
+      {
+        to: tokenIn,
+        data: new Interface([
+          "function approve(address spender, uint256 amount)",
+          "function withdraw(uint256 amount)",
+        ]).encodeFunctionData(
+          inETH ? "withdraw" : "approve",
+          inETH ? [amountIn] : [PERMIT2[config.chainId], amountIn]
+        ),
+        value: "0",
+      },
+      !inETH
+        ? {
+            to: PERMIT2[config.chainId],
+            data: new Interface([
+              "function approve(address token, address spender, uint160 amount, uint48 expiration)",
+            ]).encodeFunctionData("approve", [
+              tokenIn,
+              actualRoute!.methodParameters!.to,
+              amountIn,
+              now() + 3600,
+            ]),
+            value: "0",
+          }
+        : undefined,
+      {
+        to: actualRoute!.methodParameters!.to,
+        data: actualRoute!.methodParameters!.calldata,
+        value: inETH ? amountIn : "0",
+      },
+    ].filter(Boolean) as Call[],
+    minAmountOut: parseUnits(
       actualRoute!.quote.toExact(),
       actualRoute!.quote.currency.decimals
     ).toString(),
