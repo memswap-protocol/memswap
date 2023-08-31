@@ -63,6 +63,8 @@ const worker = new Worker(
       };
 
     try {
+      const perfTime1 = performance.now();
+
       const provider = new JsonRpcProvider(config.jsonUrl);
       const flashbotsProvider = await FlashbotsBundleProvider.create(
         provider,
@@ -86,6 +88,8 @@ const worker = new Worker(
         );
         return;
       }
+
+      const perfTime2 = performance.now();
 
       // Starting tip is 1 gwei
       let maxPriorityFeePerGas = parseUnits("1", "gwei");
@@ -295,6 +299,8 @@ const worker = new Worker(
         };
       }
 
+      const perfTime3 = performance.now();
+
       let approvalTx: FlashbotsBundleRawTransaction | undefined;
       let approvalTxHash: string | undefined;
       if (approvalTxOrTxHash && approvalTxOrTxHash.length === 66) {
@@ -334,6 +340,8 @@ const worker = new Worker(
         .then((b) =>
           b!.baseFeePerGas!.add(b!.baseFeePerGas!.mul(2500).div(10000))
         );
+
+      const perfTime4 = performance.now();
 
       const getFillerTx = async (
         intent: Intent,
@@ -426,6 +434,8 @@ const worker = new Worker(
       const relayMethod = process.env.BLOXROUTE_AUTH
         ? relayViaBloxroute
         : relayViaFlashbots;
+
+      const perfTime5 = performance.now();
 
       if (intent.matchmaker !== MATCHMAKER[config.chainId]) {
         // Solve directly
@@ -536,6 +546,20 @@ const worker = new Worker(
           }
         }
       }
+
+      const perfTime6 = performance.now();
+
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          msg: "Performance measurements for tx-solver",
+          time1: (perfTime2 - perfTime1) / 1000,
+          time2: (perfTime3 - perfTime2) / 1000,
+          time3: (perfTime4 - perfTime3) / 1000,
+          time4: (perfTime5 - perfTime4) / 1000,
+          time5: (perfTime6 - perfTime5) / 1000,
+        })
+      );
     } catch (error: any) {
       logger.error(
         COMPONENT,
