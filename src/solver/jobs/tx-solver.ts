@@ -161,7 +161,7 @@ const worker = new Worker(
         const latestTimestamp = latestBlock.timestamp + BLOCK_TIME;
         const latestBaseFee = await provider
           .getBlock("pending")
-          .then((b) => b!.baseFeePerGas!.add(parseUnits("0.5", "gwei")));
+          .then((b) => b!.baseFeePerGas!);
 
         const startAmountOut = bn(intent.endAmountOut).add(
           bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
@@ -289,9 +289,12 @@ const worker = new Worker(
         approvalTxHash = parse(approvalTxOrTxHash).hash!;
       }
 
-      const latestBaseFee = await provider
+      // Just in case, set to 25% more than the pending block's base fee
+      const estimatedBaseFee = await provider
         .getBlock("pending")
-        .then((b) => b!.baseFeePerGas!);
+        .then((b) =>
+          b!.baseFeePerGas!.add(b!.baseFeePerGas!.mul(2500).div(10000))
+        );
 
       const getFillerTx = async (
         intent: Intent,
@@ -362,7 +365,7 @@ const worker = new Worker(
             nonce: await provider.getTransactionCount(solver.address),
             gasLimit,
             chainId: config.chainId,
-            maxFeePerGas: latestBaseFee.add(maxPriorityFeePerGas).toString(),
+            maxFeePerGas: estimatedBaseFee.add(maxPriorityFeePerGas).toString(),
             maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
           }),
         };
