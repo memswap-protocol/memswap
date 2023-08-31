@@ -37,7 +37,7 @@ const main = async () => {
   const tokenOut = CURRENCIES.USDC;
 
   const amountIn = parseUnits("0.01", 18);
-  const amountOut = parseUnits("2", 6);
+  const amountOut = parseUnits("3", 6);
   // Create intent
   const intent = {
     tokenIn,
@@ -123,7 +123,7 @@ const main = async () => {
   const currentBaseFee = await provider
     .getBlock("pending")
     .then((b) => b!.baseFeePerGas!);
-  const nextBaseFee = currentBaseFee.add(currentBaseFee.mul(2500).div(10000));
+  const nextBaseFee = currentBaseFee.add(currentBaseFee.mul(3000).div(10000));
   const maxPriorityFeePerGas = parseUnits("0.02", "gwei");
 
   // const tx = await maker.connect(provider).sendTransaction({
