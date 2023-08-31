@@ -16,16 +16,22 @@ export const SOLVER: ChainIdToAddress = {
   5: "0x743dbd073d951bc1e7ee276eb79a285595993d63",
 };
 export const SOLUTION_PROXY: ChainIdToAddress = {
-  1: "0x55dc25bffa85f85f0f68ee3433ea36a0c5bd4ac6",
-  5: "0x9c99a452d623cbeecc981461f96c8660565ffdf5",
-};
-export const REGULAR_WETH: ChainIdToAddress = {
-  1: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-  5: "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6",
+  1: "0x885857a1e82d5285f03b4bc562dbeace8921fac2",
+  5: "0x0c3f473abd75e6fc77aeb4d09d73a7d7c883c142",
 };
 
 // Matchmaker
 export const MATCHMAKER: ChainIdToAddress = {
   1: "0xf4f6df97aa065758c70e6fb7d938ec392dda98e0",
   5: "0xf4f6df97aa065758c70e6fb7d938ec392dda98e0",
+};
+
+// Misc
+export const PERMIT2: ChainIdToAddress = {
+  1: "0x000000000022d473030f116ddee9f6b43ac78ba3",
+  5: "0x000000000022d473030f116ddee9f6b43ac78ba3",
+};
+export const REGULAR_WETH: ChainIdToAddress = {
+  1: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+  5: "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6",
 };

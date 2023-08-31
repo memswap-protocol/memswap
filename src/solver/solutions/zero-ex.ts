@@ -30,7 +30,8 @@ export const solve = async (
   );
 
   return {
-    to: swapData.to,
+    callTo: swapData.to,
+    approveTo: swapData.to,
     data: swapData.data,
     amountOut: swapData.buyAmount,
     tokenOutToEthRate: swapData.buyTokenToEthRate,

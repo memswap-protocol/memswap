@@ -246,9 +246,20 @@ const worker = new Worker(
         solution = {
           to: SOLUTION_PROXY[config.chainId],
           data: new Interface([
-            "function fill(address to, bytes data, address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut)",
+            `
+              function fill(
+                address callTo,
+                address approveTo,
+                bytes data,
+                address tokenIn,
+                uint256 amountIn,
+                address tokenOut,
+                uint256 amountOut
+              )
+            `,
           ]).encodeFunctionData("fill", [
-            solutionDetails.to,
+            solutionDetails.callTo,
+            solutionDetails.approveTo,
             solutionDetails.data,
             intent.tokenIn,
             intent.amountIn,

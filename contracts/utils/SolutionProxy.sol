@@ -36,7 +36,8 @@ contract SolutionProxy {
     // --- Public methods ---
 
     function fill(
-        address to,
+        address callTo,
+        address approveTo,
         bytes calldata data,
         IERC20 tokenIn,
         uint256 amountIn,
@@ -53,10 +54,10 @@ contract SolutionProxy {
         if (inputETH) {
             WETH2(payable(weth2)).withdraw(amountIn);
         } else {
-            tokenIn.approve(to, amountIn);
+            tokenIn.approve(approveTo, amountIn);
         }
 
-        (success, ) = to.call{value: inputETH ? amountIn : 0}(data);
+        (success, ) = callTo.call{value: inputETH ? amountIn : 0}(data);
         if (!success) {
             revert UnsuccessfulCall();
         }

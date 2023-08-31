@@ -1,7 +1,8 @@
 import { Intent, Solution } from "../common/types";
 
 export type SolutionDetails = {
-  to: string;
+  callTo: string;
+  approveTo: string;
   data: string;
   amountOut: string;
   tokenOutToEthRate: string;

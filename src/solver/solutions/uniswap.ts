@@ -14,7 +14,7 @@ import {
 } from "@uniswap/sdk-core";
 import { AlphaRouter, SwapType } from "@uniswap/smart-order-router";
 
-import { MEMSWAP_WETH, REGULAR_WETH } from "../../common/addresses";
+import { MEMSWAP_WETH, PERMIT2, REGULAR_WETH } from "../../common/addresses";
 import { config } from "../config";
 import { SolutionDetails } from "../types";
 
@@ -92,7 +92,8 @@ export const solve = async (
   ]);
 
   return {
-    to: actualRoute!.methodParameters!.to,
+    callTo: actualRoute!.methodParameters!.to,
+    approveTo: PERMIT2[config.chainId],
     data: actualRoute!.methodParameters!.calldata,
     amountOut: parseUnits(
       actualRoute!.quote.toExact(),
