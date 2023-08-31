@@ -745,7 +745,7 @@ const relayViaBloxroute = async (
       method: "blxr_submit_bundle",
       params: {
         transaction: txs.map((tx) => tx.signedTransaction.slice(2)),
-        block_number: bn(targetBlock).toHexString(),
+        block_number: "0x" + targetBlock.toString(16),
         mev_builders: {
           bloxroute: "",
           flashbots: "",
