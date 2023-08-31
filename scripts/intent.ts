@@ -123,6 +123,7 @@ const main = async () => {
   const currentBaseFee = await provider
     .getBlock("pending")
     .then((b) => b!.baseFeePerGas!);
+  const nextBaseFee = currentBaseFee.add(currentBaseFee.mul(2500).div(10000));
   const maxPriorityFeePerGas = parseUnits("0.02", "gwei");
 
   // const tx = await maker.connect(provider).sendTransaction({
@@ -140,7 +141,7 @@ const main = async () => {
     to: tokenIn,
     data,
     value: approveMethod === "depositAndApprove" ? amountIn : 0,
-    maxFeePerGas: currentBaseFee.add(maxPriorityFeePerGas),
+    maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
     maxPriorityFeePerGas: maxPriorityFeePerGas,
     type: 2,
     nonce: await provider.getTransactionCount(maker.address),

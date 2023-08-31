@@ -16,7 +16,9 @@ const COMPONENT = "tx-listener";
 
 // Listen to mempool transactions
 const wsProvider = new WebSocketProvider(config.wsUrl);
-wsProvider.on("pending", (txHash) => addToQueue(txHash));
+if (!process.env.DEBUG_MODE) {
+  wsProvider.on("pending", (txHash) => addToQueue(txHash));
+}
 
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),

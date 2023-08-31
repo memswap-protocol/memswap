@@ -14,6 +14,9 @@ import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
+// Monkey-patch the flashbots bundle provider to support relaying via bloxroute
+import "../monkey-patches/flashbots-bundle-provider";
+
 import {
   SOLUTION_PROXY,
   MATCHMAKER,
@@ -740,31 +743,11 @@ const relayViaBloxroute = async (
     })
   );
 
-  // Relay via bloxroute
-  await axios.post(
-    "https://mev.api.blxrbdn.com",
-    {
-      id: "1",
-      method: "blxr_submit_bundle",
-      params: {
-        transaction: txs.map((tx) => tx.signedTransaction.slice(2)),
-        block_number: "0x" + targetBlock.toString(16),
-        mev_builders: {
-          bloxroute: "",
-          flashbots: "",
-          builder0x69: "",
-          beaverbuild: "",
-          buildai: "",
-          all: "",
-        },
-      },
-    },
-    {
-      headers: {
-        Authorization: process.env.BLOXROUTE_AUTH,
-      },
-    }
+  const receipt = await (flashbotsProvider as any).blxrSubmitBundle(
+    txs,
+    targetBlock
   );
+  const hash = (receipt as any).bundleHash;
 
   logger.info(
     COMPONENT,
@@ -772,6 +755,54 @@ const relayViaBloxroute = async (
       msg: "Bundle relayed using bloxroute",
       intentHash,
       targetBlock,
+      bundleHash: hash,
     })
   );
+
+  const waitResponse = await (receipt as any).wait();
+  if (
+    waitResponse === FlashbotsBundleResolution.BundleIncluded ||
+    waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
+  ) {
+    if (
+      await isTxIncluded(
+        parse(txs[txs.length - 1].signedTransaction).hash!,
+        provider
+      )
+    ) {
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          msg: "Bundle included",
+          intentHash,
+          targetBlock,
+          bundleHash: hash,
+        })
+      );
+    } else {
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          msg: "Bundle not included",
+          intentHash,
+          targetBlock,
+          bundleHash: hash,
+        })
+      );
+
+      throw new Error("Bundle not included");
+    }
+  } else {
+    logger.info(
+      COMPONENT,
+      JSON.stringify({
+        msg: "Bundle not included",
+        intentHash,
+        targetBlock,
+        bundleHash: hash,
+      })
+    );
+
+    throw new Error("Bundle not included");
+  }
 };
