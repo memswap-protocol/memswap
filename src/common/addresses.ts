@@ -16,7 +16,7 @@ export const SOLVER: ChainIdToAddress = {
   5: "0x743dbd073d951bc1e7ee276eb79a285595993d63",
 };
 export const SOLUTION_PROXY: ChainIdToAddress = {
-  1: "0x885857a1e82d5285f03b4bc562dbeace8921fac2",
+  1: "0xeae2f5b8e7085fb766f7f270955abef018d61fdb",
   5: "0xbdaac8d9627e17ad3a7ae34f98a604916f899628",
 };
 

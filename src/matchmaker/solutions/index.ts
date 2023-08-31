@@ -1,4 +1,5 @@
 import { Interface } from "@ethersproject/abi";
+import { AddressZero } from "@ethersproject/constants";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { parse } from "@ethersproject/transactions";
@@ -220,9 +221,10 @@ export const processSolution = async (
 
     // Compute the amount received by the intent maker
     const stateChange = getStateChange(solveTrace);
+    const isTokenOutETH = intent.tokenOut.toLowerCase() === AddressZero;
     const amountReceived =
       stateChange[intent.maker.toLowerCase()].tokenBalanceState[
-        `erc20:${intent.tokenOut.toLowerCase()}`
+        `${isTokenOutETH ? "native" : "erc20"}:${intent.tokenOut.toLowerCase()}`
       ];
 
     // Save the solution
