@@ -74,6 +74,8 @@ const worker = new Worker(
           : "https://relay-goerli.flashbots.net"
       );
 
+      const perfTime12 = performance.now();
+
       const solver = new Wallet(config.solverPk);
       const intentHash = getIntentHash(intent);
 
@@ -554,6 +556,8 @@ const worker = new Worker(
         JSON.stringify({
           msg: "Performance measurements for tx-solver",
           time1: (perfTime2 - perfTime1) / 1000,
+          time12: (perfTime12 - perfTime1) / 1000,
+          time22: (perfTime2 - perfTime12) / 1000,
           time2: (perfTime3 - perfTime2) / 1000,
           time3: (perfTime4 - perfTime3) / 1000,
           time4: (perfTime5 - perfTime4) / 1000,
