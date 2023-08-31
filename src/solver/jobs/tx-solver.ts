@@ -37,10 +37,14 @@ import {
 import { config } from "../config";
 import { redis } from "../redis";
 import * as solutions from "../solutions";
+import { getFlashbotsProvider } from "../utils";
 
 const COMPONENT = "tx-solver";
 
 const BLOCK_TIME = 15;
+
+// Warm-up
+getFlashbotsProvider();
 
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
@@ -66,13 +70,7 @@ const worker = new Worker(
       const perfTime1 = performance.now();
 
       const provider = new JsonRpcProvider(config.jsonUrl);
-      const flashbotsProvider = await FlashbotsBundleProvider.create(
-        provider,
-        new Wallet(config.flashbotsSignerPk),
-        config.chainId === 1
-          ? "https://relay.flashbots.net"
-          : "https://relay-goerli.flashbots.net"
-      );
+      const flashbotsProvider = await getFlashbotsProvider();
 
       const perfTime12 = performance.now();
 
