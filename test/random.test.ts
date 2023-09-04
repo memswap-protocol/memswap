@@ -147,16 +147,27 @@ describe("Random", async () => {
         ? await weth.balanceOf(intent.source)
         : await token0.balanceOf(intent.source);
 
+    // Optionally have some surplus (eg. from amount required by intent)
+    const surplus = ethers.utils.parseEther(
+      getRandomFloat(
+        0,
+        Number(ethers.utils.formatEther(bn(amount).mul(5000).div(10000)))
+      )
+    );
+
     // Compute fees
     const fee =
       intent.source === AddressZero
         ? bn(0)
-        : amount.mul(intent.feeBps).div(10000);
+        : amount.sub(surplus).mul(intent.feeBps).div(10000);
     const surplusFee =
       intent.source === AddressZero
         ? bn(0)
-        : amount.lt(expectedAmount)
-        ? expectedAmount.sub(amount).mul(intent.surplusBps).div(10000)
+        : amount.sub(surplus).lt(expectedAmount)
+        ? expectedAmount
+            .sub(amount.sub(surplus))
+            .mul(intent.surplusBps)
+            .div(10000)
         : bn(0);
 
     // Solve
@@ -166,7 +177,7 @@ describe("Random", async () => {
         [intent.tokenOut, fillAmount]
       ),
       fillAmounts: [fillAmount],
-      executeAmounts: [amount],
+      executeAmounts: [amount.sub(surplus)],
     });
     if (nextBlockTime > intent.endTime) {
       await expect(solve).to.be.revertedWith("IntentIsExpired");
@@ -179,7 +190,7 @@ describe("Random", async () => {
           intent.tokenOut,
           intent.maker,
           solutionProxy.address,
-          amount.sub(fee).sub(surplusFee),
+          amount.sub(surplus).sub(fee).sub(surplusFee),
           fillAmount
         );
     }
@@ -195,7 +206,9 @@ describe("Random", async () => {
         : await token0.balanceOf(intent.source);
 
     // Make sure the maker and the source got the right amounts
-    expect(makerBalanceBefore.sub(makerBalanceAfter)).to.eq(amount);
+    expect(makerBalanceBefore.sub(makerBalanceAfter)).to.eq(
+      amount.sub(surplus)
+    );
     expect(sourceBalanceAfter.sub(sourceBalanceBefore)).to.eq(
       fee.add(surplusFee)
     );
@@ -321,18 +334,17 @@ describe("Random", async () => {
     if (nextBlockTime > intent.endTime) {
       await expect(solve).to.be.revertedWith("IntentIsExpired");
     } else {
-      // await expect(solve)
-      //   .to.emit(memswap, "IntentSolved")
-      //   .withArgs(
-      //     getIntentHash(intent),
-      //     intent.tokenIn,
-      //     intent.tokenOut,
-      //     intent.maker,
-      //     solutionProxy.address,
-      //     fillAmount,
-      //     amount.add(surplus).sub(fee).sub(surplusFee)
-      //   );
-      await solve;
+      await expect(solve)
+        .to.emit(memswap, "IntentSolved")
+        .withArgs(
+          getIntentHash(intent),
+          intent.tokenIn,
+          intent.tokenOut,
+          intent.maker,
+          solutionProxy.address,
+          fillAmount,
+          amount.add(surplus).sub(fee).sub(surplusFee)
+        );
     }
 
     // Get balances after the execution
