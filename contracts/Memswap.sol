@@ -4,11 +4,34 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import {ISolution} from "./interfaces/ISolution.sol";
+
 contract Memswap is ReentrancyGuard {
-    // --- Structs ---
+    // --- Structs and enums ---
+
+    enum Side {
+        BUY,
+        SELL
+    }
 
     struct Intent {
+        // When side = BUY:
+        // amount = amountOut
+        // endAmount = endAmountIn
+        // startAmountBps = startAmountInBps
+        // expectedAmountBps = expectedAmountInBps
+
+        // When side = SELL:
+        // amount = amountIn
+        // endAmount = endAmountOut
+        // startAmountBps = startAmountOutBps
+        // expectedAmountBps = expectedAmountOutBps
+
+        // Exact output (BUY) or exact input (SELL)
+        Side side;
+        // Token to sell
         IERC20 tokenIn;
+        // Token to buy
         IERC20 tokenOut;
         address maker;
         // The address allowed to solve or authorize others to solve
@@ -16,38 +39,60 @@ contract Memswap is ReentrancyGuard {
         address source;
         uint16 feeBps;
         uint16 surplusBps;
-        uint32 deadline;
+        uint32 startTime;
+        uint32 endTime;
         bool isPartiallyFillable;
-        uint128 amountIn;
-        uint128 endAmountOut;
+        uint128 amount;
+        uint128 endAmount;
         uint16 startAmountBps;
         uint16 expectedAmountBps;
+        bool hasDynamicSignature;
         bytes signature;
     }
 
     struct IntentStatus {
-        bool isValidated;
+        bool isPrevalidated;
         bool isCancelled;
         uint128 amountFilled;
     }
 
     struct Authorization {
-        uint128 maxAmountIn;
-        uint128 minAmountOut;
+        // When side = BUY:
+        // fillAmountToCheck = amount to fill
+        // executeAmountToCheck = maximum amount pulled from user
+
+        // When side = SELL:
+        // fillAmountToCheck = amount to fill
+        // executeAmountToCheck = minimum amount pushed to user
+
+        uint128 fillAmountToCheck;
+        uint128 executeAmountToCheck;
         uint32 blockDeadline;
-        bool isPartiallyFillable;
+    }
+
+    struct AuthorizationWithSignature {
+        Authorization auth;
+        bytes signature;
     }
 
     struct Solution {
-        address to;
+        // When side = BUY:
+        // fillAmounts = amounts out to fill
+        // executeAmounts = amounts in to pull from user
+
+        // When side = SELL:
+        // fillAmounts = amounts in to fill
+        // executeAmounts = amounts out to push to user
+
         bytes data;
-        uint128 amount;
+        uint128[] fillAmounts;
+        uint128[] executeAmounts;
     }
 
     // --- Events ---
 
     event IntentCancelled(bytes32 indexed intentHash);
-    event IntentPosted();
+    event IntentPrevalidated(bytes32 indexed intentHash);
     event IntentSolved(
         bytes32 indexed intentHash,
         address tokenIn,
@@ -57,22 +102,26 @@ contract Memswap is ReentrancyGuard {
         uint128 amountIn,
         uint128 amountOut
     );
-    event IntentValidated(bytes32 indexed intentHash);
+    event IntentsPosted();
+    event NonceIncremented(address maker, uint256 newNonce);
 
     // --- Errors ---
 
+    error AmountCheckFailed();
+    error AuthorizationAmountMismatch();
     error AuthorizationIsExpired();
-    error AuthorizationIsInsufficient();
-    error AuthorizationIsNotPartiallyFillable();
+    error IntentCannotBePrevalidated();
     error IntentIsCancelled();
     error IntentIsExpired();
     error IntentIsFilled();
     error IntentIsNotPartiallyFillable();
+    error IntentIsNotStarted();
     error InvalidSignature();
     error InvalidSolution();
+    error InvalidStartAndEndTimes();
     error MerkleTreeTooLarge();
     error Unauthorized();
-    error UnsuccessfullCall();
+    error UnsuccessfulCall();
 
     // --- Fields ---
 
@@ -80,6 +129,7 @@ contract Memswap is ReentrancyGuard {
     bytes32 public immutable AUTHORIZATION_TYPEHASH;
     bytes32 public immutable INTENT_TYPEHASH;
 
+    mapping(address => uint256) public nonce;
     mapping(bytes32 => IntentStatus) public intentStatus;
     mapping(bytes32 => Authorization) public authorization;
 
@@ -112,11 +162,10 @@ contract Memswap is ReentrancyGuard {
             abi.encodePacked(
                 "Authorization(",
                 "bytes32 intentHash,",
-                "address authorizedSolver,",
-                "uint128 maxAmountIn,",
-                "uint128 minAmountOut,",
-                "uint32 blockDeadline,",
-                "bool isPartiallyFillable",
+                "address solver,",
+                "uint128 fillAmountToCheck,",
+                "uint128 executeAmountToCheck,",
+                "uint32 blockDeadline",
                 ")"
             )
         );
@@ -124,6 +173,7 @@ contract Memswap is ReentrancyGuard {
         INTENT_TYPEHASH = keccak256(
             abi.encodePacked(
                 "Intent(",
+                "uint8 side,",
                 "address tokenIn,",
                 "address tokenOut,",
                 "address maker,",
@@ -131,12 +181,15 @@ contract Memswap is ReentrancyGuard {
                 "address source,",
                 "uint16 feeBps,",
                 "uint16 surplusBps,",
-                "uint32 deadline,",
+                "uint32 startTime,",
+                "uint32 endTime,",
+                "uint256 nonce,",
                 "bool isPartiallyFillable,",
-                "uint128 amountIn,",
-                "uint128 endAmountOut,",
+                "uint128 amount,",
+                "uint128 endAmount,",
                 "uint16 startAmountBps,",
-                "uint16 expectedAmountBps",
+                "uint16 expectedAmountBps,",
+                "bool hasDynamicSignature"
                 ")"
             )
         );
@@ -149,63 +202,77 @@ contract Memswap is ReentrancyGuard {
     // Public methods
 
     /**
-     * @notice Authorize an address to solve a particular intent
+     * @notice Authorize an address to solve particular intents
      *
-     * @param intent Intent which is being solved
-     * @param authorizedSolver The address authorized to solve the intent
-     * @param auth Authorization details and conditions
+     * @param intents Intents to solve
+     * @param auths Authorizations
+     * @param solver The address authorized to solve
      */
     function authorize(
-        Intent calldata intent,
-        address authorizedSolver,
-        Authorization calldata auth
+        Intent[] calldata intents,
+        Authorization[] calldata auths,
+        address solver
     ) external {
-        if (intent.matchmaker != msg.sender) {
-            revert Unauthorized();
-        }
+        unchecked {
+            uint256 intentsLength = intents.length;
+            for (uint256 i; i < intentsLength; i++) {
+                Intent calldata intent = intents[i];
+                Authorization calldata auth = auths[i];
 
-        bytes32 intentHash = getIntentHash(intent);
-        bytes32 authId = keccak256(
-            abi.encodePacked(intentHash, authorizedSolver)
-        );
-        authorization[authId] = auth;
+                if (intent.matchmaker != msg.sender) {
+                    revert Unauthorized();
+                }
+
+                bytes32 intentHash = getIntentHash(intent);
+                bytes32 authId = keccak256(
+                    abi.encodePacked(intentHash, solver)
+                );
+                authorization[authId] = auth;
+            }
+        }
     }
 
     /**
-     * @notice Make an intent available on-chain (this method doesn't do
-     *         anything useful, it's only used as a mechanism for intent
-     *         distribution)
+     * @notice Make intents available on-chain (this method doesn't do anything
+     *         useful - it's only used as a mechanism for intent distribution)
      *
-     * @custom:param intent Intent being made available
+     * @custom:param intents Intents being made available
      */
     function post(
         /**
-         * @custom:name intent
+         * @custom:name intents
          */
-        Intent calldata
+        Intent[] calldata
     ) external {
-        emit IntentPosted();
+        emit IntentsPosted();
     }
 
     /**
-     * @notice Validate an arbitrary number of intents (the signature of each
-     *         intent will be checked thus resulting in skipping verification
-     *         on further attempts to solve the intent)
+     * @notice Pre-validate an arbitrary number of intents (the signature of each
+     *         intent will be checked, thus resulting in skipping verification on
+     *         further attempts to solve the intent, unless the intent explicitly
+     *         enforces checking the signature on every fill)
      *
      * @param intents Intents to validate
      */
-    function validate(Intent[] calldata intents) external {
-        uint256 length = intents.length;
-        for (uint256 i; i < length; ) {
-            Intent calldata intent = intents[i];
+    function prevalidate(Intent[] calldata intents) external {
+        unchecked {
+            uint256 intentsLength = intents.length;
+            for (uint256 i; i < intentsLength; i++) {
+                Intent calldata intent = intents[i];
+                if (intent.hasDynamicSignature) {
+                    revert IntentCannotBePrevalidated();
+                }
 
-            bytes32 intentHash = getIntentHash(intent);
+                bytes32 intentHash = getIntentHash(intent);
 
-            _validateIntent(intentHash, intent.maker, intent.signature);
-            emit IntentValidated(intentHash);
-
-            unchecked {
-                ++i;
+                _prevalidateIntent(
+                    intentHash,
+                    intent.maker,
+                    intent.hasDynamicSignature,
+                    intent.signature
+                );
+                emit IntentPrevalidated(intentHash);
             }
         }
     }
@@ -215,110 +282,165 @@ contract Memswap is ReentrancyGuard {
      *
      * @param intents Intents to cancel
      */
-    function cancel(Intent[] calldata intents) external nonReentrant {
-        uint256 length = intents.length;
-        for (uint256 i; i < length; ) {
-            Intent calldata intent = intents[i];
-            if (intent.maker != msg.sender) {
-                revert Unauthorized();
-            }
+    function cancel(Intent[] calldata intents) external {
+        unchecked {
+            uint256 intentsLength = intents.length;
+            for (uint256 i; i < intentsLength; i++) {
+                Intent calldata intent = intents[i];
+                if (intent.maker != msg.sender) {
+                    revert Unauthorized();
+                }
 
-            bytes32 intentHash = getIntentHash(intent);
-            IntentStatus memory status = intentStatus[intentHash];
-            status.isValidated = false;
-            status.isCancelled = true;
+                bytes32 intentHash = getIntentHash(intent);
+                IntentStatus memory status = intentStatus[intentHash];
+                status.isPrevalidated = false;
+                status.isCancelled = true;
 
-            intentStatus[intentHash] = status;
-            emit IntentCancelled(intentHash);
-
-            unchecked {
-                ++i;
+                intentStatus[intentHash] = status;
+                emit IntentCancelled(intentHash);
             }
         }
     }
 
     /**
-     * @notice Solve an intent
+     * @notice Increment the nonce for `msg.sender`. This will result in
+     *         the invalidation of any intents signed with a lower nonce
+     *         than the latest value.
+     */
+    function incrementNonce() external nonReentrant {
+        unchecked {
+            uint256 oldNonce = nonce[msg.sender];
+            uint256 newNonce = oldNonce + 1;
+
+            nonce[msg.sender] = newNonce;
+            emit NonceIncremented(msg.sender, newNonce);
+        }
+    }
+
+    /**
+     * @notice Solve intents
      *
-     * @param intent Intent to solve
-     * @param solution Solution for the intent
+     * @param intents Intents to solve
+     * @param solution Solution
      */
     function solve(
-        Intent calldata intent,
+        Intent[] calldata intents,
         Solution calldata solution
     ) external nonReentrant {
-        // The intent must be open or tied to the current solver
-        if (
-            intent.matchmaker != address(0) && intent.matchmaker != msg.sender
-        ) {
-            revert Unauthorized();
+        uint128[] memory amountsToCheck;
+
+        // Check
+        unchecked {
+            uint256 intentsLength = intents.length;
+            amountsToCheck = new uint128[](intentsLength);
+            for (uint256 i; i < intentsLength; i++) {
+                Intent calldata intent = intents[i];
+
+                // The intent must be open or tied to the current solver
+                if (
+                    intent.matchmaker != address(0) &&
+                    intent.matchmaker != msg.sender
+                ) {
+                    revert Unauthorized();
+                }
+
+                amountsToCheck[i] = intent.side == Side.SELL
+                    ? 0
+                    : type(uint128).max;
+            }
         }
 
-        // Solve (no minimum amount out restrictions when filling without authorization)
-        _solve(intent, solution, 0);
+        // Solve
+        _solve(intents, solution, amountsToCheck);
     }
 
     /**
-     * @notice Solve an intent with authorization (compared to the regular `solve`
-     *         this method allows filling intents of a matchmaker as long as there
+     * @notice Solve intents with authorization (compared to the regular `solve`,
+     *         this method allows solving intents of a matchmaker as long as there
      *         is a valid authorization in-place for the current solver). The auth
      *         will be done on-chain (via a transaction from the matchmaker).
      *
-     * @param intent Intent to solve
-     * @param solution Solution for the intent
+     * @param intents Intents to solve
+     * @param solution Solution
      */
     function solveWithOnChainAuthorizationCheck(
-        Intent calldata intent,
+        Intent[] calldata intents,
         Solution calldata solution
     ) external nonReentrant {
-        bytes32 intentHash = getIntentHash(intent);
+        uint128[] memory amountsToCheck;
 
-        // Fetch the authorization
-        bytes32 authId = keccak256(abi.encodePacked(intentHash, msg.sender));
-        Authorization memory auth = authorization[authId];
+        // Check
+        unchecked {
+            uint256 intentsLength = intents.length;
+            amountsToCheck = new uint128[](intentsLength);
+            for (uint256 i; i < intentsLength; i++) {
+                Intent calldata intent = intents[i];
 
-        // Check the authorization and solve
-        _checkAuthorization(auth, solution.amount);
-        _solve(intent, solution, auth.minAmountOut);
+                bytes32 intentHash = getIntentHash(intent);
+                bytes32 authId = keccak256(
+                    abi.encodePacked(intentHash, msg.sender)
+                );
+
+                Authorization memory auth = authorization[authId];
+                _checkAuthorization(auth, solution.fillAmounts[i]);
+
+                amountsToCheck[i] = auth.executeAmountToCheck;
+            }
+        }
+
+        // Solve
+        _solve(intents, solution, amountsToCheck);
     }
 
     /**
-     * @notice Solve an intent with authorization (compared to the regular `solve`
-     *         this method allows filling intents of a matchmaker as long as there
+     * @notice Solve intents with authorization (compared to the regular `solve`,
+     *         this method allows solving intents of a matchmaker as long as there
      *         is a valid authorization in-place for the current solver). The auth
      *         will be done off-chain (via a signature from the matchmaker).
      *
-     * @param intent Intent to solve
+     * @param intents Intents to solve
      * @param solution Solution for the intent
-     * @param auth Authorization details/conditions
-     * @param signature Authorization signature
+     * @param auths Authorizations
      */
     function solveWithSignatureAuthorizationCheck(
-        Intent calldata intent,
+        Intent[] calldata intents,
         Solution calldata solution,
-        Authorization calldata auth,
-        bytes calldata signature
+        AuthorizationWithSignature[] calldata auths
     ) external nonReentrant {
-        bytes32 intentHash = getIntentHash(intent);
-        bytes32 authorizationHash = getAuthorizationHash(
-            intentHash,
-            msg.sender,
-            auth
-        );
+        uint128[] memory amountsToCheck;
 
-        // Verify the authorization
-        bytes32 digest = _getEIP712Hash(authorizationHash);
-        _assertValidSignature(
-            intent.matchmaker,
-            digest,
-            digest,
-            signature.length,
-            signature
-        );
+        // Check
+        unchecked {
+            uint256 intentsLength = intents.length;
+            amountsToCheck = new uint128[](intentsLength);
+            for (uint256 i; i < intentsLength; i++) {
+                Intent calldata intent = intents[i];
+                AuthorizationWithSignature calldata authWithSig = auths[i];
+                Authorization calldata auth = authWithSig.auth;
 
-        // Check the authorization and solve
-        _checkAuthorization(auth, solution.amount);
-        _solve(intent, solution, auth.minAmountOut);
+                bytes32 intentHash = getIntentHash(intent);
+                bytes32 authorizationHash = getAuthorizationHash(
+                    intentHash,
+                    msg.sender,
+                    auth
+                );
+                bytes32 digest = _getEIP712Hash(authorizationHash);
+
+                _assertValidSignature(
+                    intent.matchmaker,
+                    digest,
+                    digest,
+                    authWithSig.signature.length,
+                    authWithSig.signature
+                );
+                _checkAuthorization(auth, solution.fillAmounts[i]);
+
+                amountsToCheck[i] = auth.executeAmountToCheck;
+            }
+        }
+
+        // Solve
+        _solve(intents, solution, amountsToCheck);
     }
 
     // View methods
@@ -327,25 +449,24 @@ contract Memswap is ReentrancyGuard {
      * @notice Get the EIP712 struct hash for an authorization
      *
      * @param intentHash Intent EIP712 struct hash to authorize
-     * @param authorizedSolver Solver to authorize
+     * @param solver Solver to authorize
      * @param auth Authorization details/conditions
      *
      * @return authorizationHash The EIP712 struct hash of the authorization
      */
     function getAuthorizationHash(
         bytes32 intentHash,
-        address authorizedSolver,
+        address solver,
         Authorization memory auth
     ) public view returns (bytes32 authorizationHash) {
         authorizationHash = keccak256(
             abi.encode(
                 AUTHORIZATION_TYPEHASH,
                 intentHash,
-                authorizedSolver,
-                auth.maxAmountIn,
-                auth.minAmountOut,
-                auth.blockDeadline,
-                auth.isPartiallyFillable
+                solver,
+                auth.fillAmountToCheck,
+                auth.executeAmountToCheck,
+                auth.blockDeadline
             )
         );
     }
@@ -361,186 +482,371 @@ contract Memswap is ReentrancyGuard {
         Intent memory intent
     ) public view returns (bytes32 intentHash) {
         intentHash = keccak256(
-            abi.encode(
-                INTENT_TYPEHASH,
-                intent.tokenIn,
-                intent.tokenOut,
-                intent.maker,
-                intent.matchmaker,
-                intent.source,
-                intent.feeBps,
-                intent.surplusBps,
-                intent.deadline,
-                intent.isPartiallyFillable,
-                intent.amountIn,
-                intent.endAmountOut,
-                intent.startAmountBps,
-                intent.expectedAmountBps
+            bytes.concat(
+                abi.encode(
+                    INTENT_TYPEHASH,
+                    intent.side,
+                    intent.tokenIn,
+                    intent.tokenOut,
+                    intent.maker,
+                    intent.matchmaker,
+                    intent.source,
+                    intent.feeBps,
+                    intent.surplusBps,
+                    intent.startTime,
+                    intent.endTime,
+                    nonce[intent.maker]
+                ),
+                abi.encode(
+                    intent.isPartiallyFillable,
+                    intent.amount,
+                    intent.endAmount,
+                    intent.startAmountBps,
+                    intent.expectedAmountBps,
+                    intent.hasDynamicSignature
+                )
             )
         );
     }
 
     // Internal methods
 
-    /**
-     * @dev Solve an intent
-     *
-     * @param intent Intent to solve
-     * @param solution Solution for the intent
-     * @param minAmountOut The minimum amount out the solution is required to fulfill
-     */
-    function _solve(
-        Intent calldata intent,
-        Solution calldata solution,
-        uint128 minAmountOut
-    ) internal {
-        bytes32 intentHash = getIntentHash(intent);
+    function _preProcess(
+        Intent[] calldata intents,
+        uint128[] memory amountsToFill,
+        uint128[] memory amountsToExecute,
+        uint128[] memory amountsToCheck
+    ) internal returns (uint128[] memory actualAmountsToFill) {
+        actualAmountsToFill = new uint128[](intents.length);
 
-        // Verify deadline
-        if (intent.deadline < block.timestamp) {
-            revert IntentIsExpired();
-        }
+        uint256 intentsLength = intents.length;
+        for (uint256 i; i < intentsLength; ) {
+            Intent calldata intent = intents[i];
+            bytes32 intentHash = getIntentHash(intent);
 
-        IntentStatus memory status = intentStatus[intentHash];
+            // Verify start and end times
 
-        // Verify cancellation status
-        if (status.isCancelled) {
-            revert IntentIsCancelled();
-        }
+            if (intent.startTime > block.timestamp) {
+                revert IntentIsNotStarted();
+            }
 
-        // Verify signature
-        if (!status.isValidated) {
-            _validateIntent(intentHash, intent.maker, intent.signature);
-        }
+            if (intent.endTime < block.timestamp) {
+                revert IntentIsExpired();
+            }
 
-        uint128 amountToFill;
-        // Avoid "Stack too deep" errors by wrapping inside a block
-        {
+            if (intent.startTime >= intent.endTime) {
+                revert InvalidStartAndEndTimes();
+            }
+
+            IntentStatus memory status = intentStatus[intentHash];
+
+            // Verify cancellation status
+            if (status.isCancelled) {
+                revert IntentIsCancelled();
+            }
+
+            // Verify signature
+            if (!status.isPrevalidated) {
+                _prevalidateIntent(
+                    intentHash,
+                    intent.maker,
+                    intent.hasDynamicSignature,
+                    intent.signature
+                );
+            }
+
             // Ensure there's still some amount left to be filled
-            uint128 amountAvailable = intent.amountIn - status.amountFilled;
+            uint128 amountAvailable = intent.amount - status.amountFilled;
             if (amountAvailable == 0) {
                 revert IntentIsFilled();
             }
 
             // Ensure non-partially-fillable intents are fully filled
             if (
-                !intent.isPartiallyFillable && solution.amount < amountAvailable
+                !intent.isPartiallyFillable &&
+                amountsToFill[i] < amountAvailable
             ) {
                 revert IntentIsNotPartiallyFillable();
             }
 
-            // Compute the amount available to fill
-            amountToFill = solution.amount > amountAvailable
+            // Compute the actual amount to fill
+            uint128 actualAmountToFill = amountsToFill[i] > amountAvailable
                 ? amountAvailable
-                : solution.amount;
-            intentStatus[intentHash].amountFilled += amountToFill;
-        }
+                : amountsToFill[i];
+            intentStatus[intentHash].amountFilled += actualAmountToFill;
 
-        // Transfer inputs to fill contract
-        if (amountToFill > 0) {
-            _transferToken(
-                intent.maker,
-                solution.to,
-                intent.tokenIn,
-                amountToFill
-            );
-        }
+            if (actualAmountToFill > 0) {
+                if (intent.side == Side.SELL) {
+                    // When side = SELL:
+                    // amount = amountIn
+                    // endAmount = endAmountOut
+                    // startAmount = startAmountOut
+                    // expectedAmount = expectedAmountOut
 
-        // Execute solution
-        // Avoid "Stack too deep" errors by wrapping inside a block
-        {
-            (bool result, ) = solution.to.call(solution.data);
-            if (!result) {
-                revert UnsuccessfullCall();
+                    // Transfer inputs to solver
+                    _transferToken(
+                        intent.maker,
+                        msg.sender,
+                        intent.tokenIn,
+                        actualAmountToFill
+                    );
+                } else {
+                    // When side = BUY:
+                    // amount = amountOut
+                    // endAmount = endAmountIn
+                    // startAmount = startAmountIn
+                    // expectedAmount = expectedAmountIn
+
+                    uint128 endAmount = (intent.endAmount *
+                        actualAmountToFill) / intent.amount;
+                    uint128 startAmount = endAmount -
+                        (endAmount * intent.startAmountBps) /
+                        10000;
+                    uint128 expectedAmount = endAmount -
+                        (endAmount * intent.expectedAmountBps) /
+                        10000;
+
+                    //                                                           (now() - startTime)
+                    // requiredAmount = startAmount + (endAmount - startAmount) ---------------------
+                    //                                                          (endTime - startTime)
+
+                    uint128 requiredAmount = startAmount +
+                        ((endAmount - startAmount) *
+                            (uint32(block.timestamp) - intent.startTime)) /
+                        (intent.endTime - intent.startTime);
+
+                    uint128 executeAmount = amountsToExecute[i];
+
+                    // The amount to execute should be lower than the required amount
+                    if (executeAmount > requiredAmount) {
+                        revert InvalidSolution();
+                    }
+
+                    // The amount to execute should be lower than the check amount
+                    if (executeAmount > amountsToCheck[i]) {
+                        revert AmountCheckFailed();
+                    }
+
+                    if (intent.source != address(0)) {
+                        uint128 amount;
+
+                        // Charge fee
+                        if (intent.feeBps > 0) {
+                            amount += (executeAmount * intent.feeBps) / 10000;
+                        }
+
+                        // Charge surplus fee
+                        if (
+                            intent.surplusBps > 0 &&
+                            executeAmount < expectedAmount
+                        ) {
+                            amount +=
+                                ((expectedAmount - executeAmount) *
+                                    intent.surplusBps) /
+                                10000;
+                        }
+
+                        // Transfer fees
+                        if (amount > 0) {
+                            _transferToken(
+                                intent.maker,
+                                intent.source,
+                                intent.tokenIn,
+                                amount
+                            );
+
+                            executeAmount -= amount;
+                        }
+                    }
+
+                    // Transfer inputs to solver
+                    if (executeAmount > 0) {
+                        _transferToken(
+                            intent.maker,
+                            msg.sender,
+                            intent.tokenIn,
+                            executeAmount
+                        );
+                    }
+
+                    emit IntentSolved(
+                        intentHash,
+                        address(intent.tokenIn),
+                        address(intent.tokenOut),
+                        intent.maker,
+                        msg.sender,
+                        executeAmount,
+                        actualAmountToFill
+                    );
+                }
+            }
+
+            actualAmountsToFill[i] = actualAmountToFill;
+
+            unchecked {
+                ++i;
             }
         }
+    }
 
-        // Check
+    function _postProcess(
+        Intent[] calldata intents,
+        uint128[] memory amountsToFill,
+        uint128[] memory amountsToExecute,
+        uint128[] memory amountsToCheck
+    ) internal {
+        uint256 intentsLength = intents.length;
+        for (uint256 i; i < intentsLength; ) {
+            Intent calldata intent = intents[i];
+            bytes32 intentHash = getIntentHash(intent);
 
-        uint128 endAmountOut = intent.endAmountOut;
-        uint128 startAmountOut = endAmountOut +
-            (endAmountOut * intent.startAmountBps) /
-            10000;
-        uint128 expectedAmountOut = endAmountOut +
-            (endAmountOut * intent.expectedAmountBps) /
-            10000;
+            if (intent.side == Side.SELL) {
+                // When side = SELL:
+                // amount = amountIn
+                // endAmount = endAmountOut
+                // startAmount = startAmountOut
+                // expectedAmount = expectedAmountOut
 
-        //                                (startAmount - endAmount)
-        // requiredAmount = startAmount - -------------------------
-        //                                   (deadline - now())
-
-        uint128 requiredAmountOut = startAmountOut -
-            (startAmountOut - endAmountOut) /
-            (
-                intent.deadline > uint32(block.timestamp)
-                    ? intent.deadline - uint32(block.timestamp)
-                    : 1
-            );
-
-        if (requiredAmountOut < minAmountOut) {
-            revert InvalidSolution();
-        }
-
-        uint256 tokenOutBalance = address(intent.tokenOut) == address(0)
-            ? address(this).balance
-            : intent.tokenOut.allowance(solution.to, address(this));
-
-        // Ensure the maker got at least what he intended
-        if (tokenOutBalance < requiredAmountOut) {
-            revert InvalidSolution();
-        }
-
-        if (intent.source != address(0)) {
-            uint256 amount;
-
-            // Charge fee
-            if (intent.feeBps > 0) {
-                amount += (requiredAmountOut * intent.feeBps) / 10000;
-            }
-
-            // Charge surplus fee
-            if (
-                intent.surplusBps > 0 &&
-                tokenOutBalance > expectedAmountOut &&
-                expectedAmountOut > requiredAmountOut
-            ) {
-                amount +=
-                    ((tokenOutBalance - expectedAmountOut) *
-                        intent.surplusBps) /
+                uint128 endAmount = (intent.endAmount * amountsToFill[i]) /
+                    intent.amount;
+                uint128 startAmount = endAmount +
+                    (endAmount * intent.startAmountBps) /
                     10000;
-            }
+                uint128 expectedAmount = endAmount +
+                    (endAmount * intent.expectedAmountBps) /
+                    10000;
 
-            // Transfer fees
-            if (amount > 0) {
-                _transferToken(
-                    solution.to,
-                    intent.source,
-                    intent.tokenOut,
-                    amount
+                //                                                           (now() - startTime)
+                // requiredAmount = startAmount - (startAmount - endAmount) ---------------------
+                //                                                          (endTime - startTime)
+
+                uint128 requiredAmount = startAmount -
+                    ((startAmount - endAmount) *
+                        (uint32(block.timestamp) - intent.startTime)) /
+                    (intent.endTime - intent.startTime);
+
+                uint128 executeAmount = amountsToExecute[i];
+
+                // The amount to execute should be greater than the required amount
+                if (executeAmount < requiredAmount) {
+                    revert InvalidSolution();
+                }
+
+                // The amount to execute should be greater than the check amount
+                if (executeAmount < amountsToCheck[i]) {
+                    revert AmountCheckFailed();
+                }
+
+                if (intent.source != address(0)) {
+                    uint128 amount;
+
+                    // Charge fee
+                    if (intent.feeBps > 0) {
+                        amount += (executeAmount * intent.feeBps) / 10000;
+                    }
+
+                    // Charge surplus fee
+                    if (
+                        intent.surplusBps > 0 && executeAmount > expectedAmount
+                    ) {
+                        amount +=
+                            ((executeAmount - expectedAmount) *
+                                intent.surplusBps) /
+                            10000;
+                    }
+
+                    // Transfer fees
+                    if (amount > 0) {
+                        _transferToken(
+                            msg.sender,
+                            intent.source,
+                            intent.tokenOut,
+                            amount
+                        );
+
+                        executeAmount -= amount;
+                    }
+                }
+
+                // Transfer ouputs to maker
+                if (executeAmount > 0) {
+                    _transferToken(
+                        msg.sender,
+                        intent.maker,
+                        intent.tokenOut,
+                        executeAmount
+                    );
+                }
+
+                emit IntentSolved(
+                    intentHash,
+                    address(intent.tokenIn),
+                    address(intent.tokenOut),
+                    intent.maker,
+                    msg.sender,
+                    amountsToFill[i],
+                    executeAmount
                 );
+            } else {
+                // When side = BUY:
+                // amount = amountOut
+                // endAmount = endAmountIn
+                // startAmount = startAmountIn
+                // expectedAmount = expectedAmountIn
 
-                tokenOutBalance -= amount;
+                // Transfer ouputs to maker
+                if (amountsToFill[i] > 0) {
+                    _transferToken(
+                        msg.sender,
+                        intent.maker,
+                        intent.tokenOut,
+                        amountsToFill[i]
+                    );
+                }
+            }
+
+            unchecked {
+                ++i;
             }
         }
+    }
 
-        // Transfer ouputs to maker
-        if (tokenOutBalance > 0) {
-            _transferToken(
-                solution.to,
-                intent.maker,
-                intent.tokenOut,
-                tokenOutBalance
-            );
-        }
+    /**
+     * @dev Solve intents
+     *
+     * @param intents Intents to solve
+     * @param amountsToCheck The amounts to check the solution against
+     * @param solution Solution for the intent
+     */
+    function _solve(
+        Intent[] calldata intents,
+        Solution calldata solution,
+        uint128[] memory amountsToCheck
+    ) internal {
+        uint128[] memory amountsToFill = solution.fillAmounts;
+        uint128[] memory amountsToExecute = solution.executeAmounts;
 
-        emit IntentSolved(
-            intentHash,
-            address(intent.tokenIn),
-            address(intent.tokenOut),
-            intent.maker,
-            msg.sender,
-            amountToFill,
-            uint128(tokenOutBalance)
+        // Pre-process
+        uint128[] memory actualAmountsToFill = _preProcess(
+            intents,
+            amountsToFill,
+            amountsToExecute,
+            amountsToCheck
+        );
+
+        // Solve
+        ISolution(msg.sender).callback(
+            intents,
+            amountsToExecute,
+            solution.data
+        );
+
+        // Post-process
+        _postProcess(
+            intents,
+            actualAmountsToFill,
+            amountsToExecute,
+            amountsToCheck
         );
     }
 
@@ -559,14 +865,9 @@ contract Memswap is ReentrancyGuard {
             revert AuthorizationIsExpired();
         }
 
-        // Ensure the amount doesn't exceed the maximum authorized amount
-        if (auth.maxAmountIn < amount) {
-            revert AuthorizationIsInsufficient();
-        }
-
-        // Ensure non-partially-fillable authorizations are fully filled
-        if (!auth.isPartiallyFillable && auth.maxAmountIn != amount) {
-            revert AuthorizationIsNotPartiallyFillable();
+        // Ensure the amount to fill matches the authorized amount
+        if (auth.fillAmountToCheck != amount) {
+            revert AuthorizationAmountMismatch();
         }
     }
 
@@ -586,21 +887,25 @@ contract Memswap is ReentrancyGuard {
     }
 
     /**
-     * @dev Validate an intent by checking its signature
+     * @dev Pre-validate an intent by checking its signature
      *
      * @param intentHash EIP712 intent struct hash to verify
      * @param maker The maker of the intent
+     * @param hasDynamicSignature Whether the intent has a dynamic signature
      * @param signature The signature of the intent
      */
-    function _validateIntent(
+    function _prevalidateIntent(
         bytes32 intentHash,
         address maker,
+        bool hasDynamicSignature,
         bytes calldata signature
     ) internal {
         _verifySignature(intentHash, maker, signature);
 
-        // Mark the intent as validated
-        intentStatus[intentHash].isValidated = true;
+        // Mark the intent as validated if allowed
+        if (!hasDynamicSignature) {
+            intentStatus[intentHash].isPrevalidated = true;
+        }
     }
 
     /**
@@ -627,7 +932,7 @@ contract Memswap is ReentrancyGuard {
         }
 
         if (!success) {
-            revert UnsuccessfullCall();
+            revert UnsuccessfulCall();
         }
     }
 
@@ -748,23 +1053,23 @@ contract Memswap is ReentrancyGuard {
     function _lookupBulkOrderTypehash(
         uint256 treeHeight
     ) internal pure returns (bytes32 typeHash) {
-        // kecca256("BatchIntent(Intent[2] tree)Intent(address tokenIn,address tokenOut,address maker,address matchmaker,address source,uint16 feeBps,uint16 surplusBps,uint32 deadline,bool isPartiallyFillable,uint128 amountIn,uint128 endAmountOut,uint16 startAmountBps,uint16 expectedAmountBps)")
+        // kecca256("BatchIntent(Intent[2]...[2] tree)Intent(uint8 side,address tokenIn,address tokenOut,address maker,address matchmaker,address source,uint16 feeBps,uint16 surplusBps,uint32 startTime,uint32 endTime,uint256 nonce,bool isPartiallyFillable,uint128 amount,uint128 endAmount,uint16 startAmountBps,uint16 expectedAmountBps,bool hasDynamicSignature)")
         if (treeHeight == 1) {
-            typeHash = 0xa09b55b2b0f1611c4db0b312fc7063c8438a51497adc137310360981267db3ef;
+            typeHash = 0x752fe66f461ad26607dab37df65d9f145c404f6d987af0a1396c53aa63c4090f;
         } else if (treeHeight == 2) {
-            typeHash = 0x04440a5b85b1ac9a5931adc223455ce5ee3db7c8a2779030b9b8db54e2b85799;
+            typeHash = 0x2594282edb473d84da7e88a9b9f66f7fe3cd2c33e20e5b2c690421db86a32380;
         } else if (treeHeight == 3) {
-            typeHash = 0x3201a8c99184de74eeba60a0f95ba5677e2d05308248224cff5d53314a25b768;
+            typeHash = 0x76b81fdcb4be73e208608de69da4cba1fdec2fb82f31781205e378d92e98758e;
         } else if (treeHeight == 4) {
-            typeHash = 0x5f9c3a9757945e640a0e6f0fa11269b3d05f3516b8377caf06a22bcd47f19a0c;
+            typeHash = 0xd9a65e15256d62ef180250f50ac26068de751b679b4f9ed7f1615e832c5e988e;
         } else if (treeHeight == 5) {
-            typeHash = 0x49b5887b13176700800be2e1ec7eece8e4683eba84310a7a49f8acda23a84cc9;
+            typeHash = 0x9a36ed08b115bb0e421302aa0cdeb7072a9ceaa7eb0732ef2c7bbcdaaaf25abf;
         } else if (treeHeight == 6) {
-            typeHash = 0x5aba5e52e068d52122f8220dda000664baf304f522ceface6940df335ca128fb;
+            typeHash = 0x5cddea5c888c2bb7db8e1416408984d8c376bef466804fc27955802d1e66e580;
         } else if (treeHeight == 7) {
-            typeHash = 0xa004a0ff682c47acac1378afc7985f7c43efbd1adea9248e30d6afad0b0211e8;
+            typeHash = 0x31af46d3e7c43bed478af23e497cd1e4b8cd346912e6e5d83f380af2bc0607c5;
         } else if (treeHeight == 8) {
-            typeHash = 0x0745413a2bfe7693ff806398f8d59424166d165d7c16591bcfa1d4ce7cc168f5;
+            typeHash = 0x37e29d72978727485bc0d786835c69d98615b7402d54452b99e92709d29e546e;
         } else {
             revert MerkleTreeTooLarge();
         }

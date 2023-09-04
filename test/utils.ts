@@ -5,10 +5,11 @@ import { hexConcat } from "@ethersproject/bytes";
 import { AddressZero } from "@ethersproject/constants";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 import { keccak256 } from "@ethersproject/keccak256";
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { ethers } from "hardhat";
 import { MerkleTree } from "merkletreejs";
 
-// Misc
+// Misc utilities
 
 export const bn = (value: BigNumberish) => BigNumber.from(value);
 
@@ -26,7 +27,174 @@ export const getRandomInteger = (min: number, max: number) => {
 export const getRandomFloat = (min: number, max: number) =>
   (Math.random() * (max - min) + min).toFixed(6);
 
-// Bulk-signing
+// Contract utilities
+
+export enum Side {
+  BUY,
+  SELL,
+}
+
+export type Intent = {
+  side: Side;
+  tokenIn: string;
+  tokenOut: string;
+  maker: string;
+  matchmaker: string;
+  source: string;
+  feeBps: number;
+  surplusBps: number;
+  startTime: number;
+  endTime: number;
+  nonce: BigNumberish;
+  isPartiallyFillable: boolean;
+  amount: BigNumberish;
+  endAmount: BigNumberish;
+  startAmountBps: number;
+  expectedAmountBps: number;
+  hasDynamicSignature: boolean;
+  signature?: string;
+};
+
+export type Authorization = {
+  intentHash: string;
+  solver: string;
+  fillAmountToCheck: BigNumberish;
+  executeAmountToCheck: BigNumberish;
+  blockDeadline: number;
+  signature?: string;
+};
+
+export const getIntentHash = (intent: any) =>
+  _TypedDataEncoder.hashStruct("Intent", INTENT_EIP712_TYPES, intent);
+
+export const signIntent = async (
+  signer: SignerWithAddress,
+  contract: string,
+  intent: any
+) =>
+  signer._signTypedData(
+    EIP712_DOMAIN(contract, await signer.getChainId()),
+    INTENT_EIP712_TYPES,
+    intent
+  );
+
+export const signAuthorization = async (
+  signer: SignerWithAddress,
+  contract: string,
+  authorization: any
+) =>
+  signer._signTypedData(
+    EIP712_DOMAIN(contract, await signer.getChainId()),
+    AUTHORIZATION_EIP712_TYPES,
+    authorization
+  );
+
+export const EIP712_DOMAIN = (contract: string, chainId: number) => ({
+  name: "Memswap",
+  version: "1.0",
+  chainId,
+  verifyingContract: contract,
+});
+
+export const AUTHORIZATION_EIP712_TYPES = {
+  Authorization: [
+    {
+      name: "intentHash",
+      type: "bytes32",
+    },
+    {
+      name: "solver",
+      type: "address",
+    },
+    {
+      name: "fillAmountToCheck",
+      type: "uint128",
+    },
+    {
+      name: "executeAmountToCheck",
+      type: "uint128",
+    },
+    {
+      name: "blockDeadline",
+      type: "uint32",
+    },
+  ],
+};
+
+export const INTENT_EIP712_TYPES = {
+  Intent: [
+    {
+      name: "side",
+      type: "uint8",
+    },
+    {
+      name: "tokenIn",
+      type: "address",
+    },
+    {
+      name: "tokenOut",
+      type: "address",
+    },
+    {
+      name: "maker",
+      type: "address",
+    },
+    {
+      name: "matchmaker",
+      type: "address",
+    },
+    {
+      name: "source",
+      type: "address",
+    },
+    {
+      name: "feeBps",
+      type: "uint16",
+    },
+    {
+      name: "surplusBps",
+      type: "uint16",
+    },
+    {
+      name: "startTime",
+      type: "uint32",
+    },
+    {
+      name: "endTime",
+      type: "uint32",
+    },
+    {
+      name: "nonce",
+      type: "uint256",
+    },
+    {
+      name: "isPartiallyFillable",
+      type: "bool",
+    },
+    {
+      name: "amount",
+      type: "uint128",
+    },
+    {
+      name: "endAmount",
+      type: "uint128",
+    },
+    {
+      name: "startAmountBps",
+      type: "uint16",
+    },
+    {
+      name: "expectedAmountBps",
+      type: "uint16",
+    },
+    {
+      name: "hasDynamicSignature",
+      type: "bool",
+    },
+  ],
+};
+
+// Bulk-signing utilities
 
 export const bulkSign = async (
   signer: TypedDataSigner,
@@ -63,7 +231,7 @@ const getBulkSignatureDataWithProofs = (
   const height = Math.max(Math.ceil(Math.log2(intents.length)), 1);
   const size = Math.pow(2, height);
 
-  const types = { ...INTENT_EIP712_HASH };
+  const types = { ...INTENT_EIP712_TYPES };
   (types as any).BatchIntent = [
     { name: "tree", type: `Intent${`[2]`.repeat(height)}` },
   ];
@@ -74,6 +242,7 @@ const getBulkSignatureDataWithProofs = (
   const leaves = elements.map((i) => hashElement(i));
 
   const defaultElement = {
+    side: 0,
     tokenIn: AddressZero,
     tokenOut: AddressZero,
     maker: AddressZero,
@@ -81,12 +250,15 @@ const getBulkSignatureDataWithProofs = (
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,
-    deadline: 0,
+    startTime: 0,
+    endTime: 0,
+    nonce: 0,
     isPartiallyFillable: false,
-    amountIn: 0,
-    endAmountOut: 0,
+    amount: 0,
+    endAmount: 0,
     startAmountBps: 0,
     expectedAmountBps: 0,
+    hasDynamicSignature: false,
   };
   const defaultLeaf = hashElement(defaultElement);
 
@@ -136,97 +308,4 @@ const encodeBulkOrderProofAndSignature = (
     `0x${orderIndex.toString(16).padStart(6, "0")}`,
     defaultAbiCoder.encode([`uint256[${merkleProof.length}]`], [merkleProof]),
   ]);
-};
-
-export const EIP712_DOMAIN = (contract: string, chainId: number) => ({
-  name: "Memswap",
-  version: "1.0",
-  chainId,
-  verifyingContract: contract,
-});
-
-export const AUTHORIZATION_EIP712_TYPES = {
-  Authorization: [
-    {
-      name: "intentHash",
-      type: "bytes32",
-    },
-    {
-      name: "authorizedSolver",
-      type: "address",
-    },
-    {
-      name: "maxAmountIn",
-      type: "uint128",
-    },
-    {
-      name: "minAmountOut",
-      type: "uint128",
-    },
-    {
-      name: "blockDeadline",
-      type: "uint32",
-    },
-    {
-      name: "isPartiallyFillable",
-      type: "bool",
-    },
-  ],
-};
-
-export const INTENT_EIP712_HASH = {
-  Intent: [
-    {
-      name: "tokenIn",
-      type: "address",
-    },
-    {
-      name: "tokenOut",
-      type: "address",
-    },
-    {
-      name: "maker",
-      type: "address",
-    },
-    {
-      name: "matchmaker",
-      type: "address",
-    },
-    {
-      name: "source",
-      type: "address",
-    },
-    {
-      name: "feeBps",
-      type: "uint16",
-    },
-    {
-      name: "surplusBps",
-      type: "uint16",
-    },
-    {
-      name: "deadline",
-      type: "uint32",
-    },
-    {
-      name: "isPartiallyFillable",
-      type: "bool",
-    },
-    {
-      name: "amountIn",
-      type: "uint128",
-    },
-    {
-      name: "endAmountOut",
-      type: "uint128",
-    },
-    {
-      name: "startAmountBps",
-      type: "uint16",
-    },
-    {
-      name: "expectedAmountBps",
-      type: "uint16",
-    },
-  ],
 };
