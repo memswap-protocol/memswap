@@ -309,9 +309,7 @@ contract Memswap is ReentrancyGuard {
      */
     function incrementNonce() external nonReentrant {
         unchecked {
-            uint256 oldNonce = nonce[msg.sender];
-            uint256 newNonce = oldNonce + 1;
-
+            uint256 newNonce = nonce[msg.sender] + 1;
             nonce[msg.sender] = newNonce;
             emit NonceIncremented(msg.sender, newNonce);
         }
