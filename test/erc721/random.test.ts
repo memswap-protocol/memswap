@@ -6,19 +6,16 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
+import { Intent, Side, getIntentHash, signIntent } from "./utils";
 import {
-  Intent,
-  Side,
   bn,
   getCurrentTimestamp,
-  getIntentHash,
   getRandomBoolean,
   getRandomFloat,
   getRandomInteger,
-  signIntent,
-} from "./utils";
+} from "../utils";
 
-describe("Random", async () => {
+describe("[ERC721] Random", async () => {
   let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
@@ -35,20 +32,20 @@ describe("Random", async () => {
     [deployer, alice, bob, carol] = await ethers.getSigners();
 
     memswap = await ethers
-      .getContractFactory("Memswap")
+      .getContractFactory("MemswapERC721")
       .then((factory) => factory.deploy());
     weth = await ethers
       .getContractFactory("WETH2")
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxy")
+      .getContractFactory("MockSolutionProxyERC721")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
       .then((factory) => factory.deploy());
     token1 = await ethers
-      .getContractFactory("MockERC20")
+      .getContractFactory("MockERC721")
       .then((factory) => factory.deploy());
 
     // Send some ETH to solution proxy contract for the tests where `tokenOut` is ETH
@@ -65,7 +62,7 @@ describe("Random", async () => {
     const intent: Intent = {
       side: Side.BUY,
       tokenIn: getRandomBoolean() ? weth.address : token0.address,
-      tokenOut: getRandomBoolean() ? AddressZero : token1.address,
+      tokenOut: token1.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: getRandomBoolean() ? AddressZero : carol.address,
@@ -75,7 +72,7 @@ describe("Random", async () => {
       endTime: currentTime + getRandomInteger(1, 1000),
       nonce: 0,
       isPartiallyFillable: getRandomBoolean(),
-      amount: ethers.utils.parseEther(getRandomFloat(0.01, 1)),
+      amount: getRandomInteger(1, 5),
       endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
       expectedAmountBps: getRandomInteger(500, 800),
@@ -84,9 +81,7 @@ describe("Random", async () => {
 
     // Generate a random fill amount (for partially-fillable intents)
     const fillAmount = intent.isPartiallyFillable
-      ? ethers.utils.parseEther(
-          getRandomFloat(0.01, Number(ethers.utils.formatEther(intent.amount)))
-        )
+      ? getRandomInteger(1, Number(intent.amount))
       : intent.amount;
 
     if (intent.tokenIn === weth.address) {
@@ -171,12 +166,13 @@ describe("Random", async () => {
         : bn(0);
 
     // Solve
+    const tokenIdsToFill = [...Array(Number(fillAmount)).keys()];
     const solve = solutionProxy.connect(bob).solve([intent], {
       data: defaultAbiCoder.encode(
-        ["address", "uint128"],
-        [intent.tokenOut, fillAmount]
+        ["address", "uint256[]"],
+        [intent.tokenOut, tokenIdsToFill]
       ),
-      fillAmounts: [fillAmount],
+      fillTokenIds: [tokenIdsToFill],
       executeAmounts: [amount.sub(surplus)],
     });
     if (nextBlockTime > intent.endTime) {
@@ -186,12 +182,13 @@ describe("Random", async () => {
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
+          intent.side,
           intent.tokenIn,
           intent.tokenOut,
           intent.maker,
           solutionProxy.address,
           amount.sub(surplus).sub(fee).sub(surplusFee),
-          fillAmount
+          tokenIdsToFill
         );
     }
 
@@ -220,8 +217,8 @@ describe("Random", async () => {
     // Generate an intent with random values
     const intent: Intent = {
       side: Side.SELL,
-      tokenIn: getRandomBoolean() ? weth.address : token0.address,
-      tokenOut: getRandomBoolean() ? AddressZero : token1.address,
+      tokenIn: token1.address,
+      tokenOut: getRandomBoolean() ? AddressZero : token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: getRandomBoolean() ? AddressZero : carol.address,
@@ -231,7 +228,7 @@ describe("Random", async () => {
       endTime: currentTime + getRandomInteger(1, 1000),
       nonce: 0,
       isPartiallyFillable: getRandomBoolean(),
-      amount: ethers.utils.parseEther(getRandomFloat(0.01, 1)),
+      amount: getRandomInteger(1, 5),
       endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
       expectedAmountBps: getRandomInteger(500, 800),
@@ -240,27 +237,14 @@ describe("Random", async () => {
 
     // Generate a random fill amount (for partially-fillable intents)
     const fillAmount = intent.isPartiallyFillable
-      ? ethers.utils.parseEther(
-          getRandomFloat(0.01, Number(ethers.utils.formatEther(intent.amount)))
-        )
+      ? getRandomInteger(1, Number(intent.amount))
       : intent.amount;
 
-    if (intent.tokenIn === weth.address) {
-      // Deposit and approve
-      await alice.sendTransaction({
-        to: weth.address,
-        data: new Interface([
-          "function depositAndApprove(address spender, uint256 amount)",
-        ]).encodeFunctionData("depositAndApprove", [
-          memswap.address,
-          fillAmount,
-        ]),
-        value: fillAmount,
-      });
-    } else {
-      // Mint and approve
-      await token0.connect(alice).mint(fillAmount);
-      await token0.connect(alice).approve(memswap.address, fillAmount);
+    // Mint and approve
+    const tokenIdsToFill = [...Array(Number(fillAmount)).keys()];
+    for (const tokenId of tokenIdsToFill) {
+      await token1.connect(alice).mint(tokenId);
+      await token1.connect(alice).approve(memswap.address, tokenId);
     }
 
     // Sign the intent
@@ -297,11 +281,11 @@ describe("Random", async () => {
     const makerBalanceBefore =
       intent.tokenOut === AddressZero
         ? await ethers.provider.getBalance(intent.maker)
-        : await token1.balanceOf(intent.maker);
+        : await token0.balanceOf(intent.maker);
     const sourceBalanceBefore =
       intent.tokenOut === AddressZero
         ? await ethers.provider.getBalance(intent.source)
-        : await token1.balanceOf(intent.source);
+        : await token0.balanceOf(intent.source);
 
     // Optionally have some surplus (eg. on top of amount required by intent)
     const surplus = ethers.utils.parseEther(getRandomFloat(0.001, 0.1));
@@ -328,7 +312,7 @@ describe("Random", async () => {
         ["address", "uint128"],
         [intent.tokenOut, amount.add(surplus)]
       ),
-      fillAmounts: [fillAmount],
+      fillTokenIds: [tokenIdsToFill],
       executeAmounts: [amount.add(surplus)],
     });
     if (nextBlockTime > intent.endTime) {
@@ -338,12 +322,13 @@ describe("Random", async () => {
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
+          intent.side,
           intent.tokenIn,
           intent.tokenOut,
           intent.maker,
           solutionProxy.address,
-          fillAmount,
-          amount.add(surplus).sub(fee).sub(surplusFee)
+          amount.add(surplus).sub(fee).sub(surplusFee),
+          tokenIdsToFill
         );
     }
 
@@ -351,11 +336,11 @@ describe("Random", async () => {
     const makerBalanceAfter =
       intent.tokenOut === AddressZero
         ? await ethers.provider.getBalance(intent.maker)
-        : await token1.balanceOf(intent.maker);
+        : await token0.balanceOf(intent.maker);
     const sourceBalanceAfter =
       intent.tokenOut === AddressZero
         ? await ethers.provider.getBalance(intent.source)
-        : await token1.balanceOf(intent.source);
+        : await token0.balanceOf(intent.source);
 
     // Make sure the maker and the source got the right amounts
     expect(makerBalanceAfter.sub(makerBalanceBefore)).to.eq(

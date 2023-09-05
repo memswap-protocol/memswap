@@ -9,14 +9,13 @@ import {
   Authorization,
   Intent,
   Side,
-  bn,
-  getCurrentTimestamp,
   getIntentHash,
   signAuthorization,
   signIntent,
 } from "./utils";
+import { bn, getCurrentTimestamp } from "../utils";
 
-describe("Authorization", async () => {
+describe("[ERC721] Authorization", async () => {
   let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
@@ -24,7 +23,6 @@ describe("Authorization", async () => {
   let dan: SignerWithAddress;
 
   let memswap: Contract;
-  let weth: Contract;
 
   let solutionProxy: Contract;
   let token0: Contract;
@@ -34,20 +32,17 @@ describe("Authorization", async () => {
     [deployer, alice, bob, carol, dan] = await ethers.getSigners();
 
     memswap = await ethers
-      .getContractFactory("Memswap")
-      .then((factory) => factory.deploy());
-    weth = await ethers
-      .getContractFactory("WETH2")
+      .getContractFactory("MemswapERC721")
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxy")
+      .getContractFactory("MockSolutionProxyERC721")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
       .then((factory) => factory.deploy());
     token1 = await ethers
-      .getContractFactory("MockERC20")
+      .getContractFactory("MockERC721")
       .then((factory) => factory.deploy());
 
     // Send some ETH to solution proxy contract for the tests where `tokenOut` is ETH
@@ -63,8 +58,8 @@ describe("Authorization", async () => {
     // Generate intent
     const intent: Intent = {
       side: Side.SELL,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      tokenIn: token1.address,
+      tokenOut: token0.address,
       maker: alice.address,
       matchmaker: bob.address,
       source: AddressZero,
@@ -74,7 +69,7 @@ describe("Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
-      amount: ethers.utils.parseEther("0.5"),
+      amount: 3,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
@@ -83,8 +78,11 @@ describe("Authorization", async () => {
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.amount);
-    await token0.connect(alice).approve(memswap.address, intent.amount);
+    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
+    for (const tokenId of tokenIdsToFill) {
+      await token1.connect(alice).mint(tokenId);
+      await token1.connect(alice).approve(memswap.address, tokenId);
+    }
 
     // Compute start amount
     const startAmount = bn(intent.endAmount).add(
@@ -98,7 +96,7 @@ describe("Authorization", async () => {
           ["address", "uint128"],
           [intent.tokenOut, startAmount]
         ),
-        fillAmounts: [intent.amount],
+        fillTokenIds: [tokenIdsToFill],
         executeAmounts: [startAmount],
       })
     ).to.be.revertedWith("Unauthorized");
@@ -110,7 +108,7 @@ describe("Authorization", async () => {
             ["address", "uint128"],
             [intent.tokenOut, startAmount]
           ),
-          fillAmounts: [intent.amount],
+          fillTokenIds: [tokenIdsToFill],
           executeAmounts: [startAmount],
         })
     ).to.be.revertedWith("AuthorizationIsExpired");
@@ -136,8 +134,7 @@ describe("Authorization", async () => {
 
     // Fill amount should pass the authorization amount check
     {
-      const amountAuthorized = ethers.utils.parseEther("0.4");
-      const amountToFill = ethers.utils.parseEther("0.45");
+      const amountAuthorized = 2;
 
       const authorization: Authorization = {
         intentHash: getIntentHash(intent),
@@ -161,7 +158,7 @@ describe("Authorization", async () => {
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
-            fillAmounts: [amountToFill],
+            fillTokenIds: [tokenIdsToFill],
             executeAmounts: [startAmount],
           })
       ).to.be.revertedWith("AuthorizationAmountMismatch");
@@ -169,8 +166,7 @@ describe("Authorization", async () => {
 
     // Cannot use expired authorization
     {
-      const amountAuthorized = ethers.utils.parseEther("0.4");
-      const amountToFill = ethers.utils.parseEther("0.4");
+      const amountAuthorized = 2;
 
       const authorization: Authorization = {
         intentHash: getIntentHash(intent),
@@ -194,7 +190,7 @@ describe("Authorization", async () => {
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
-            fillAmounts: [amountToFill],
+            fillTokenIds: [tokenIdsToFill],
             executeAmounts: [startAmount],
           })
       ).to.be.revertedWith("AuthorizationIsExpired");
@@ -226,227 +222,11 @@ describe("Authorization", async () => {
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
-            fillAmounts: [intent.amount],
+            fillTokenIds: [tokenIdsToFill],
             executeAmounts: [startAmount],
           })
       ).to.be.revertedWith("AmountCheckFailed");
     }
-
-    it("On-chain sell authorization", async () => {
-      const currentTime = await getCurrentTimestamp();
-
-      // Generate intent
-      const intent: Intent = {
-        side: Side.SELL,
-        tokenIn: token0.address,
-        tokenOut: token1.address,
-        maker: alice.address,
-        matchmaker: bob.address,
-        source: AddressZero,
-        feeBps: 0,
-        surplusBps: 0,
-        startTime: currentTime,
-        endTime: currentTime + 60,
-        nonce: 0,
-        isPartiallyFillable: true,
-        amount: ethers.utils.parseEther("0.5"),
-        endAmount: ethers.utils.parseEther("0.3"),
-        startAmountBps: 0,
-        expectedAmountBps: 0,
-        hasDynamicSignature: false,
-      };
-      intent.signature = await signIntent(alice, memswap.address, intent);
-
-      // Mint and approve
-      await token0.connect(alice).mint(intent.amount);
-      await token0.connect(alice).approve(memswap.address, intent.amount);
-
-      // Compute start amount
-      const startAmount = bn(intent.endAmount).add(
-        bn(intent.endAmount).mul(intent.startAmountBps).div(10000)
-      );
-
-      // Without authorization, cannot fill an intent of a different matchmaker
-      await expect(
-        solutionProxy.connect(carol).solve([intent], {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.tokenOut, startAmount]
-          ),
-          fillAmounts: [intent.amount],
-          executeAmounts: [startAmount],
-        })
-      ).to.be.revertedWith("Unauthorized");
-      await expect(
-        solutionProxy
-          .connect(carol)
-          .solveWithOnChainAuthorizationCheck([intent], {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.tokenOut, startAmount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [startAmount],
-          })
-      ).to.be.revertedWith("AuthorizationIsExpired");
-
-      // Authorization must come from the intent matchmaker
-      {
-        const authorization: Authorization = {
-          intentHash: getIntentHash(intent),
-          solver: solutionProxy.address,
-          fillAmountToCheck: intent.amount,
-          executeAmountToCheck: intent.endAmount,
-          blockDeadline: await ethers.provider
-            .getBlock("latest")
-            .then((b) => b.number + 2),
-        };
-
-        await expect(
-          memswap
-            .connect(dan)
-            .authorize([intent], [authorization], solutionProxy.address)
-        ).to.be.revertedWith("Unauthorized");
-      }
-
-      // Fill amount should pass the authorization amount check
-      {
-        const amountAuthorized = ethers.utils.parseEther("0.4");
-        const amountToFill = ethers.utils.parseEther("0.45");
-
-        const authorization: Authorization = {
-          intentHash: getIntentHash(intent),
-          solver: solutionProxy.address,
-          fillAmountToCheck: amountAuthorized,
-          executeAmountToCheck: intent.endAmount,
-          blockDeadline: await ethers.provider
-            .getBlock("latest")
-            .then((b) => b.number + 2),
-        };
-
-        await memswap
-          .connect(bob)
-          .authorize([intent], [authorization], solutionProxy.address);
-
-        await expect(
-          solutionProxy
-            .connect(carol)
-            .solveWithOnChainAuthorizationCheck([intent], {
-              data: defaultAbiCoder.encode(
-                ["address", "uint128"],
-                [intent.tokenOut, startAmount]
-              ),
-              fillAmounts: [amountToFill],
-              executeAmounts: [startAmount],
-            })
-        ).to.be.revertedWith("AuthorizationAmountMismatch");
-      }
-
-      // Cannot use expired authorization
-      {
-        const amountAuthorized = ethers.utils.parseEther("0.4");
-        const amountToFill = ethers.utils.parseEther("0.4");
-
-        const authorization: Authorization = {
-          intentHash: getIntentHash(intent),
-          solver: solutionProxy.address,
-          fillAmountToCheck: amountAuthorized,
-          executeAmountToCheck: intent.endAmount,
-          blockDeadline: await ethers.provider
-            .getBlock("latest")
-            .then((b) => b.number + 1),
-        };
-
-        await memswap
-          .connect(bob)
-          .authorize([intent], [authorization], solutionProxy.address);
-
-        await expect(
-          solutionProxy
-            .connect(carol)
-            .solveWithOnChainAuthorizationCheck([intent], {
-              data: defaultAbiCoder.encode(
-                ["address", "uint128"],
-                [intent.tokenOut, startAmount]
-              ),
-              fillAmounts: [amountToFill],
-              executeAmounts: [startAmount],
-            })
-        ).to.be.revertedWith("AuthorizationIsExpired");
-      }
-
-      // Cannot fill less at a worse rate than authorized
-      {
-        const amountToCheck = startAmount.add(1);
-
-        const authorization: Authorization = {
-          intentHash: getIntentHash(intent),
-          solver: solutionProxy.address,
-          fillAmountToCheck: intent.amount,
-          executeAmountToCheck: amountToCheck,
-          blockDeadline: await ethers.provider
-            .getBlock("latest")
-            .then((b) => b.number + 2),
-        };
-
-        await memswap
-          .connect(bob)
-          .authorize([intent], [authorization], solutionProxy.address);
-
-        await expect(
-          solutionProxy
-            .connect(carol)
-            .solveWithOnChainAuthorizationCheck([intent], {
-              data: defaultAbiCoder.encode(
-                ["address", "uint128"],
-                [intent.tokenOut, startAmount]
-              ),
-              fillAmounts: [intent.amount],
-              executeAmounts: [startAmount],
-            })
-        ).to.be.revertedWith("AmountCheckFailed");
-      }
-
-      // Successful fill
-      {
-        const authorization: Authorization = {
-          intentHash: getIntentHash(intent),
-          solver: solutionProxy.address,
-          fillAmountToCheck: intent.amount,
-          executeAmountToCheck: intent.endAmount,
-          blockDeadline: await ethers.provider
-            .getBlock("latest")
-            .then((b) => b.number + 2),
-        };
-
-        await memswap
-          .connect(bob)
-          .authorize([intent], [authorization], solutionProxy.address);
-
-        await expect(
-          solutionProxy
-            .connect(carol)
-            .solveWithOnChainAuthorizationCheck([intent], {
-              data: defaultAbiCoder.encode(
-                ["address", "uint128"],
-                [intent.tokenOut, startAmount]
-              ),
-              fillAmounts: [intent.amount],
-              executeAmounts: [startAmount],
-            })
-        )
-          .to.emit(memswap, "IntentSolved")
-          .withArgs(
-            getIntentHash(intent),
-            intent.tokenIn,
-            intent.tokenOut,
-            intent.maker,
-            solutionProxy.address,
-            intent.amount,
-            startAmount
-          );
-      }
-    });
 
     // Successful fill
     {
@@ -472,19 +252,20 @@ describe("Authorization", async () => {
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
-            fillAmounts: [intent.amount],
+            fillTokenIds: [tokenIdsToFill],
             executeAmounts: [startAmount],
           })
       )
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
+          intent.side,
           intent.tokenIn,
           intent.tokenOut,
           intent.maker,
           solutionProxy.address,
-          intent.amount,
-          startAmount
+          startAmount,
+          tokenIdsToFill
         );
     }
   });
@@ -506,7 +287,7 @@ describe("Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
-      amount: ethers.utils.parseEther("0.5"),
+      amount: 3,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
@@ -517,6 +298,8 @@ describe("Authorization", async () => {
     // Mint and approve
     await token0.connect(alice).mint(intent.endAmount);
     await token0.connect(alice).approve(memswap.address, intent.endAmount);
+
+    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
     // Cannot fill less at a worse rate than authorized
     {
@@ -541,10 +324,10 @@ describe("Authorization", async () => {
           .connect(carol)
           .solveWithOnChainAuthorizationCheck([intent], {
             data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.tokenOut, intent.amount]
+              ["address", "uint256[]"],
+              [intent.tokenOut, tokenIdsToFill]
             ),
-            fillAmounts: [intent.amount],
+            fillTokenIds: [tokenIdsToFill],
             executeAmounts: [intent.endAmount],
           })
       ).to.be.revertedWith("AmountCheckFailed");
@@ -571,22 +354,23 @@ describe("Authorization", async () => {
           .connect(carol)
           .solveWithOnChainAuthorizationCheck([intent], {
             data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.tokenOut, intent.amount]
+              ["address", "uint256[]"],
+              [intent.tokenOut, tokenIdsToFill]
             ),
-            fillAmounts: [intent.amount],
+            fillTokenIds: [tokenIdsToFill],
             executeAmounts: [intent.endAmount],
           })
       )
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
+          intent.side,
           intent.tokenIn,
           intent.tokenOut,
           intent.maker,
           solutionProxy.address,
           intent.endAmount,
-          intent.amount
+          tokenIdsToFill
         );
     }
   });
@@ -597,8 +381,8 @@ describe("Authorization", async () => {
     // Generate intent
     const intent: Intent = {
       side: Side.SELL,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      tokenIn: token1.address,
+      tokenOut: token0.address,
       maker: alice.address,
       matchmaker: bob.address,
       source: AddressZero,
@@ -608,7 +392,7 @@ describe("Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
-      amount: ethers.utils.parseEther("0.5"),
+      amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
@@ -617,8 +401,11 @@ describe("Authorization", async () => {
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.amount);
-    await token0.connect(alice).approve(memswap.address, intent.amount);
+    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
+    for (const tokenId of tokenIdsToFill) {
+      await token1.connect(alice).mint(tokenId);
+      await token1.connect(alice).approve(memswap.address, tokenId);
+    }
 
     // Compute start amount
     const startAmount = bn(intent.endAmount).add(
@@ -650,7 +437,7 @@ describe("Authorization", async () => {
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
-            fillAmounts: [intent.amount],
+            fillTokenIds: [tokenIdsToFill],
             executeAmounts: [startAmount],
           },
           [
@@ -688,7 +475,7 @@ describe("Authorization", async () => {
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
-            fillAmounts: [intent.amount],
+            fillTokenIds: [tokenIdsToFill],
             executeAmounts: [startAmount],
           },
           [
@@ -726,7 +513,7 @@ describe("Authorization", async () => {
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
-            fillAmounts: [intent.amount],
+            fillTokenIds: [tokenIdsToFill],
             executeAmounts: [startAmount],
           },
           [
@@ -740,12 +527,13 @@ describe("Authorization", async () => {
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
+          intent.side,
           intent.tokenIn,
           intent.tokenOut,
           intent.maker,
           solutionProxy.address,
-          intent.amount,
-          startAmount
+          startAmount,
+          tokenIdsToFill
         );
     }
   });
@@ -767,7 +555,7 @@ describe("Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
-      amount: ethers.utils.parseEther("0.5"),
+      amount: 4,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
@@ -778,6 +566,8 @@ describe("Authorization", async () => {
     // Mint and approve
     await token0.connect(alice).mint(intent.endAmount);
     await token0.connect(alice).approve(memswap.address, intent.endAmount);
+
+    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
     // Successful fill
     {
@@ -801,10 +591,10 @@ describe("Authorization", async () => {
           [intent],
           {
             data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.tokenOut, intent.amount]
+              ["address", "uint256[]"],
+              [intent.tokenOut, tokenIdsToFill]
             ),
-            fillAmounts: [intent.amount],
+            fillTokenIds: [tokenIdsToFill],
             executeAmounts: [intent.endAmount],
           },
           [
@@ -818,12 +608,13 @@ describe("Authorization", async () => {
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
+          intent.side,
           intent.tokenIn,
           intent.tokenOut,
           intent.maker,
           solutionProxy.address,
           intent.endAmount,
-          intent.amount
+          tokenIdsToFill
         );
     }
   });

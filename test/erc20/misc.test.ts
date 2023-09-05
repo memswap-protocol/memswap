@@ -5,22 +5,15 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import {
-  Intent,
-  Side,
-  bn,
-  getCurrentTimestamp,
-  getIntentHash,
-  signIntent,
-} from "./utils";
+import { Intent, Side, getIntentHash, signIntent } from "./utils";
+import { bn, getCurrentTimestamp } from "../utils";
 
-describe("Misc", async () => {
+describe("[ERC20] Misc", async () => {
   let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
 
   let memswap: Contract;
-  let weth: Contract;
 
   let solutionProxy: Contract;
   let token0: Contract;
@@ -30,14 +23,11 @@ describe("Misc", async () => {
     [deployer, alice, bob] = await ethers.getSigners();
 
     memswap = await ethers
-      .getContractFactory("Memswap")
-      .then((factory) => factory.deploy());
-    weth = await ethers
-      .getContractFactory("WETH2")
+      .getContractFactory("MemswapERC20")
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxy")
+      .getContractFactory("MockSolutionProxyERC20")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")

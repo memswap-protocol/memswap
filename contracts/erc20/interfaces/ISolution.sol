@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import {Memswap} from "../Memswap.sol";
+import {MemswapERC20} from "../MemswapERC20.sol";
 
 interface ISolution {
     function callback(
-        Memswap.Intent[] memory intents,
+        MemswapERC20.Intent[] memory intents,
         uint128[] memory amountsToFill,
         bytes memory data
     ) external;

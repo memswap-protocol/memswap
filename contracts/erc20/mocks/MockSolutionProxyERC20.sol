@@ -4,14 +4,14 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {Memswap} from "../Memswap.sol";
+import {MemswapERC20} from "../MemswapERC20.sol";
 import {ISolution} from "../interfaces/ISolution.sol";
 
 interface IMintableERC20 is IERC20 {
     function mint(uint256 amount) external;
 }
 
-contract MockSolutionProxy is ISolution {
+contract MockSolutionProxyERC20 is ISolution {
     address public memswap;
 
     constructor(address memswapAddress) {
@@ -21,28 +21,28 @@ contract MockSolutionProxy is ISolution {
     receive() external payable {}
 
     function solve(
-        Memswap.Intent[] calldata intents,
-        Memswap.Solution calldata solution
+        MemswapERC20.Intent[] calldata intents,
+        MemswapERC20.Solution calldata solution
     ) external {
-        Memswap(payable(memswap)).solve(intents, solution);
+        MemswapERC20(payable(memswap)).solve(intents, solution);
     }
 
     function solveWithOnChainAuthorizationCheck(
-        Memswap.Intent[] calldata intents,
-        Memswap.Solution calldata solution
+        MemswapERC20.Intent[] calldata intents,
+        MemswapERC20.Solution calldata solution
     ) external {
-        Memswap(payable(memswap)).solveWithOnChainAuthorizationCheck(
+        MemswapERC20(payable(memswap)).solveWithOnChainAuthorizationCheck(
             intents,
             solution
         );
     }
 
     function solveWithSignatureAuthorizationCheck(
-        Memswap.Intent[] calldata intents,
-        Memswap.Solution calldata solution,
-        Memswap.AuthorizationWithSignature[] calldata auths
+        MemswapERC20.Intent[] calldata intents,
+        MemswapERC20.Solution calldata solution,
+        MemswapERC20.AuthorizationWithSignature[] calldata auths
     ) external {
-        Memswap(payable(memswap)).solveWithSignatureAuthorizationCheck(
+        MemswapERC20(payable(memswap)).solveWithSignatureAuthorizationCheck(
             intents,
             solution,
             auths
@@ -50,7 +50,7 @@ contract MockSolutionProxy is ISolution {
     }
 
     function callback(
-        Memswap.Intent[] memory,
+        MemswapERC20.Intent[] memory,
         uint128[] memory,
         bytes memory data
     ) external {

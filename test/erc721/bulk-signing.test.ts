@@ -6,17 +6,10 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import {
-  Intent,
-  Side,
-  bn,
-  bulkSign,
-  getCurrentTimestamp,
-  getIntentHash,
-  getRandomInteger,
-} from "./utils";
+import { Intent, Side, getIntentHash, bulkSign } from "./utils";
+import { bn, getCurrentTimestamp, getRandomInteger } from "../utils";
 
-describe("Bulk-signing", async () => {
+describe("[ERC721] Bulk-signing", async () => {
   let chainId: number;
 
   let deployer: SignerWithAddress;
@@ -24,7 +17,6 @@ describe("Bulk-signing", async () => {
   let bob: SignerWithAddress;
 
   let memswap: Contract;
-  let weth: Contract;
 
   let solutionProxy: Contract;
   let token0: Contract;
@@ -36,20 +28,17 @@ describe("Bulk-signing", async () => {
     [deployer, alice, bob] = await ethers.getSigners();
 
     memswap = await ethers
-      .getContractFactory("Memswap")
-      .then((factory) => factory.deploy());
-    weth = await ethers
-      .getContractFactory("WETH2")
+      .getContractFactory("MemswapERC721")
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxy")
+      .getContractFactory("MockSolutionProxyERC721")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
       .then((factory) => factory.deploy());
     token1 = await ethers
-      .getContractFactory("MockERC20")
+      .getContractFactory("MockERC721")
       .then((factory) => factory.deploy());
 
     // Send some ETH to solution proxy contract for the tests where `tokenOut` is ETH
@@ -66,7 +55,7 @@ describe("Bulk-signing", async () => {
     const intents: Intent[] = [];
     for (let i = 0; i < count; i++) {
       intents.push({
-        side: Side.SELL,
+        side: Side.BUY,
         tokenIn: token0.address,
         tokenOut: token1.address,
         maker: alice.address,
@@ -78,7 +67,7 @@ describe("Bulk-signing", async () => {
         endTime: currentTime + 60,
         nonce: 0,
         isPartiallyFillable: true,
-        amount: ethers.utils.parseEther("0.5"),
+        amount: 1,
         endAmount: ethers.utils.parseEther("0.3"),
         startAmountBps: 0,
         expectedAmountBps: 0,
@@ -93,8 +82,8 @@ describe("Bulk-signing", async () => {
     const intent = intents[getRandomInteger(0, intents.length - 1)];
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.amount);
-    await token0.connect(alice).approve(memswap.address, intent.amount);
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
 
     // Move to a known block timestamp
     const nextBlockTime = getRandomInteger(intent.startTime, intent.endTime);
@@ -119,25 +108,27 @@ describe("Bulk-signing", async () => {
         .div(bn(intent.endTime).sub(intent.startTime))
     );
 
+    const tokenIdsToFill = [0];
     await expect(
       solutionProxy.connect(bob).solve([intent], {
         data: defaultAbiCoder.encode(
-          ["address", "uint128"],
-          [intent.tokenOut, amount]
+          ["address", "uint256[]"],
+          [intent.tokenOut, tokenIdsToFill]
         ),
-        fillAmounts: [intent.amount],
+        fillTokenIds: [tokenIdsToFill],
         executeAmounts: [amount],
       })
     )
       .to.emit(memswap, "IntentSolved")
       .withArgs(
         getIntentHash(intent),
+        intent.side,
         intent.tokenIn,
         intent.tokenOut,
         intent.maker,
         solutionProxy.address,
-        intent.amount,
-        amount
+        amount,
+        tokenIdsToFill
       );
   };
 
