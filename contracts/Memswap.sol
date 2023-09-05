@@ -71,7 +71,7 @@ contract Memswap is ReentrancyGuard {
     }
 
     struct AuthorizationWithSignature {
-        Authorization auth;
+        Authorization authorization;
         bytes signature;
     }
 
@@ -414,7 +414,7 @@ contract Memswap is ReentrancyGuard {
             for (uint256 i; i < intentsLength; i++) {
                 Intent calldata intent = intents[i];
                 AuthorizationWithSignature calldata authWithSig = auths[i];
-                Authorization calldata auth = authWithSig.auth;
+                Authorization calldata auth = authWithSig.authorization;
 
                 bytes32 intentHash = getIntentHash(intent);
                 bytes32 authorizationHash = getAuthorizationHash(

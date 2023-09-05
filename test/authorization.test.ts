@@ -655,7 +655,7 @@ describe("Authorization", async () => {
           },
           [
             {
-              auth: authorization,
+              authorization,
               signature: authorization.signature,
             },
           ]
@@ -693,7 +693,7 @@ describe("Authorization", async () => {
           },
           [
             {
-              auth: authorization,
+              authorization,
               signature: authorization.signature,
             },
           ]
@@ -731,7 +731,7 @@ describe("Authorization", async () => {
           },
           [
             {
-              auth: authorization,
+              authorization,
               signature: authorization.signature,
             },
           ]
@@ -809,7 +809,7 @@ describe("Authorization", async () => {
           },
           [
             {
-              auth: authorization,
+              authorization,
               signature: authorization.signature,
             },
           ]
