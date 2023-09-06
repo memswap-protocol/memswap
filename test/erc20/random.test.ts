@@ -108,14 +108,12 @@ describe("[ERC20] Random", async () => {
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Move to a known block timestamp
-    const nextBlockTime = getRandomInteger(intent.startTime, intent.endTime);
-    await time.setNextBlockTimestamp(
+    const nextBlockTime = Math.max(
+      getRandomInteger(intent.startTime, intent.endTime),
       // Try to avoid `Timestamp is lower than the previous block's timestamp` errors
-      Math.max(
-        nextBlockTime,
-        await ethers.provider.getBlock("latest").then((b) => b.timestamp + 1)
-      )
+      await ethers.provider.getBlock("latest").then((b) => b.timestamp + 1)
     );
+    await time.setNextBlockTimestamp(nextBlockTime);
 
     // Compute the start / expected / end amounts
     const endAmount = bn(intent.endAmount).mul(fillAmount).div(intent.amount);
