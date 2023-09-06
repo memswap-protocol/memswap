@@ -1,4 +1,10 @@
+export enum Side {
+  BUY,
+  SELL,
+}
+
 export type Intent = {
+  side: Side;
   tokenIn: string;
   tokenOut: string;
   maker: string;
@@ -6,29 +12,31 @@ export type Intent = {
   source: string;
   feeBps: number;
   surplusBps: number;
-  deadline: number;
+  startTime: number;
+  endTime: number;
+  nonce: string;
   isPartiallyFillable: boolean;
-  amountIn: string;
-  endAmountOut: string;
+  amount: string;
+  endAmount: string;
   startAmountBps: number;
   expectedAmountBps: number;
+  hasDynamicSignature: string;
   signature: string;
 };
 
 export type Authorization = {
   intentHash: string;
-  authorizedSolver: string;
-  maxAmountIn: string;
-  minAmountOut: string;
+  solver: string;
+  fillAmountToCheck: string;
+  executeAmountToCheck: string;
   blockDeadline: number;
-  isPartiallyFillable: boolean;
   signature?: string;
 };
 
 export type Solution = {
-  to: string;
   data: string;
-  amount: string;
+  fillAmounts: string[];
+  executeAmounts: string[];
 };
 
 export type TxData = {

@@ -1,4 +1,4 @@
-import { Interface } from "@ethersproject/abi";
+import { Interface, defaultAbiCoder } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { parse, serialize } from "@ethersproject/transactions";
@@ -20,12 +20,11 @@ import "../monkey-patches/flashbots-bundle-provider";
 import {
   SOLUTION_PROXY,
   MATCHMAKER,
-  MEMSWAP,
-  MEMSWAP_WETH,
-  REGULAR_WETH,
+  WETH2,
+  WETH9,
 } from "../../common/addresses";
 import { logger } from "../../common/logger";
-import { Authorization, Intent, Solution } from "../../common/types";
+import { Authorization, Intent, Side, Solution } from "../../common/types";
 import {
   bn,
   getAuthorizationHash,
@@ -37,6 +36,7 @@ import {
 import { config } from "../config";
 import { redis } from "../redis";
 import * as solutions from "../solutions";
+import { BuySolutionData, SellSolutionData } from "../types";
 import { getFlashbotsProvider } from "../utils";
 
 const COMPONENT = "tx-solver";
@@ -110,9 +110,9 @@ const worker = new Worker(
         // Check and generate solution
 
         if (
-          (intent.tokenIn === MEMSWAP_WETH[config.chainId] &&
-            intent.tokenOut === REGULAR_WETH[config.chainId]) ||
-          (intent.tokenIn === REGULAR_WETH[config.chainId] &&
+          (intent.tokenIn === WETH2[config.chainId] &&
+            intent.tokenOut === WETH9[config.chainId]) ||
+          (intent.tokenIn === WETH9[config.chainId] &&
             intent.tokenOut === AddressZero)
         ) {
           logger.info(
@@ -126,13 +126,27 @@ const worker = new Worker(
           return;
         }
 
-        if (intent.deadline <= now()) {
+        if (intent.startTime > now()) {
+          logger.info(
+            COMPONENT,
+            JSON.stringify({
+              msg: "Not started",
+              now: now(),
+              startTime: intent.startTime,
+              intentHash,
+              approvalTxOrTxHash,
+            })
+          );
+          return;
+        }
+
+        if (intent.endTime <= now()) {
           logger.info(
             COMPONENT,
             JSON.stringify({
               msg: "Expired",
               now: now(),
-              deadline: intent.deadline,
+              endTime: intent.endTime,
               intentHash,
               approvalTxOrTxHash,
             })
@@ -172,141 +186,287 @@ const worker = new Worker(
           .getBlock("pending")
           .then((b) => b!.baseFeePerGas!);
 
-        const startAmountOut = bn(intent.endAmountOut).add(
-          bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
-        );
-        let minAmountOut = startAmountOut.sub(
-          startAmountOut
-            .sub(intent.endAmountOut)
-            .div(intent.deadline - latestTimestamp)
-        );
-
-        const solutionDetails = await solutions.zeroEx.solve(
-          intent.tokenIn,
-          intent.tokenOut,
-          intent.amountIn
-        );
-
-        const gasConsumed = bn(memswapGas)
-          .add(solutionDetails.gasUsed ?? defaultGas)
-          .toString();
-
-        if (bn(solutionDetails.minAmountOut).lt(minAmountOut)) {
-          logger.error(
-            COMPONENT,
-            JSON.stringify({
-              msg: "Solution not good enough",
-              solutionAmountOut: solutionDetails.minAmountOut,
-              minAmountOut: minAmountOut.toString(),
-              intentHash,
-              approvalTxOrTxHash,
-            })
+        if (intent.side === Side.SELL) {
+          const endAmount = intent.endAmount;
+          const startAmount = bn(endAmount).add(
+            bn(endAmount).mul(intent.startAmountBps).div(10000)
           );
-          return;
-        }
 
-        const tokenOutDecimals = await solutions.uniswap
-          .getToken(intent.tokenOut, provider)
-          .then((t) => t.decimals);
-        const grossProfitInTokenOut = bn(solutionDetails.minAmountOut).sub(
-          minAmountOut
-        );
-        const grossProfitInETH = grossProfitInTokenOut
-          .mul(parseEther("1"))
-          .div(parseUnits(solutionDetails.tokenOutToEthRate, tokenOutDecimals));
-
-        const gasFee = latestBaseFee.add(maxPriorityFeePerGas).mul(gasConsumed);
-        const netProfitInETH = grossProfitInETH.sub(gasFee);
-
-        logger.info(
-          COMPONENT,
-          JSON.stringify({
-            msg: "Profit breakdown",
-            solutionDetails,
-            minAmountOut: minAmountOut.toString(),
-            grossProfitInTokenOut: grossProfitInTokenOut.toString(),
-            grossProfitInETH: grossProfitInETH.toString(),
-            netProfitInETH: netProfitInETH.toString(),
-            gasConsumed,
-            gasFee: gasFee.toString(),
-          })
-        );
-
-        if (netProfitInETH.lte(0)) {
-          logger.error(
-            COMPONENT,
-            JSON.stringify({
-              msg: "Insufficient solver profit",
-              intentHash,
-              approvalTxOrTxHash,
-            })
+          let minAmountOut = startAmount.sub(
+            startAmount
+              .sub(endAmount)
+              .mul(latestTimestamp - intent.startTime)
+              .div(intent.endTime - intent.startTime)
           );
-          return;
-        }
 
-        // Assume other solvers compete for the same intent and so increase the
-        // tip to the block builder as much as possible while we're profitable.
-        // This will also result in the bundles being included faster.
-        const minTipIncrement = parseUnits("0.01", "gwei");
-        const gasPerTipIncrement = minTipIncrement.mul(gasConsumed);
+          const { data: solutionDetails } = (await solutions.uniswap.solve(
+            intent,
+            intent.amount,
+            provider
+          )) as { data: SellSolutionData };
 
-        // Deduct from the 40% of the profit
-        const minTipUnits = netProfitInETH
-          .mul(4000)
-          .div(10000)
-          .div(gasPerTipIncrement);
-        maxPriorityFeePerGas = maxPriorityFeePerGas.add(
-          minTipIncrement.mul(minTipUnits)
-        );
+          const gasConsumed = bn(memswapGas)
+            .add(solutionDetails.gasUsed ?? defaultGas)
+            .toString();
 
-        // Give 50% of the profit back to the user
-        minAmountOut = minAmountOut.add(
-          netProfitInETH
-            .mul(5000)
-            .div(10000)
-            .mul(
+          if (bn(solutionDetails.minAmountOut).lt(minAmountOut)) {
+            logger.error(
+              COMPONENT,
+              JSON.stringify({
+                msg: "Solution not good enough",
+                solutionAmountOut: solutionDetails.minAmountOut,
+                minAmountOut: minAmountOut.toString(),
+                intentHash,
+                approvalTxOrTxHash,
+              })
+            );
+            return;
+          }
+
+          const tokenOutDecimals = await solutions.uniswap
+            .getToken(intent.tokenOut, provider)
+            .then((t) => t.decimals);
+          const grossProfitInTokenOut = bn(solutionDetails.minAmountOut).sub(
+            minAmountOut
+          );
+          const grossProfitInETH = grossProfitInTokenOut
+            .mul(parseEther("1"))
+            .div(
               parseUnits(solutionDetails.tokenOutToEthRate, tokenOutDecimals)
-            )
-            .div(parseEther("1"))
-        );
+            );
 
-        // The rest of 10% from the profit is kept
+          const gasFee = latestBaseFee
+            .add(maxPriorityFeePerGas)
+            .mul(gasConsumed);
+          const netProfitInETH = grossProfitInETH.sub(gasFee);
 
-        logger.info(
-          COMPONENT,
-          JSON.stringify({
-            msg: "Tip increment",
-            intentHash,
-            gasPerTipIncrement: gasPerTipIncrement.toString(),
-            minTipUnits: minTipUnits.toString(),
-            maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
-            newMaxPriorityFeePerGas: maxPriorityFeePerGas
-              .add(minTipIncrement.mul(minTipUnits))
-              .toString(),
-          })
-        );
+          logger.info(
+            COMPONENT,
+            JSON.stringify({
+              msg: "Profit breakdown",
+              solutionDetails,
+              minAmountOut: minAmountOut.toString(),
+              grossProfitInTokenOut: grossProfitInTokenOut.toString(),
+              grossProfitInETH: grossProfitInETH.toString(),
+              netProfitInETH: netProfitInETH.toString(),
+              gasConsumed,
+              gasFee: gasFee.toString(),
+            })
+          );
 
-        solution = {
-          to: SOLUTION_PROXY[config.chainId],
-          data: new Interface([
-            `
-              function fill(
-                (
-                  address to,
-                  bytes data,
-                  uint256 value
-                )[] calls,
-                address tokenOut,
-                uint256 minAmountOut
-              )
-            `,
-          ]).encodeFunctionData("fill", [
-            solutionDetails.calls,
-            intent.tokenOut,
-            minAmountOut,
-          ]),
-          amount: intent.amountIn,
-        };
+          if (config.chainId === 1 && netProfitInETH.lte(0)) {
+            logger.error(
+              COMPONENT,
+              JSON.stringify({
+                msg: "Insufficient solver profit",
+                intentHash,
+                approvalTxOrTxHash,
+              })
+            );
+            return;
+          }
+
+          if (netProfitInETH.gt(0)) {
+            // Assume other solvers compete for the same intent and so increase the
+            // tip to the block builder as much as possible while we're profitable.
+            // This will also result in the bundles being included faster.
+            const minTipIncrement = parseUnits("0.01", "gwei");
+            const gasPerTipIncrement = minTipIncrement.mul(gasConsumed);
+
+            // Deduct from the 40% of the profit
+            const minTipUnits = netProfitInETH
+              .mul(4000)
+              .div(10000)
+              .div(gasPerTipIncrement);
+            maxPriorityFeePerGas = maxPriorityFeePerGas.add(
+              minTipIncrement.mul(minTipUnits)
+            );
+
+            // Give 50% of the profit back to the user
+            minAmountOut = minAmountOut.add(
+              netProfitInETH
+                .mul(5000)
+                .div(10000)
+                .mul(
+                  parseUnits(
+                    solutionDetails.tokenOutToEthRate,
+                    tokenOutDecimals
+                  )
+                )
+                .div(parseEther("1"))
+            );
+
+            // The rest of 10% from the profit is kept
+
+            logger.info(
+              COMPONENT,
+              JSON.stringify({
+                msg: "Tip increment",
+                intentHash,
+                gasPerTipIncrement: gasPerTipIncrement.toString(),
+                minTipUnits: minTipUnits.toString(),
+                maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
+                newMaxPriorityFeePerGas: maxPriorityFeePerGas
+                  .add(minTipIncrement.mul(minTipUnits))
+                  .toString(),
+              })
+            );
+          }
+
+          solution = {
+            data: defaultAbiCoder.encode(
+              ["(address to, bytes data, uint256 value)[]"],
+              [solutionDetails.calls]
+            ),
+            fillAmounts: [intent.amount],
+            executeAmounts: [minAmountOut.toString()],
+          };
+        } else {
+          const endAmount = intent.endAmount;
+          const startAmount = bn(endAmount).sub(
+            bn(endAmount).mul(intent.startAmountBps).div(10000)
+          );
+          const expectedAmount = bn(endAmount).sub(
+            bn(endAmount).mul(intent.expectedAmountBps).div(10000)
+          );
+
+          let maxAmountIn = startAmount.add(
+            bn(endAmount)
+              .sub(startAmount)
+              .mul(latestTimestamp - intent.startTime)
+              .div(intent.endTime - intent.startTime)
+          );
+
+          // We need to subtract any fees from `maxAmountIn`
+          if (intent.feeBps) {
+            maxAmountIn = maxAmountIn.sub(
+              maxAmountIn.mul(intent.feeBps).div(10000)
+            );
+          }
+          if (intent.surplusBps && maxAmountIn.lt(expectedAmount)) {
+            maxAmountIn = maxAmountIn.sub(
+              expectedAmount.sub(maxAmountIn).mul(intent.surplusBps).div(10000)
+            );
+          }
+
+          const { data: solutionDetails } = (await solutions.uniswap.solve(
+            intent,
+            intent.amount,
+            provider
+          )) as { data: BuySolutionData };
+
+          const gasConsumed = bn(memswapGas)
+            .add(solutionDetails.gasUsed ?? defaultGas)
+            .toString();
+
+          if (bn(solutionDetails.maxAmountIn).gt(maxAmountIn)) {
+            logger.error(
+              COMPONENT,
+              JSON.stringify({
+                msg: "Solution not good enough",
+                solutionAmountIn: solutionDetails.maxAmountIn,
+                maxAmountIn: maxAmountIn.toString(),
+                intentHash,
+                approvalTxOrTxHash,
+              })
+            );
+            return;
+          }
+
+          const tokenInDecimals = await solutions.uniswap
+            .getToken(intent.tokenIn, provider)
+            .then((t) => t.decimals);
+          const grossProfitInTokenIn = bn(solutionDetails.maxAmountIn).sub(
+            maxAmountIn
+          );
+          const grossProfitInETH = grossProfitInTokenIn
+            .mul(parseEther("1"))
+            .div(parseUnits(solutionDetails.tokenInToEthRate, tokenInDecimals));
+
+          const gasFee = latestBaseFee
+            .add(maxPriorityFeePerGas)
+            .mul(gasConsumed);
+          const netProfitInETH = grossProfitInETH.sub(gasFee);
+
+          logger.info(
+            COMPONENT,
+            JSON.stringify({
+              msg: "Profit breakdown",
+              solutionDetails,
+              maxAmountIn: maxAmountIn.toString(),
+              grossProfitInTokenIn: grossProfitInTokenIn.toString(),
+              grossProfitInETH: grossProfitInETH.toString(),
+              netProfitInETH: netProfitInETH.toString(),
+              gasConsumed,
+              gasFee: gasFee.toString(),
+            })
+          );
+
+          if (config.chainId === 1 && netProfitInETH.lte(0)) {
+            logger.error(
+              COMPONENT,
+              JSON.stringify({
+                msg: "Insufficient solver profit",
+                intentHash,
+                approvalTxOrTxHash,
+              })
+            );
+            return;
+          }
+
+          if (netProfitInETH.gt(0)) {
+            // Assume other solvers compete for the same intent and so increase the
+            // tip to the block builder as much as possible while we're profitable.
+            // This will also result in the bundles being included faster.
+            const minTipIncrement = parseUnits("0.01", "gwei");
+            const gasPerTipIncrement = minTipIncrement.mul(gasConsumed);
+
+            // Deduct from the 40% of the profit
+            const minTipUnits = netProfitInETH
+              .mul(4000)
+              .div(10000)
+              .div(gasPerTipIncrement);
+            maxPriorityFeePerGas = maxPriorityFeePerGas.add(
+              minTipIncrement.mul(minTipUnits)
+            );
+
+            // Give 50% of the profit back to the user
+            maxAmountIn = maxAmountIn.sub(
+              netProfitInETH
+                .mul(5000)
+                .div(10000)
+                .mul(
+                  parseUnits(solutionDetails.tokenInToEthRate, tokenInDecimals)
+                )
+                .div(parseEther("1"))
+            );
+
+            // The rest of 10% from the profit is kept
+
+            logger.info(
+              COMPONENT,
+              JSON.stringify({
+                msg: "Tip increment",
+                intentHash,
+                gasPerTipIncrement: gasPerTipIncrement.toString(),
+                minTipUnits: minTipUnits.toString(),
+                maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
+                newMaxPriorityFeePerGas: maxPriorityFeePerGas
+                  .add(minTipIncrement.mul(minTipUnits))
+                  .toString(),
+              })
+            );
+          }
+
+          solution = {
+            data: defaultAbiCoder.encode(
+              ["(address to, bytes data, uint256 value)[]"],
+              [solutionDetails.calls]
+            ),
+            fillAmounts: [intent.amount],
+            executeAmounts: [maxAmountIn.toString()],
+          };
+        }
       }
 
       const perfTime3 = performance.now();
@@ -372,12 +532,13 @@ const worker = new Worker(
         return {
           signedTransaction: await solver.signTransaction({
             from: solver.address,
-            to: MEMSWAP[config.chainId],
+            to: SOLUTION_PROXY[config.chainId],
             value: 0,
             data: new Interface([
               `
                 function ${method}(
                   (
+                    uint8 side,
                     address tokenIn,
                     address tokenOut,
                     address maker,
@@ -385,28 +546,31 @@ const worker = new Worker(
                     address source,
                     uint16 feeBps,
                     uint16 surplusBps,
-                    uint32 deadline,
+                    uint32 startTime,
+                    uint32 endTime,
                     bool isPartiallyFillable,
-                    uint128 amountIn,
-                    uint128 endAmountOut,
+                    uint128 amount,
+                    uint128 endAmount,
                     uint16 startAmountBps,
                     uint16 expectedAmountBps,
+                    bool hasDynamicSignature,
                     bytes signature
-                  ) intent,
+                  )[] intents,
                   (
-                    address to,
                     bytes data,
-                    uint128 amount
+                    uint128[] fillAmounts,
+                    uint128[] executeAmounts
                   ) solution${
                     authorization
                       ? `,
                         (
-                          uint128 maxAmountIn,
-                          uint128 minAmountOut,
-                          uint32 blockDeadline,
-                          bool isPartiallyFillable
-                        ),
-                        bytes signature
+                          (
+                            uint128 fillAmountToCheck,
+                            uint128 executeAmountToCheck,
+                            uint32 blockDeadline
+                          ) authorization,
+                          bytes signature
+                        )[] auths
                       `
                       : ""
                   }
@@ -415,8 +579,12 @@ const worker = new Worker(
             ]).encodeFunctionData(
               method,
               method === "solveWithSignatureAuthorizationCheck"
-                ? [intent, solution, authorization, authorization!.signature!]
-                : [intent, solution]
+                ? [
+                    [intent],
+                    solution,
+                    [{ authorization, signature: authorization!.signature }],
+                  ]
+                : [[intent], solution]
             ),
             type: 2,
             nonce: await provider.getTransactionCount(solver.address),

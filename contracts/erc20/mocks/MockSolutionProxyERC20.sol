@@ -52,6 +52,7 @@ contract MockSolutionProxyERC20 is ISolution {
     function callback(
         MemswapERC20.Intent[] memory,
         uint128[] memory,
+        uint128[] memory,
         bytes memory data
     ) external {
         (address tokenOut, uint128 amount) = abi.decode(

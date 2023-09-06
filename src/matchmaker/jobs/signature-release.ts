@@ -6,10 +6,11 @@ import { randomUUID } from "crypto";
 
 import { MATCHMAKER } from "../../common/addresses";
 import { logger } from "../../common/logger";
-import { Intent } from "../../common/types";
+import { Authorization, Intent, Side } from "../../common/types";
 import {
   BLOCK_TIME,
   bn,
+  getAuthorizationHash,
   getEIP712Domain,
   getEIP712TypesForAuthorization,
   getIntentHash,
@@ -56,10 +57,10 @@ const worker = new Worker(
 
       // Select the solutions which are within 0.01% of the best solution
       const bestSolution = topSolutions[0];
-      topSolutions = topSolutions.filter(({ minAmountOut }) =>
-        bn(bestSolution.minAmountOut)
-          .sub(minAmountOut)
-          .lte(bn(bestSolution.maxAmountIn).mul(10).div(10000))
+      topSolutions = topSolutions.filter(({ executeAmountToCheck }) =>
+        bn(bestSolution.executeAmountToCheck)
+          .sub(executeAmountToCheck)
+          .lte(bn(bestSolution.executeAmountToCheck).mul(10).div(10000))
       );
 
       // Authorize the solvers
@@ -69,25 +70,23 @@ const worker = new Worker(
             uuid,
             baseUrl,
             intentHash,
-            authorizedSolver,
-            maxAmountIn,
-            minAmountOut,
+            solver,
+            fillAmountToCheck,
+            executeAmountToCheck,
           }) => {
             try {
-              const authorization = {
+              const authorization: Authorization = {
                 intentHash,
-                authorizedSolver,
-                maxAmountIn,
-                minAmountOut,
+                solver,
+                fillAmountToCheck,
+                executeAmountToCheck,
                 blockDeadline: deadlineBlock,
-                isPartiallyFillable: false,
               };
-              (authorization as any).signature =
-                await matchmaker._signTypedData(
-                  getEIP712Domain(config.chainId),
-                  getEIP712TypesForAuthorization(),
-                  authorization
-                );
+              authorization.signature = await matchmaker._signTypedData(
+                getEIP712Domain(config.chainId),
+                getEIP712TypesForAuthorization(),
+                authorization
+              );
 
               await axios.post(`${baseUrl}/authorizations`, {
                 uuid,
@@ -171,29 +170,54 @@ export const submitDirectlyToSolver = async (
   const latestBlock = await provider.getBlock("latest");
   const timestamp = latestBlock.timestamp + blocksCount * BLOCK_TIME;
 
-  const startAmountOut = bn(intent.endAmountOut).add(
-    bn(intent.endAmountOut).mul(intent.startAmountBps).div(10000)
-  );
-  const minAmountOut = startAmountOut.sub(
-    startAmountOut.sub(intent.endAmountOut).div(intent.deadline - timestamp)
-  );
+  let executeAmountToCheck: string;
+  if (intent.side === Side.BUY) {
+    const endAmount = bn(intent.endAmount);
+    const startAmount = endAmount.sub(
+      endAmount.mul(intent.startAmountBps).div(10000)
+    );
+
+    executeAmountToCheck = startAmount
+      .add(
+        endAmount
+          .sub(startAmount)
+          .mul(timestamp - intent.startTime)
+          .div(intent.endTime - intent.startTime)
+      )
+      .toString();
+  } else {
+    const endAmount = bn(intent.endAmount);
+    const startAmount = endAmount.add(
+      endAmount.mul(intent.startAmountBps).div(10000)
+    );
+
+    executeAmountToCheck = startAmount
+      .sub(
+        startAmount
+          .sub(endAmount)
+          .mul(timestamp - intent.startTime)
+          .div(intent.endTime - intent.startTime)
+      )
+      .toString();
+  }
 
   await Promise.all(
     solvers.map(async ({ address, baseUrl }) => {
       const intentHash = getIntentHash(intent);
-      const authorization = {
+      const authorization: Authorization = {
         intentHash,
-        authorizedSolver: address,
-        maxAmountIn: intent.amountIn,
-        minAmountOut: minAmountOut.toString(),
+        solver: address,
+        fillAmountToCheck: intent.amount,
+        executeAmountToCheck,
         blockDeadline: latestBlock.number + blocksCount,
-        isPartiallyFillable: false,
       };
-      (authorization as any).signature = await matchmaker._signTypedData(
+      authorization.signature = await matchmaker._signTypedData(
         getEIP712Domain(config.chainId),
         getEIP712TypesForAuthorization(),
         authorization
       );
+
+      console.log(`auth hash: ${getAuthorizationHash(authorization)}`);
 
       await axios.post(`${baseUrl}/authorizations`, {
         intent,

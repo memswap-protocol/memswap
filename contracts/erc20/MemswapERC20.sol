@@ -818,6 +818,7 @@ contract MemswapERC20 is ReentrancyGuard, SignatureVerification {
         // Solve
         ISolution(msg.sender).callback(
             intents,
+            actualAmountsToFill,
             amountsToExecute,
             solution.data
         );

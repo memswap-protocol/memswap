@@ -4,7 +4,7 @@ import { verifyTypedData } from "@ethersproject/wallet";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
-import { MEMSWAP, MEMSWAP_WETH } from "../../common/addresses";
+import { MEMSWAP, WETH2 } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { Intent } from "../../common/types";
 import { getEIP712Domain, getEIP712TypesForIntent } from "../../common/utils";
@@ -45,6 +45,7 @@ const worker = new Worker(
       }
 
       const intentTypes = [
+        "uint8",
         "address",
         "address",
         "address",
@@ -53,11 +54,14 @@ const worker = new Worker(
         "uint16",
         "uint16",
         "uint32",
+        "uint32",
+        "uint256",
         "bool",
         "uint128",
         "uint128",
         "uint16",
         "uint16",
+        "bool",
         "bytes",
       ];
 
@@ -78,7 +82,7 @@ const worker = new Worker(
         }
       } else if (
         tx.data.startsWith("0x28026ace") &&
-        tx.to?.toLowerCase() === MEMSWAP_WETH[config.chainId]
+        tx.to?.toLowerCase() === WETH2[config.chainId]
       ) {
         const iface = new Interface([
           "function depositAndApprove(address spender, uint256 amount)",
@@ -98,19 +102,23 @@ const worker = new Worker(
         const iface = new Interface([
           `function post(
             (
+              uint8 side,
               address tokenIn,
               address tokenOut,
               address maker,
-              address filler,
-              address referrer,
-              uint32 referrerFeeBps,
-              uint32 referrerSurplusBps,
-              uint32 deadline,
+              address matchmaker,
+              address source,
+              uint32 feeBps,
+              uint32 surplusBps,
+              uint32 startTime,
+              uint32 endTime,
+              uint256 nonce,
               bool isPartiallyFillable,
-              uint128 amountIn,
-              uint128 startAmountOut,
-              uint128 expectedAmountOut,
-              uint128 endAmountOut,
+              uint128 amount,
+              uint128 endAmount,
+              uint16 startAmountBps,
+              uint16 expectedAmountBps,
+              bool hasDynamicSignature,
               bytes signature
             ) intent
           )`,
@@ -128,22 +136,27 @@ const worker = new Worker(
           const result = defaultAbiCoder.decode(intentTypes, restOfCalldata);
 
           intent = {
-            tokenIn: result[0].toLowerCase(),
-            tokenOut: result[1].toLowerCase(),
-            maker: result[2].toLowerCase(),
-            matchmaker: result[3].toLowerCase(),
-            source: result[4].toLowerCase(),
-            feeBps: result[5],
-            surplusBps: result[6],
-            deadline: result[7],
-            isPartiallyFillable: result[8],
-            amountIn: result[9].toString(),
-            endAmountOut: result[10].toString(),
-            startAmountBps: result[11],
-            expectedAmountBps: result[12],
-            signature: result[13].toLowerCase(),
+            side: result[0],
+            tokenIn: result[1].toLowerCase(),
+            tokenOut: result[2].toLowerCase(),
+            maker: result[3].toLowerCase(),
+            matchmaker: result[4].toLowerCase(),
+            source: result[5].toLowerCase(),
+            feeBps: result[6],
+            surplusBps: result[7],
+            startTime: result[8],
+            endTime: result[9],
+            nonce: result[10].toString(),
+            isPartiallyFillable: result[11],
+            amount: result[12].toString(),
+            endAmount: result[13].toString(),
+            startAmountBps: result[14],
+            expectedAmountBps: result[15],
+            hasDynamicSignature: result[16],
+            signature: result[17].toLowerCase(),
           };
-        } catch {
+        } catch (error) {
+          console.log(error);
           // Skip errors
         }
       }

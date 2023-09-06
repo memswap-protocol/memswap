@@ -2,7 +2,7 @@ import { Interface } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import axios from "axios";
 
-import { MEMSWAP_WETH } from "../../common/addresses";
+import { WETH2 } from "../../common/addresses";
 import { config } from "../config";
 import { SolutionDetails } from "../types";
 
@@ -12,8 +12,8 @@ export const solve = async (
   tokenIn: string,
   tokenOut: string,
   amountIn: string
-): Promise<SolutionDetails> => {
-  const inETH = tokenIn === MEMSWAP_WETH[config.chainId];
+) => {
+  const inETH = tokenIn === WETH2[config.chainId];
 
   const { data: swapData } = await axios.get(
     config.chainId === 1

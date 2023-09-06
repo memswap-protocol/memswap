@@ -6,13 +6,13 @@ import { parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import axios from "axios";
 
+import { MATCHMAKER, MEMSWAP, WETH2, WETH9 } from "../src/common/addresses";
 import {
-  MATCHMAKER,
-  MEMSWAP,
-  MEMSWAP_WETH,
-  REGULAR_WETH,
-} from "../src/common/addresses";
-import { getEIP712Domain, getEIP712TypesForIntent } from "../src/common/utils";
+  getEIP712Domain,
+  getEIP712TypesForIntent,
+  now,
+} from "../src/common/utils";
+import { Side } from "../src/common/types";
 
 // Required env variables:
 // - JSON_URL: url for the http provider
@@ -24,9 +24,9 @@ const main = async () => {
 
   const chainId = await provider.getNetwork().then((n) => n.chainId);
   const CURRENCIES = {
-    ETH_IN: MEMSWAP_WETH[chainId],
+    ETH_IN: WETH2[chainId],
     ETH_OUT: AddressZero,
-    WETH: REGULAR_WETH[chainId],
+    WETH: WETH9[chainId],
     USDC:
       chainId === 1
         ? "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
@@ -36,10 +36,9 @@ const main = async () => {
   const tokenIn = CURRENCIES.ETH_IN;
   const tokenOut = CURRENCIES.USDC;
 
-  const amountIn = parseUnits("0.01", 18);
-  const amountOut = parseUnits("3", 6);
   // Create intent
   const intent = {
+    side: Side.BUY,
     tokenIn,
     tokenOut,
     maker: maker.address,
@@ -47,14 +46,17 @@ const main = async () => {
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,
-    deadline: await provider
+    startTime: now(),
+    endTime: await provider
       .getBlock("latest")
       .then((b) => b!.timestamp + 3600 * 24),
+    nonce: 0,
     isPartiallyFillable: false,
-    amountIn: amountIn.toString(),
-    endAmountOut: amountOut.toString(),
-    startAmountBps: 0,
-    expectedAmountBps: 0,
+    amount: parseUnits("1000", 6).toString(),
+    endAmount: parseUnits("0.01", 18).toString(),
+    startAmountBps: 5000,
+    expectedAmountBps: 3000,
+    hasDynamicSignature: false,
   };
   (intent as any).signature = await maker._signTypedData(
     getEIP712Domain(chainId),
@@ -63,7 +65,7 @@ const main = async () => {
   );
 
   const memswapWeth = new Contract(
-    MEMSWAP_WETH[chainId],
+    WETH2[chainId],
     new Interface([
       "function balanceOf(address owner) view returns (uint256)",
       "function approve(address spender, uint256 amount)",
@@ -72,20 +74,24 @@ const main = async () => {
     provider
   );
 
+  const amountToApprove =
+    intent.side === Side.SELL ? intent.amount : intent.endAmount;
+
   // Generate approval transaction
   const approveMethod =
-    tokenIn === MEMSWAP_WETH[chainId] &&
-    (await memswapWeth.balanceOf(maker.address)).lt(amountIn)
+    tokenIn === WETH2[chainId] &&
+    (await memswapWeth.balanceOf(maker.address)).lt(amountToApprove)
       ? "depositAndApprove"
       : "approve";
   const data =
     memswapWeth.interface.encodeFunctionData(approveMethod, [
       MEMSWAP[chainId],
-      amountIn,
+      amountToApprove,
     ]) +
     defaultAbiCoder
       .encode(
         [
+          "uint8",
           "address",
           "address",
           "address",
@@ -94,14 +100,18 @@ const main = async () => {
           "uint16",
           "uint16",
           "uint32",
+          "uint32",
+          "uint256",
           "bool",
           "uint128",
           "uint128",
           "uint16",
           "uint16",
+          "bool",
           "bytes",
         ],
         [
+          intent.side,
           intent.tokenIn,
           intent.tokenOut,
           intent.maker,
@@ -109,12 +119,15 @@ const main = async () => {
           intent.source,
           intent.feeBps,
           intent.surplusBps,
-          intent.deadline,
+          intent.startTime,
+          intent.endTime,
+          intent.nonce,
           intent.isPartiallyFillable,
-          intent.amountIn,
-          intent.endAmountOut,
+          intent.amount,
+          intent.endAmount,
           intent.startAmountBps,
           intent.expectedAmountBps,
+          intent.hasDynamicSignature,
           (intent as any).signature,
         ]
       )
@@ -129,7 +142,7 @@ const main = async () => {
   // const tx = await maker.connect(provider).sendTransaction({
   //   to: tokenIn,
   //   data,
-  //   value: approveMethod === "depositAndApprove" ? amountIn : 0,
+  //   value: approveMethod === "depositAndApprove" ? amountToApprove : 0,
   //   maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
   //   maxPriorityFeePerGas: maxPriorityFeePerGas,
   // });
@@ -140,7 +153,7 @@ const main = async () => {
     from: maker.address,
     to: tokenIn,
     data,
-    value: approveMethod === "depositAndApprove" ? amountIn : 0,
+    value: approveMethod === "depositAndApprove" ? amountToApprove : 0,
     maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
     maxPriorityFeePerGas: maxPriorityFeePerGas,
     type: 2,

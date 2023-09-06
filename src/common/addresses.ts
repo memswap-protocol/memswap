@@ -3,9 +3,9 @@ type ChainIdToAddress = { [chainId: number]: string };
 // Protocol
 export const MEMSWAP: ChainIdToAddress = {
   1: "0x63c9362a7bedc92dec83433c15d623fbd3e1e5a9",
-  5: "0x62e309adcf935d62f824081148798ef8a7466b66",
+  5: "0x71e2e37ad7e497c2696a6f207aa014036e323dd8",
 };
-export const MEMSWAP_WETH: ChainIdToAddress = {
+export const WETH2: ChainIdToAddress = {
   1: "0x2712515766af2e2680f20e8372c7ea6010eaca66",
   5: "0x5088a0a51e45b5a00c049676dc11f12bb8b4ec29",
 };
@@ -17,7 +17,7 @@ export const SOLVER: ChainIdToAddress = {
 };
 export const SOLUTION_PROXY: ChainIdToAddress = {
   1: "0xeae2f5b8e7085fb766f7f270955abef018d61fdb",
-  5: "0xbdaac8d9627e17ad3a7ae34f98a604916f899628",
+  5: "0x21751694aef1a2689e298248a298ebc3ad65bc63",
 };
 
 // Matchmaker
@@ -31,7 +31,7 @@ export const PERMIT2: ChainIdToAddress = {
   1: "0x000000000022d473030f116ddee9f6b43ac78ba3",
   5: "0x000000000022d473030f116ddee9f6b43ac78ba3",
 };
-export const REGULAR_WETH: ChainIdToAddress = {
+export const WETH9: ChainIdToAddress = {
   1: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
   5: "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6",
 };

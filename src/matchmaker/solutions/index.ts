@@ -9,9 +9,10 @@ import { getCallTraces, getStateChange } from "@georgeroman/evm-tx-simulator";
 
 import { MEMSWAP } from "../../common/addresses";
 import { logger } from "../../common/logger";
-import { Intent } from "../../common/types";
+import { Intent, Side } from "../../common/types";
 import {
   BLOCK_TIME,
+  bn,
   getEIP712TypesForIntent,
   isIntentFilled,
   now,
@@ -57,8 +58,25 @@ export const processSolution = async (
 
     const perfTime1 = performance.now();
 
+    // Return early if the intent is not yet started
+    if (intent.startTime > now()) {
+      const msg = "Intent not yet started";
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          msg,
+          intentHash,
+        })
+      );
+
+      return {
+        status: "error",
+        error: msg,
+      };
+    }
+
     // Return early if the intent is expired
-    if (intent.deadline < now()) {
+    if (intent.endTime <= now()) {
       const msg = "Intent is expired";
       logger.info(
         COMPONENT,
@@ -76,7 +94,6 @@ export const processSolution = async (
 
     const perfTime2 = performance.now();
 
-    // TODO: Return early if intent is filled
     if (await isIntentFilled(intent, config.chainId, provider)) {
       const msg = "Filled";
       logger.info(
@@ -130,7 +147,7 @@ export const processSolution = async (
 
     // Assume the solution transaction is the last one in the list
     const parsedSolutionTx = parse(txs[txs.length - 1]);
-    const authorizedSolver = parsedSolutionTx.from!;
+    const solver = parsedSolutionTx.from!;
 
     // Get the call traces of the submission + status check transactions
     const txsToSimulate = [
@@ -142,6 +159,7 @@ export const processSolution = async (
           `
             function authorize(
               (
+                uint8 side,
                 address tokenIn,
                 address tokenOut,
                 address maker,
@@ -149,32 +167,35 @@ export const processSolution = async (
                 address source,
                 uint16 feeBps,
                 uint16 surplusBps,
-                uint32 deadline,
+                uint32 startTime,
+                uint32 endTime,
                 bool isPartiallyFillable,
-                uint128 amountIn,
-                uint128 endAmountOut,
+                uint128 amount,
+                uint128 endAmount,
                 uint16 startAmountBps,
                 uint16 expectedAmountBps,
+                bool hasDynamicSignature,
                 bytes signature
-              ) intent,
-              address authorizedSolver,
+              )[] intents,
               (
-                uint128 maxAmountIn,
-                uint128 minAmountOut,
-                uint32 blockDeadline,
-                bool isPartiallyFillable
-              ) auth
+                uint128 fillAmountToCheck,
+                uint128 executeAmountToCheck,
+                uint32 blockDeadline
+              )[] auths,
+              address solver
             )
           `,
         ]).encodeFunctionData("authorize", [
-          intent,
-          authorizedSolver,
-          {
-            maxAmountIn: intent.amountIn,
-            minAmountOut: 0,
-            blockDeadline: targetBlockNumber,
-            isPartiallyFillable: false,
-          },
+          [intent],
+          [
+            {
+              fillAmountToCheck: intent.amount,
+              executeAmountToCheck:
+                intent.side === Side.BUY ? bn("0x" + "ff".repeat(16)) : 0,
+              blockDeadline: targetBlockNumber,
+            },
+          ],
+          solver,
         ]),
         value: 0,
         gas: parsedSolutionTx.gasLimit,
@@ -219,27 +240,52 @@ export const processSolution = async (
       };
     }
 
-    // Compute the amount received by the intent maker
-    const stateChange = getStateChange(solveTrace);
-    const isTokenOutETH = intent.tokenOut.toLowerCase() === AddressZero;
-    const amountReceived =
-      stateChange[intent.maker.toLowerCase()].tokenBalanceState[
-        `${isTokenOutETH ? "native" : "erc20"}:${intent.tokenOut.toLowerCase()}`
-      ];
+    if (intent.side === Side.BUY) {
+      // Compute the amount pulled from the intent maker
+      const stateChange = getStateChange(solveTrace);
+      const amountPulled =
+        stateChange[intent.maker.toLowerCase()].tokenBalanceState[
+          `erc20:${intent.tokenIn.toLowerCase()}`
+        ];
 
-    // Save the solution
-    await redis.zadd(
-      solutionKey,
-      Number(formatEther(amountReceived)),
-      JSON.stringify({
-        uuid,
-        baseUrl,
-        intentHash,
-        authorizedSolver,
-        maxAmountIn: intent.amountIn,
-        minAmountOut: amountReceived,
-      } as Solution)
-    );
+      // Save the solution
+      await redis.zadd(
+        solutionKey,
+        Number(formatEther(amountPulled)),
+        JSON.stringify({
+          uuid,
+          baseUrl,
+          intentHash,
+          solver,
+          fillAmountToCheck: intent.amount,
+          executeAmountToCheck: bn(amountPulled).mul(-1).toString(),
+        } as Solution)
+      );
+    } else {
+      // Compute the amount received by the intent maker
+      const stateChange = getStateChange(solveTrace);
+      const isTokenOutETH = intent.tokenOut.toLowerCase() === AddressZero;
+      const amountReceived =
+        stateChange[intent.maker.toLowerCase()].tokenBalanceState[
+          `${
+            isTokenOutETH ? "native" : "erc20"
+          }:${intent.tokenOut.toLowerCase()}`
+        ];
+
+      // Save the solution
+      await redis.zadd(
+        solutionKey,
+        Number(formatEther(amountReceived)),
+        JSON.stringify({
+          uuid,
+          baseUrl,
+          intentHash,
+          solver,
+          fillAmountToCheck: intent.amount,
+          executeAmountToCheck: amountReceived,
+        } as Solution)
+      );
+    }
 
     // Put a delayed job to release the signatures
     await jobs.signatureRelease.addToQueue(

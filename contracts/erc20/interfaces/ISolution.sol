@@ -7,6 +7,7 @@ interface ISolution {
     function callback(
         MemswapERC20.Intent[] memory intents,
         uint128[] memory amountsToFill,
+        uint128[] memory amountsToExecute,
         bytes memory data
     ) external;
 }

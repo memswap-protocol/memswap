@@ -37,7 +37,7 @@ export const isIntentFilled = async (
 
   const intentHash = getIntentHash(intent);
   const result = await memswap.intentStatus(intentHash);
-  if (result.amountFilled.gte(intent.amountIn)) {
+  if (result.amountFilled.gte(intent.amount)) {
     return true;
   }
 
@@ -55,7 +55,7 @@ export const getIntentHash = (intent: Intent) =>
   _TypedDataEncoder.hashStruct("Intent", getEIP712TypesForIntent(), intent);
 
 export const getEIP712Domain = (chainId: number) => ({
-  name: "Memswap",
+  name: "MemswapERC20",
   version: "1.0",
   chainId,
   verifyingContract: MEMSWAP[chainId],
@@ -68,30 +68,30 @@ export const getEIP712TypesForAuthorization = () => ({
       type: "bytes32",
     },
     {
-      name: "authorizedSolver",
+      name: "solver",
       type: "address",
     },
     {
-      name: "maxAmountIn",
+      name: "fillAmountToCheck",
       type: "uint128",
     },
     {
-      name: "minAmountOut",
+      name: "executeAmountToCheck",
       type: "uint128",
     },
     {
       name: "blockDeadline",
       type: "uint32",
     },
-    {
-      name: "isPartiallyFillable",
-      type: "bool",
-    },
   ],
 });
 
 export const getEIP712TypesForIntent = () => ({
   Intent: [
+    {
+      name: "side",
+      type: "uint8",
+    },
     {
       name: "tokenIn",
       type: "address",
@@ -121,19 +121,27 @@ export const getEIP712TypesForIntent = () => ({
       type: "uint16",
     },
     {
-      name: "deadline",
+      name: "startTime",
       type: "uint32",
+    },
+    {
+      name: "endTime",
+      type: "uint32",
+    },
+    {
+      name: "nonce",
+      type: "uint256",
     },
     {
       name: "isPartiallyFillable",
       type: "bool",
     },
     {
-      name: "amountIn",
+      name: "amount",
       type: "uint128",
     },
     {
-      name: "endAmountOut",
+      name: "endAmount",
       type: "uint128",
     },
     {
@@ -143,6 +151,10 @@ export const getEIP712TypesForIntent = () => ({
     {
       name: "expectedAmountBps",
       type: "uint16",
+    },
+    {
+      name: "hasDynamicSignature",
+      type: "bool",
     },
   ],
 });
