@@ -5,6 +5,8 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {MemswapERC20} from "../MemswapERC20.sol";
+import {PermitExecutor} from "../../common/PermitExecutor.sol";
+
 import {ISolution} from "../interfaces/ISolution.sol";
 
 interface IMintableERC20 is IERC20 {
@@ -22,30 +24,35 @@ contract MockSolutionProxyERC20 is ISolution {
 
     function solve(
         MemswapERC20.Intent[] calldata intents,
-        MemswapERC20.Solution calldata solution
+        MemswapERC20.Solution calldata solution,
+        PermitExecutor.Permit[] calldata permits
     ) external {
-        MemswapERC20(payable(memswap)).solve(intents, solution);
+        MemswapERC20(payable(memswap)).solve(intents, solution, permits);
     }
 
     function solveWithOnChainAuthorizationCheck(
         MemswapERC20.Intent[] calldata intents,
-        MemswapERC20.Solution calldata solution
+        MemswapERC20.Solution calldata solution,
+        PermitExecutor.Permit[] calldata permits
     ) external {
         MemswapERC20(payable(memswap)).solveWithOnChainAuthorizationCheck(
             intents,
-            solution
+            solution,
+            permits
         );
     }
 
     function solveWithSignatureAuthorizationCheck(
         MemswapERC20.Intent[] calldata intents,
         MemswapERC20.Solution calldata solution,
-        MemswapERC20.AuthorizationWithSignature[] calldata auths
+        MemswapERC20.AuthorizationWithSignature[] calldata auths,
+        PermitExecutor.Permit[] calldata permits
     ) external {
         MemswapERC20(payable(memswap)).solveWithSignatureAuthorizationCheck(
             intents,
             solution,
-            auths
+            auths,
+            permits
         );
     }
 

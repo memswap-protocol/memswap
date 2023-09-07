@@ -5,11 +5,16 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {EIP712} from "../common/EIP712.sol";
+import {PermitExecutor} from "../common/PermitExecutor.sol";
 import {SignatureVerification} from "../common/SignatureVerification.sol";
 
 import {ISolution} from "./interfaces/ISolution.sol";
 
-contract MemswapERC20 is ReentrancyGuard, SignatureVerification {
+contract MemswapERC20 is
+    ReentrancyGuard,
+    PermitExecutor,
+    SignatureVerification
+{
     // --- Structs and enums ---
 
     enum Side {
@@ -138,7 +143,13 @@ contract MemswapERC20 is ReentrancyGuard, SignatureVerification {
 
     // --- Constructor ---
 
-    constructor() EIP712("MemswapERC20", "1.0") {
+    constructor(
+        address permit2Address,
+        address usdcAddress
+    )
+        EIP712("MemswapERC20", "1.0")
+        PermitExecutor(permit2Address, usdcAddress)
+    {
         AUTHORIZATION_TYPEHASH = keccak256(
             abi.encodePacked(
                 "Authorization(",
@@ -301,11 +312,13 @@ contract MemswapERC20 is ReentrancyGuard, SignatureVerification {
      *
      * @param intents Intents to solve
      * @param solution Solution
+     * @param permits Permits to execute prior to the solution
      */
     function solve(
         Intent[] calldata intents,
-        Solution calldata solution
-    ) external nonReentrant {
+        Solution calldata solution,
+        PermitExecutor.Permit[] calldata permits
+    ) external nonReentrant executePermits(permits) {
         uint128[] memory amountsToCheck;
 
         // Check
@@ -341,11 +354,13 @@ contract MemswapERC20 is ReentrancyGuard, SignatureVerification {
      *
      * @param intents Intents to solve
      * @param solution Solution
+     * @param permits Permits to execute prior to the solution
      */
     function solveWithOnChainAuthorizationCheck(
         Intent[] calldata intents,
-        Solution calldata solution
-    ) external nonReentrant {
+        Solution calldata solution,
+        PermitExecutor.Permit[] calldata permits
+    ) external nonReentrant executePermits(permits) {
         uint128[] memory amountsToCheck;
 
         // Check
@@ -380,12 +395,14 @@ contract MemswapERC20 is ReentrancyGuard, SignatureVerification {
      * @param intents Intents to solve
      * @param solution Solution for the intent
      * @param auths Authorizations
+     * @param permits Permits to execute prior to the solution
      */
     function solveWithSignatureAuthorizationCheck(
         Intent[] calldata intents,
         Solution calldata solution,
-        AuthorizationWithSignature[] calldata auths
-    ) external nonReentrant {
+        AuthorizationWithSignature[] calldata auths,
+        PermitExecutor.Permit[] calldata permits
+    ) external nonReentrant executePermits(permits) {
         uint128[] memory amountsToCheck;
 
         // Check
@@ -893,7 +910,14 @@ contract MemswapERC20 is ReentrancyGuard, SignatureVerification {
         if (address(token) == address(0)) {
             (success, ) = to.call{value: amount}("");
         } else {
-            success = IERC20(token).transferFrom(from, to, amount);
+            // First, attempt to transfer directly
+            try IERC20(token).transferFrom(from, to, amount) {
+                success = true;
+            } catch {
+                // Secondly, attempt to transfer via permit2
+                _transferFrom(from, to, uint160(amount), token);
+                success = true;
+            }
         }
 
         if (!success) {

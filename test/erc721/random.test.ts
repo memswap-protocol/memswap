@@ -14,6 +14,7 @@ import {
   getRandomFloat,
   getRandomInteger,
 } from "../utils";
+import { PERMIT2, USDC } from "../../src/common/addresses";
 
 describe("[ERC721] Random", async () => {
   let deployer: SignerWithAddress;
@@ -31,9 +32,10 @@ describe("[ERC721] Random", async () => {
   beforeEach(async () => {
     [deployer, alice, bob, carol] = await ethers.getSigners();
 
+    const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
     memswap = await ethers
       .getContractFactory("MemswapERC721")
-      .then((factory) => factory.deploy());
+      .then((factory) => factory.deploy(PERMIT2[chainId], USDC[chainId]));
     weth = await ethers
       .getContractFactory("WETH2")
       .then((factory) => factory.deploy());
@@ -167,14 +169,18 @@ describe("[ERC721] Random", async () => {
 
     // Solve
     const tokenIdsToFill = [...Array(Number(fillAmount)).keys()];
-    const solve = solutionProxy.connect(bob).solve([intent], {
-      data: defaultAbiCoder.encode(
-        ["address", "uint256[]"],
-        [intent.tokenOut, tokenIdsToFill]
-      ),
-      fillTokenIds: [tokenIdsToFill],
-      executeAmounts: [amount.sub(surplus)],
-    });
+    const solve = solutionProxy.connect(bob).solve(
+      [intent],
+      {
+        data: defaultAbiCoder.encode(
+          ["address", "uint256[]"],
+          [intent.tokenOut, tokenIdsToFill]
+        ),
+        fillTokenIds: [tokenIdsToFill],
+        executeAmounts: [amount.sub(surplus)],
+      },
+      []
+    );
     if (nextBlockTime > intent.endTime) {
       await expect(solve).to.be.revertedWith("IntentIsExpired");
     } else {
@@ -305,14 +311,18 @@ describe("[ERC721] Random", async () => {
         : bn(0);
 
     // Solve
-    const solve = solutionProxy.connect(bob).solve([intent], {
-      data: defaultAbiCoder.encode(
-        ["address", "uint128"],
-        [intent.tokenOut, amount.add(surplus)]
-      ),
-      fillTokenIds: [tokenIdsToFill],
-      executeAmounts: [amount.add(surplus)],
-    });
+    const solve = solutionProxy.connect(bob).solve(
+      [intent],
+      {
+        data: defaultAbiCoder.encode(
+          ["address", "uint128"],
+          [intent.tokenOut, amount.add(surplus)]
+        ),
+        fillTokenIds: [tokenIdsToFill],
+        executeAmounts: [amount.add(surplus)],
+      },
+      []
+    );
     if (nextBlockTime > intent.endTime) {
       await expect(solve).to.be.revertedWith("IntentIsExpired");
     } else {

@@ -14,6 +14,7 @@ import {
   signIntent,
 } from "./utils";
 import { bn, getCurrentTimestamp } from "../utils";
+import { PERMIT2, USDC } from "../../src/common/addresses";
 
 describe("[ERC20] Authorization", async () => {
   let deployer: SignerWithAddress;
@@ -31,9 +32,10 @@ describe("[ERC20] Authorization", async () => {
   beforeEach(async () => {
     [deployer, alice, bob, carol, dan] = await ethers.getSigners();
 
+    const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
     memswap = await ethers
       .getContractFactory("MemswapERC20")
-      .then((factory) => factory.deploy());
+      .then((factory) => factory.deploy(PERMIT2[chainId], USDC[chainId]));
 
     solutionProxy = await ethers
       .getContractFactory("MockSolutionProxyERC20")
@@ -88,26 +90,32 @@ describe("[ERC20] Authorization", async () => {
 
     // Without authorization, cannot fill an intent of a different matchmaker
     await expect(
-      solutionProxy.connect(carol).solve([intent], {
-        data: defaultAbiCoder.encode(
-          ["address", "uint128"],
-          [intent.tokenOut, startAmount]
-        ),
-        fillAmounts: [intent.amount],
-        executeAmounts: [startAmount],
-      })
-    ).to.be.revertedWith("Unauthorized");
-    await expect(
-      solutionProxy
-        .connect(carol)
-        .solveWithOnChainAuthorizationCheck([intent], {
+      solutionProxy.connect(carol).solve(
+        [intent],
+        {
           data: defaultAbiCoder.encode(
             ["address", "uint128"],
             [intent.tokenOut, startAmount]
           ),
           fillAmounts: [intent.amount],
           executeAmounts: [startAmount],
-        })
+        },
+        []
+      )
+    ).to.be.revertedWith("Unauthorized");
+    await expect(
+      solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+        [intent],
+        {
+          data: defaultAbiCoder.encode(
+            ["address", "uint128"],
+            [intent.tokenOut, startAmount]
+          ),
+          fillAmounts: [intent.amount],
+          executeAmounts: [startAmount],
+        },
+        []
+      )
     ).to.be.revertedWith("AuthorizationIsExpired");
 
     // Authorization must come from the intent matchmaker
@@ -149,16 +157,18 @@ describe("[ERC20] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy
-          .connect(carol)
-          .solveWithOnChainAuthorizationCheck([intent], {
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+          [intent],
+          {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
             fillAmounts: [amountToFill],
             executeAmounts: [startAmount],
-          })
+          },
+          []
+        )
       ).to.be.revertedWith("AuthorizationAmountMismatch");
     }
 
@@ -182,16 +192,18 @@ describe("[ERC20] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy
-          .connect(carol)
-          .solveWithOnChainAuthorizationCheck([intent], {
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+          [intent],
+          {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
             fillAmounts: [amountToFill],
             executeAmounts: [startAmount],
-          })
+          },
+          []
+        )
       ).to.be.revertedWith("AuthorizationIsExpired");
     }
 
@@ -214,16 +226,18 @@ describe("[ERC20] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy
-          .connect(carol)
-          .solveWithOnChainAuthorizationCheck([intent], {
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+          [intent],
+          {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [startAmount],
-          })
+          },
+          []
+        )
       ).to.be.revertedWith("AmountCheckFailed");
     }
 
@@ -263,26 +277,32 @@ describe("[ERC20] Authorization", async () => {
 
       // Without authorization, cannot fill an intent of a different matchmaker
       await expect(
-        solutionProxy.connect(carol).solve([intent], {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.tokenOut, startAmount]
-          ),
-          fillAmounts: [intent.amount],
-          executeAmounts: [startAmount],
-        })
-      ).to.be.revertedWith("Unauthorized");
-      await expect(
-        solutionProxy
-          .connect(carol)
-          .solveWithOnChainAuthorizationCheck([intent], {
+        solutionProxy.connect(carol).solve(
+          [intent],
+          {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [startAmount],
-          })
+          },
+          []
+        )
+      ).to.be.revertedWith("Unauthorized");
+      await expect(
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+          [intent],
+          {
+            data: defaultAbiCoder.encode(
+              ["address", "uint128"],
+              [intent.tokenOut, startAmount]
+            ),
+            fillAmounts: [intent.amount],
+            executeAmounts: [startAmount],
+          },
+          []
+        )
       ).to.be.revertedWith("AuthorizationIsExpired");
 
       // Authorization must come from the intent matchmaker
@@ -324,16 +344,18 @@ describe("[ERC20] Authorization", async () => {
           .authorize([intent], [authorization], solutionProxy.address);
 
         await expect(
-          solutionProxy
-            .connect(carol)
-            .solveWithOnChainAuthorizationCheck([intent], {
+          solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+            [intent],
+            {
               data: defaultAbiCoder.encode(
                 ["address", "uint128"],
                 [intent.tokenOut, startAmount]
               ),
               fillAmounts: [amountToFill],
               executeAmounts: [startAmount],
-            })
+            },
+            []
+          )
         ).to.be.revertedWith("AuthorizationAmountMismatch");
       }
 
@@ -357,16 +379,18 @@ describe("[ERC20] Authorization", async () => {
           .authorize([intent], [authorization], solutionProxy.address);
 
         await expect(
-          solutionProxy
-            .connect(carol)
-            .solveWithOnChainAuthorizationCheck([intent], {
+          solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+            [intent],
+            {
               data: defaultAbiCoder.encode(
                 ["address", "uint128"],
                 [intent.tokenOut, startAmount]
               ),
               fillAmounts: [amountToFill],
               executeAmounts: [startAmount],
-            })
+            },
+            []
+          )
         ).to.be.revertedWith("AuthorizationIsExpired");
       }
 
@@ -389,16 +413,18 @@ describe("[ERC20] Authorization", async () => {
           .authorize([intent], [authorization], solutionProxy.address);
 
         await expect(
-          solutionProxy
-            .connect(carol)
-            .solveWithOnChainAuthorizationCheck([intent], {
+          solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+            [intent],
+            {
               data: defaultAbiCoder.encode(
                 ["address", "uint128"],
                 [intent.tokenOut, startAmount]
               ),
               fillAmounts: [intent.amount],
               executeAmounts: [startAmount],
-            })
+            },
+            []
+          )
         ).to.be.revertedWith("AmountCheckFailed");
       }
 
@@ -419,16 +445,18 @@ describe("[ERC20] Authorization", async () => {
           .authorize([intent], [authorization], solutionProxy.address);
 
         await expect(
-          solutionProxy
-            .connect(carol)
-            .solveWithOnChainAuthorizationCheck([intent], {
+          solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+            [intent],
+            {
               data: defaultAbiCoder.encode(
                 ["address", "uint128"],
                 [intent.tokenOut, startAmount]
               ),
               fillAmounts: [intent.amount],
               executeAmounts: [startAmount],
-            })
+            },
+            []
+          )
         )
           .to.emit(memswap, "IntentSolved")
           .withArgs(
@@ -461,16 +489,18 @@ describe("[ERC20] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy
-          .connect(carol)
-          .solveWithOnChainAuthorizationCheck([intent], {
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+          [intent],
+          {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
               [intent.tokenOut, startAmount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [startAmount],
-          })
+          },
+          []
+        )
       )
         .to.emit(memswap, "IntentSolved")
         .withArgs(
@@ -534,16 +564,18 @@ describe("[ERC20] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy
-          .connect(carol)
-          .solveWithOnChainAuthorizationCheck([intent], {
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+          [intent],
+          {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
               [intent.tokenOut, intent.amount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [intent.endAmount],
-          })
+          },
+          []
+        )
       ).to.be.revertedWith("AmountCheckFailed");
     }
 
@@ -564,16 +596,18 @@ describe("[ERC20] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy
-          .connect(carol)
-          .solveWithOnChainAuthorizationCheck([intent], {
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+          [intent],
+          {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
               [intent.tokenOut, intent.amount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [intent.endAmount],
-          })
+          },
+          []
+        )
       )
         .to.emit(memswap, "IntentSolved")
         .withArgs(
@@ -656,7 +690,8 @@ describe("[ERC20] Authorization", async () => {
               authorization,
               signature: authorization.signature,
             },
-          ]
+          ],
+          []
         )
       ).to.be.revertedWith("InvalidSignature");
     }
@@ -694,7 +729,8 @@ describe("[ERC20] Authorization", async () => {
               authorization,
               signature: authorization.signature,
             },
-          ]
+          ],
+          []
         )
       ).to.be.revertedWith("InvalidSignature");
     }
@@ -732,7 +768,8 @@ describe("[ERC20] Authorization", async () => {
               authorization,
               signature: authorization.signature,
             },
-          ]
+          ],
+          []
         )
       )
         .to.emit(memswap, "IntentSolved")
@@ -811,7 +848,8 @@ describe("[ERC20] Authorization", async () => {
               authorization,
               signature: authorization.signature,
             },
-          ]
+          ],
+          []
         )
       )
         .to.emit(memswap, "IntentSolved")

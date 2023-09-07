@@ -8,6 +8,7 @@ import { ethers } from "hardhat";
 
 import { Intent, Side, getIntentHash, bulkSign } from "./utils";
 import { bn, getCurrentTimestamp, getRandomInteger } from "../utils";
+import { PERMIT2, USDC } from "../../src/common/addresses";
 
 describe("[ERC20] Bulk-signing", async () => {
   let chainId: number;
@@ -29,7 +30,7 @@ describe("[ERC20] Bulk-signing", async () => {
 
     memswap = await ethers
       .getContractFactory("MemswapERC20")
-      .then((factory) => factory.deploy());
+      .then((factory) => factory.deploy(PERMIT2[chainId], USDC[chainId]));
 
     solutionProxy = await ethers
       .getContractFactory("MockSolutionProxyERC20")
@@ -109,14 +110,18 @@ describe("[ERC20] Bulk-signing", async () => {
     );
 
     await expect(
-      solutionProxy.connect(bob).solve([intent], {
-        data: defaultAbiCoder.encode(
-          ["address", "uint128"],
-          [intent.tokenOut, amount]
-        ),
-        fillAmounts: [intent.amount],
-        executeAmounts: [amount],
-      })
+      solutionProxy.connect(bob).solve(
+        [intent],
+        {
+          data: defaultAbiCoder.encode(
+            ["address", "uint128"],
+            [intent.tokenOut, amount]
+          ),
+          fillAmounts: [intent.amount],
+          executeAmounts: [amount],
+        },
+        []
+      )
     )
       .to.emit(memswap, "IntentSolved")
       .withArgs(

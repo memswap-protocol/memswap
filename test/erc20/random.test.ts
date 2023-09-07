@@ -14,6 +14,7 @@ import {
   getRandomFloat,
   getRandomInteger,
 } from "../utils";
+import { PERMIT2, USDC } from "../../src/common/addresses";
 
 describe("[ERC20] Random", async () => {
   let deployer: SignerWithAddress;
@@ -31,9 +32,10 @@ describe("[ERC20] Random", async () => {
   beforeEach(async () => {
     [deployer, alice, bob, carol] = await ethers.getSigners();
 
+    const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
     memswap = await ethers
       .getContractFactory("MemswapERC20")
-      .then((factory) => factory.deploy());
+      .then((factory) => factory.deploy(PERMIT2[chainId], USDC[chainId]));
     weth = await ethers
       .getContractFactory("WETH2")
       .then((factory) => factory.deploy());
@@ -166,14 +168,18 @@ describe("[ERC20] Random", async () => {
         : bn(0);
 
     // Solve
-    const solve = solutionProxy.connect(bob).solve([intent], {
-      data: defaultAbiCoder.encode(
-        ["address", "uint128"],
-        [intent.tokenOut, fillAmount]
-      ),
-      fillAmounts: [fillAmount],
-      executeAmounts: [amount.sub(surplus)],
-    });
+    const solve = solutionProxy.connect(bob).solve(
+      [intent],
+      {
+        data: defaultAbiCoder.encode(
+          ["address", "uint128"],
+          [intent.tokenOut, fillAmount]
+        ),
+        fillAmounts: [fillAmount],
+        executeAmounts: [amount.sub(surplus)],
+      },
+      []
+    );
     if (nextBlockTime > intent.endTime) {
       await expect(solve).to.be.revertedWith("IntentIsExpired");
     } else {
@@ -319,14 +325,18 @@ describe("[ERC20] Random", async () => {
         : bn(0);
 
     // Solve
-    const solve = solutionProxy.connect(bob).solve([intent], {
-      data: defaultAbiCoder.encode(
-        ["address", "uint128"],
-        [intent.tokenOut, amount.add(surplus)]
-      ),
-      fillAmounts: [fillAmount],
-      executeAmounts: [amount.add(surplus)],
-    });
+    const solve = solutionProxy.connect(bob).solve(
+      [intent],
+      {
+        data: defaultAbiCoder.encode(
+          ["address", "uint128"],
+          [intent.tokenOut, amount.add(surplus)]
+        ),
+        fillAmounts: [fillAmount],
+        executeAmounts: [amount.add(surplus)],
+      },
+      []
+    );
     if (nextBlockTime > intent.endTime) {
       await expect(solve).to.be.revertedWith("IntentIsExpired");
     } else {

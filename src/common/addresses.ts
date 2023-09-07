@@ -35,3 +35,7 @@ export const WETH9: ChainIdToAddress = {
   1: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
   5: "0xb4fbf271143f4fbf7b91a5ded31805e42b2208d6",
 };
+export const USDC: ChainIdToAddress = {
+  1: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  5: "0x07865c6e87b9f70255377e024ace6630c1eaa37f",
+};

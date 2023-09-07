@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-abstract contract EIP712 {
+contract EIP712 {
+    // --- Public fields ---
+
     bytes32 public immutable DOMAIN_SEPARATOR;
+
+    // --- Constructor ---
 
     constructor(bytes memory name, bytes memory version) {
         uint256 chainId;
@@ -27,6 +31,8 @@ abstract contract EIP712 {
             )
         );
     }
+
+    // --- Internal methods ---
 
     /**
      * @dev Get the EIP712 hash of a struct hash
