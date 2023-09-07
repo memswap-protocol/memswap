@@ -44,6 +44,8 @@ contract MemswapERC721 is
         uint32 startTime;
         uint32 endTime;
         bool isPartiallyFillable;
+        bool hasCriteria;
+        uint256 tokenIdOrCriteria;
         uint128 amount;
         uint128 endAmount;
         uint16 startAmountBps;
@@ -77,17 +79,22 @@ contract MemswapERC721 is
         bytes signature;
     }
 
+    struct TokenDetails {
+        uint256 tokenId;
+        bytes32[] criteriaProof;
+    }
+
     struct Solution {
         // When isBuy = true:
-        // fillTokenIds = token ids to push to user
+        // fillTokenDetails = tokens to push to user
         // executeAmounts = sell amounts to pull from user
 
         // When isBuy = false:
-        // fillAmounts = token ids to pull from user
+        // fillTokenDetails = tokens to pull from user
         // executeAmounts = buy amounts to push to user
 
         bytes data;
-        uint256[][] fillTokenIds;
+        TokenDetails[][] fillTokenDetails;
         uint128[] executeAmounts;
     }
 
@@ -119,9 +126,11 @@ contract MemswapERC721 is
     error IntentIsFilled();
     error IntentIsNotPartiallyFillable();
     error IntentIsNotStarted();
+    error InvalidCriteriaProof();
     error InvalidFillAmount();
     error InvalidSolution();
     error InvalidStartAndEndTimes();
+    error InvalidTokenId();
     error MerkleTreeTooLarge();
     error Unauthorized();
     error UnsuccessfulCall();
@@ -171,6 +180,8 @@ contract MemswapERC721 is
                 "uint32 endTime,",
                 "uint256 nonce,",
                 "bool isPartiallyFillable,",
+                "bool hasCriteria,",
+                "uint256 tokenIdOrCriteria,",
                 "uint128 amount,",
                 "uint128 endAmount,",
                 "uint16 startAmountBps,",
@@ -370,7 +381,7 @@ contract MemswapERC721 is
                 Authorization memory auth = authorization[authId];
                 _checkAuthorization(
                     auth,
-                    uint128(solution.fillTokenIds[i].length)
+                    uint128(solution.fillTokenDetails[i].length)
                 );
 
                 amountsToCheck[i] = auth.executeAmountToCheck;
@@ -426,7 +437,7 @@ contract MemswapERC721 is
                 );
                 _checkAuthorization(
                     auth,
-                    uint128(solution.fillTokenIds[i].length)
+                    uint128(solution.fillTokenDetails[i].length)
                 );
 
                 amountsToCheck[i] = auth.executeAmountToCheck;
@@ -493,6 +504,8 @@ contract MemswapERC721 is
                 ),
                 abi.encode(
                     intent.isPartiallyFillable,
+                    intent.hasCriteria,
+                    intent.tokenIdOrCriteria,
                     intent.amount,
                     intent.endAmount,
                     intent.startAmountBps,
@@ -507,11 +520,11 @@ contract MemswapERC721 is
 
     function _preProcess(
         Intent[] calldata intents,
-        uint256[][] memory tokenIdsToFill,
+        TokenDetails[][] memory tokenDetailsToFill,
         uint128[] memory amountsToExecute,
         uint128[] memory amountsToCheck
-    ) internal returns (uint256[][] memory actualTokenIdsToFill) {
-        actualTokenIdsToFill = new uint256[][](intents.length);
+    ) internal returns (TokenDetails[][] memory actualTokenDetailsToFill) {
+        actualTokenDetailsToFill = new TokenDetails[][](intents.length);
 
         uint256 intentsLength = intents.length;
         for (uint256 i; i < intentsLength; ) {
@@ -555,7 +568,7 @@ contract MemswapERC721 is
                 revert IntentIsFilled();
             }
 
-            uint128 amountToFill = uint128(tokenIdsToFill[i].length);
+            uint128 amountToFill = uint128(tokenDetailsToFill[i].length);
 
             // Ensure non-partially-fillable intents are fully filled
             if (!intent.isPartiallyFillable && amountToFill < amountAvailable) {
@@ -573,10 +586,12 @@ contract MemswapERC721 is
             // Update the storage
             intentStatus[intentHash].amountFilled += actualAmountToFill;
 
-            actualTokenIdsToFill[i] = new uint256[](actualAmountToFill);
+            actualTokenDetailsToFill[i] = new TokenDetails[](
+                actualAmountToFill
+            );
             unchecked {
                 for (uint256 j; j < actualAmountToFill; j++) {
-                    actualTokenIdsToFill[i][j] = tokenIdsToFill[i][j];
+                    actualTokenDetailsToFill[i][j] = tokenDetailsToFill[i][j];
                 }
             }
 
@@ -658,6 +673,16 @@ contract MemswapERC721 is
                     );
                 }
 
+                uint256[] memory filledTokenIds = new uint256[](
+                    actualAmountToFill
+                );
+                unchecked {
+                    for (uint256 j; j < actualAmountToFill; j++) {
+                        filledTokenIds[j] = actualTokenDetailsToFill[i][j]
+                            .tokenId;
+                    }
+                }
+
                 emit IntentSolved(
                     intentHash,
                     intent.isBuy,
@@ -666,7 +691,7 @@ contract MemswapERC721 is
                     intent.maker,
                     msg.sender,
                     executeAmount,
-                    actualTokenIdsToFill[i]
+                    filledTokenIds
                 );
             } else {
                 // When isBuy = false:
@@ -677,12 +702,28 @@ contract MemswapERC721 is
 
                 unchecked {
                     for (uint256 j; j < actualAmountToFill; j++) {
+                        TokenDetails memory details = tokenDetailsToFill[i][j];
+
+                        if (intent.hasCriteria) {
+                            if (intent.tokenIdOrCriteria != 0) {
+                                _verifyCriteriaProof(
+                                    details.tokenId,
+                                    intent.tokenIdOrCriteria,
+                                    details.criteriaProof
+                                );
+                            }
+                        } else {
+                            if (intent.tokenIdOrCriteria != details.tokenId) {
+                                revert InvalidTokenId();
+                            }
+                        }
+
                         // Transfer outputs to maker
                         _transferERC721(
                             intent.maker,
                             msg.sender,
                             intent.sellToken,
-                            tokenIdsToFill[i][j]
+                            details.tokenId
                         );
                     }
                 }
@@ -696,7 +737,7 @@ contract MemswapERC721 is
 
     function _postProcess(
         Intent[] calldata intents,
-        uint256[][] memory tokenIdsToFill,
+        TokenDetails[][] memory tokenDetailsToFill,
         uint128[] memory amountsToExecute,
         uint128[] memory amountsToCheck
     ) internal {
@@ -713,14 +754,30 @@ contract MemswapERC721 is
                 // expectedAmountBps = sell expected amount bps
 
                 unchecked {
-                    uint256 tokenIdsLength = tokenIdsToFill[i].length;
-                    for (uint256 j; j < tokenIdsLength; j++) {
+                    uint256 tokenDetailsLength = tokenDetailsToFill[i].length;
+                    for (uint256 j; j < tokenDetailsLength; j++) {
+                        TokenDetails memory details = tokenDetailsToFill[i][j];
+
+                        if (intent.hasCriteria) {
+                            if (intent.tokenIdOrCriteria != 0) {
+                                _verifyCriteriaProof(
+                                    details.tokenId,
+                                    intent.tokenIdOrCriteria,
+                                    details.criteriaProof
+                                );
+                            }
+                        } else {
+                            if (intent.tokenIdOrCriteria != details.tokenId) {
+                                revert InvalidTokenId();
+                            }
+                        }
+
                         // Transfer outputs to maker
                         _transferERC721(
                             msg.sender,
                             intent.maker,
                             intent.buyToken,
-                            tokenIdsToFill[i][j]
+                            details.tokenId
                         );
                     }
                 }
@@ -731,7 +788,7 @@ contract MemswapERC721 is
                 // startAmountBps = buy start amount bps
                 // expectedAmountBps = buy expected amount bps
 
-                uint128 amountToFill = uint128(tokenIdsToFill[i].length);
+                uint128 amountToFill = uint128(tokenDetailsToFill[i].length);
 
                 uint128 endAmount = (intent.endAmount * amountToFill) /
                     intent.amount;
@@ -804,6 +861,13 @@ contract MemswapERC721 is
                     );
                 }
 
+                uint256[] memory filledTokenIds = new uint256[](amountToFill);
+                unchecked {
+                    for (uint256 j; j < amountToFill; j++) {
+                        filledTokenIds[j] = tokenDetailsToFill[i][j].tokenId;
+                    }
+                }
+
                 emit IntentSolved(
                     intentHash,
                     intent.isBuy,
@@ -812,7 +876,7 @@ contract MemswapERC721 is
                     intent.maker,
                     msg.sender,
                     executeAmount,
-                    tokenIdsToFill[i]
+                    filledTokenIds
                 );
             }
 
@@ -834,13 +898,13 @@ contract MemswapERC721 is
         Solution calldata solution,
         uint128[] memory amountsToCheck
     ) internal {
-        uint256[][] memory tokenIdsToFill = solution.fillTokenIds;
+        TokenDetails[][] memory tokenDetailsToFill = solution.fillTokenDetails;
         uint128[] memory amountsToExecute = solution.executeAmounts;
 
         // Pre-process
-        uint256[][] memory actualTokenIdsToFill = _preProcess(
+        TokenDetails[][] memory actualTokenDetailsToFill = _preProcess(
             intents,
-            tokenIdsToFill,
+            tokenDetailsToFill,
             amountsToExecute,
             amountsToCheck
         );
@@ -855,7 +919,7 @@ contract MemswapERC721 is
         // Post-process
         _postProcess(
             intents,
-            actualTokenIdsToFill,
+            actualTokenDetailsToFill,
             amountsToExecute,
             amountsToCheck
         );
@@ -954,28 +1018,79 @@ contract MemswapERC721 is
         IERC721(token).transferFrom(from, to, tokenId);
     }
 
+    /**
+     * @dev Verify a merkle proof
+     *      Taken from: https://github.com/ProjectOpenSea/seaport/blob/dfce06d02413636f324f73352b54a4497d63c310/contracts/lib/CriteriaResolution.sol#L243-L247
+     *
+     * @param leaf Leaf to verify
+     * @param root Merkle root
+     * @param criteriaProof Merkle proof for the inclusion of `leaf` in `root`
+     */
+    function _verifyCriteriaProof(
+        uint256 leaf,
+        uint256 root,
+        bytes32[] memory criteriaProof
+    ) internal pure {
+        bool isValid;
+
+        assembly {
+            // Store the leaf at the beginning of scratch space
+            mstore(0, leaf)
+
+            // Derive the hash of the leaf to use as the initial proof element
+            let computedHash := keccak256(0, 0x20)
+            // Get memory start location of the first element in proof array
+            let data := add(criteriaProof, 0x20)
+
+            for {
+                // Left shift by 5 is equivalent to multiplying by 0x20
+                let end := add(data, shl(5, mload(criteriaProof)))
+            } lt(data, end) {
+                // Increment by one word at a time
+                data := add(data, 0x20)
+            } {
+                // Get the proof element
+                let loadedData := mload(data)
+
+                // Sort proof elements and place them in scratch space
+                let scratch := shl(5, gt(computedHash, loadedData))
+                mstore(scratch, computedHash)
+                mstore(xor(scratch, 0x20), loadedData)
+
+                // Derive the updated hash
+                computedHash := keccak256(0, 0x40)
+            }
+
+            isValid := eq(computedHash, root)
+        }
+
+        if (!isValid) {
+            revert InvalidCriteriaProof();
+        }
+    }
+
     // --- Overridden methods ---
 
     function _lookupBulkOrderTypehash(
         uint256 treeHeight
     ) internal pure override returns (bytes32 typeHash) {
-        // kecca256("BatchIntent(Intent[2]...[2] tree)Intent(bool isBuy,address buyToken,address sellToken,address maker,address matchmaker,address source,uint16 feeBps,uint16 surplusBps,uint32 startTime,uint32 endTime,uint256 nonce,bool isPartiallyFillable,uint128 amount,uint128 endAmount,uint16 startAmountBps,uint16 expectedAmountBps,bool hasDynamicSignature)")
+        // kecca256("BatchIntent(Intent[2]...[2] tree)Intent(bool isBuy,address buyToken,address sellToken,address maker,address matchmaker,address source,uint16 feeBps,uint16 surplusBps,uint32 startTime,uint32 endTime,uint256 nonce,bool isPartiallyFillable,bool hasCriteria,uint256 tokenIdOrCriteria,uint128 amount,uint128 endAmount,uint16 startAmountBps,uint16 expectedAmountBps,bool hasDynamicSignature)")
         if (treeHeight == 1) {
-            typeHash = 0x50da44c327bf23d4f64d99e3459a4e70fc3e7134590fcfdb85419ae6612f3e95;
+            typeHash = 0x6414dc2e722703d4aac87c7be1ab009e5d64d7bd7ffb489ae5dbbffa1247039f;
         } else if (treeHeight == 2) {
-            typeHash = 0x389f2d657745b16d19115044d11ec501bb380e0338892e9e2cc562d7200a5d97;
+            typeHash = 0xed4a7d66246b49ec2e6f47e703213becfbfb4d371249a932369b2ee8f586ebe8;
         } else if (treeHeight == 3) {
-            typeHash = 0x0a1cc95c01f4e6de58f7df7db8c737a0c5cd4eedbacc3ca48030f44c7912760e;
+            typeHash = 0xee2b042cb062f90fd4566218744c9449334144e38506c60939c0cc1f6efa1c0f;
         } else if (treeHeight == 4) {
-            typeHash = 0xf93535acf42fde7aaef3040cb1cf18bd57c6082deb96534be10c67073eb65143;
+            typeHash = 0x6efe93d27121fd1a27e0879e3c0ed9c51749876b0cf9c4f839b3fccf9a321d29;
         } else if (treeHeight == 5) {
-            typeHash = 0xafad9569cb3be0f4074234d3142f81d0359226d2889283a38866c4339e5e608f;
+            typeHash = 0xd7378d011389e99086e687e0e6b93fc1bbe92a275868579f21a23c4f81e94ed9;
         } else if (treeHeight == 6) {
-            typeHash = 0xed9ca47d4f3ad3614f6c794afe4f6be18a9a6a797d5d655cac837c04746a6c9f;
+            typeHash = 0x033a8c4c8524201c2741980b1782fa13fcbace6741e61bb41332051816abbd3f;
         } else if (treeHeight == 7) {
-            typeHash = 0x98950668eb0963e108fa7110c02ade925b22d1d691291031123e729a344c2cc9;
+            typeHash = 0x02eafa0cae7883550649cf888eba79f91223ece12fab8d3def8cefcfe1069342;
         } else if (treeHeight == 8) {
-            typeHash = 0x934f1ad392c5e410163bed2bfbc4c0990d5faa3eb5f891ca494a9861d2dfe124;
+            typeHash = 0xfdf1fc107d44639036bfd27132def37b16686f128aca34dac460cd28cd6c7b62;
         } else {
             revert MerkleTreeTooLarge();
         }

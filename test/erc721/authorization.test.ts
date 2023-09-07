@@ -70,6 +70,8 @@ describe("[ERC721] Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      hasCriteria: true,
+      tokenIdOrCriteria: 0,
       amount: 3,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -99,7 +101,12 @@ describe("[ERC721] Authorization", async () => {
             ["address", "uint128"],
             [intent.buyToken, startAmount]
           ),
-          fillTokenIds: [tokenIdsToFill],
+          fillTokenDetails: [
+            tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
+          ],
           executeAmounts: [startAmount],
         },
         []
@@ -113,7 +120,12 @@ describe("[ERC721] Authorization", async () => {
             ["address", "uint128"],
             [intent.buyToken, startAmount]
           ),
-          fillTokenIds: [tokenIdsToFill],
+          fillTokenDetails: [
+            tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
+          ],
           executeAmounts: [startAmount],
         },
         []
@@ -165,7 +177,12 @@ describe("[ERC721] Authorization", async () => {
               ["address", "uint128"],
               [intent.buyToken, startAmount]
             ),
-            fillTokenIds: [tokenIdsToFill],
+            fillTokenDetails: [
+              tokenIdsToFill.map((tokenId) => ({
+                tokenId,
+                criteriaProof: [],
+              })),
+            ],
             executeAmounts: [startAmount],
           },
           []
@@ -199,7 +216,12 @@ describe("[ERC721] Authorization", async () => {
               ["address", "uint128"],
               [intent.buyToken, startAmount]
             ),
-            fillTokenIds: [tokenIdsToFill],
+            fillTokenDetails: [
+              tokenIdsToFill.map((tokenId) => ({
+                tokenId,
+                criteriaProof: [],
+              })),
+            ],
             executeAmounts: [startAmount],
           },
           []
@@ -233,7 +255,12 @@ describe("[ERC721] Authorization", async () => {
               ["address", "uint128"],
               [intent.buyToken, startAmount]
             ),
-            fillTokenIds: [tokenIdsToFill],
+            fillTokenDetails: [
+              tokenIdsToFill.map((tokenId) => ({
+                tokenId,
+                criteriaProof: [],
+              })),
+            ],
             executeAmounts: [startAmount],
           },
           []
@@ -265,7 +292,12 @@ describe("[ERC721] Authorization", async () => {
               ["address", "uint128"],
               [intent.buyToken, startAmount]
             ),
-            fillTokenIds: [tokenIdsToFill],
+            fillTokenDetails: [
+              tokenIdsToFill.map((tokenId) => ({
+                tokenId,
+                criteriaProof: [],
+              })),
+            ],
             executeAmounts: [startAmount],
           },
           []
@@ -302,6 +334,8 @@ describe("[ERC721] Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      hasCriteria: true,
+      tokenIdOrCriteria: 0,
       amount: 3,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -342,7 +376,12 @@ describe("[ERC721] Authorization", async () => {
               ["address", "uint256[]"],
               [intent.buyToken, tokenIdsToFill]
             ),
-            fillTokenIds: [tokenIdsToFill],
+            fillTokenDetails: [
+              tokenIdsToFill.map((tokenId) => ({
+                tokenId,
+                criteriaProof: [],
+              })),
+            ],
             executeAmounts: [intent.endAmount],
           },
           []
@@ -374,7 +413,12 @@ describe("[ERC721] Authorization", async () => {
               ["address", "uint256[]"],
               [intent.buyToken, tokenIdsToFill]
             ),
-            fillTokenIds: [tokenIdsToFill],
+            fillTokenDetails: [
+              tokenIdsToFill.map((tokenId) => ({
+                tokenId,
+                criteriaProof: [],
+              })),
+            ],
             executeAmounts: [intent.endAmount],
           },
           []
@@ -411,6 +455,8 @@ describe("[ERC721] Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      hasCriteria: true,
+      tokenIdOrCriteria: 0,
       amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -456,7 +502,12 @@ describe("[ERC721] Authorization", async () => {
               ["address", "uint128"],
               [intent.buyToken, startAmount]
             ),
-            fillTokenIds: [tokenIdsToFill],
+            fillTokenDetails: [
+              tokenIdsToFill.map((tokenId) => ({
+                tokenId,
+                criteriaProof: [],
+              })),
+            ],
             executeAmounts: [startAmount],
           },
           [
@@ -495,7 +546,12 @@ describe("[ERC721] Authorization", async () => {
               ["address", "uint128"],
               [intent.buyToken, startAmount]
             ),
-            fillTokenIds: [tokenIdsToFill],
+            fillTokenDetails: [
+              tokenIdsToFill.map((tokenId) => ({
+                tokenId,
+                criteriaProof: [],
+              })),
+            ],
             executeAmounts: [startAmount],
           },
           [
@@ -534,7 +590,12 @@ describe("[ERC721] Authorization", async () => {
               ["address", "uint128"],
               [intent.buyToken, startAmount]
             ),
-            fillTokenIds: [tokenIdsToFill],
+            fillTokenDetails: [
+              tokenIdsToFill.map((tokenId) => ({
+                tokenId,
+                criteriaProof: [],
+              })),
+            ],
             executeAmounts: [startAmount],
           },
           [
@@ -577,6 +638,8 @@ describe("[ERC721] Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      hasCriteria: true,
+      tokenIdOrCriteria: 0,
       amount: 4,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -616,7 +679,12 @@ describe("[ERC721] Authorization", async () => {
               ["address", "uint256[]"],
               [intent.buyToken, tokenIdsToFill]
             ),
-            fillTokenIds: [tokenIdsToFill],
+            fillTokenDetails: [
+              tokenIdsToFill.map((tokenId) => ({
+                tokenId,
+                criteriaProof: [],
+              })),
+            ],
             executeAmounts: [intent.endAmount],
           },
           [

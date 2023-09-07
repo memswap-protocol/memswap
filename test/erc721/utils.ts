@@ -7,6 +7,7 @@ import { _TypedDataEncoder } from "@ethersproject/hash";
 import { keccak256 } from "@ethersproject/keccak256";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { MerkleTree } from "merkletreejs";
+import { bn } from "../utils";
 
 // Contract utilities
 
@@ -23,6 +24,8 @@ export type Intent = {
   endTime: number;
   nonce: BigNumberish;
   isPartiallyFillable: boolean;
+  hasCriteria: boolean;
+  tokenIdOrCriteria: BigNumberish;
   amount: BigNumberish;
   endAmount: BigNumberish;
   startAmountBps: number;
@@ -148,6 +151,14 @@ export const INTENT_EIP712_TYPES = {
       type: "bool",
     },
     {
+      name: "hasCriteria",
+      type: "bool",
+    },
+    {
+      name: "tokenIdOrCriteria",
+      type: "uint256",
+    },
+    {
       name: "amount",
       type: "uint128",
     },
@@ -230,6 +241,8 @@ const getBulkSignatureDataWithProofs = (
     endTime: 0,
     nonce: 0,
     isPartiallyFillable: false,
+    hasCriteria: false,
+    tokenIdOrCriteria: 0,
     amount: 0,
     endAmount: 0,
     startAmountBps: 0,
@@ -285,3 +298,22 @@ const encodeBulkOrderProofAndSignature = (
     defaultAbiCoder.encode([`uint256[${merkleProof.length}]`], [merkleProof]),
   ]);
 };
+
+export const generateMerkleTree = (tokenIds: BigNumberish[]) => {
+  if (!tokenIds.length) {
+    throw new Error("Could not generate merkle tree");
+  }
+
+  const leaves = tokenIds.map(hashFn);
+  return new MerkleTree(leaves, keccak256, { sort: true });
+};
+
+export const generateMerkleProof = (
+  merkleTree: MerkleTree,
+  tokenId: BigNumberish
+) => merkleTree.getHexProof(hashFn(tokenId));
+
+const hashFn = (tokenId: BigNumberish) =>
+  keccak256(
+    Buffer.from(bn(tokenId).toHexString().slice(2).padStart(64, "0"), "hex")
+  );

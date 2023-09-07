@@ -65,6 +65,8 @@ describe("[ERC721] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      hasCriteria: true,
+      tokenIdOrCriteria: 0,
       amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -104,7 +106,12 @@ describe("[ERC721] Misc", async () => {
           ["address", "uint256[]"],
           [intent.buyToken, tokenIdsToFill]
         ),
-        fillTokenIds: [tokenIdsToFill],
+        fillTokenDetails: [
+          tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
+        ],
         executeAmounts: [intent.endAmount],
       },
       []
@@ -128,6 +135,8 @@ describe("[ERC721] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      hasCriteria: true,
+      tokenIdOrCriteria: 0,
       amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -161,7 +170,12 @@ describe("[ERC721] Misc", async () => {
             ["address", "uint256[]"],
             [intent.buyToken, tokenIdsToFill]
           ),
-          fillTokenIds: [tokenIdsToFill],
+          fillTokenDetails: [
+            tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
+          ],
           executeAmounts: [intent.endAmount],
         },
         []
@@ -186,6 +200,8 @@ describe("[ERC721] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      hasCriteria: true,
+      tokenIdOrCriteria: 0,
       amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -216,7 +232,12 @@ describe("[ERC721] Misc", async () => {
             ["address", "uint256[]"],
             [intent.buyToken, tokenIdsToFill]
           ),
-          fillTokenIds: [tokenIdsToFill],
+          fillTokenDetails: [
+            tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
+          ],
           executeAmounts: [intent.endAmount],
         },
         []
@@ -241,6 +262,8 @@ describe("[ERC721] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      hasCriteria: true,
+      tokenIdOrCriteria: 0,
       amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -264,7 +287,12 @@ describe("[ERC721] Misc", async () => {
             ["address", "uint256[]"],
             [intent.buyToken, tokenIdsToFill]
           ),
-          fillTokenIds: [tokenIdsToFill],
+          fillTokenDetails: [
+            tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
+          ],
           executeAmounts: [intent.endAmount],
         },
         []
@@ -291,7 +319,12 @@ describe("[ERC721] Misc", async () => {
           ["address", "uint256[]"],
           [intent.buyToken, tokenIdsToFill]
         ),
-        fillTokenIds: [tokenIdsToFill],
+        fillTokenDetails: [
+          tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
+        ],
         executeAmounts: [intent.endAmount],
       },
       [

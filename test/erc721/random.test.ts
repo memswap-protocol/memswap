@@ -74,6 +74,8 @@ describe("[ERC721] Random", async () => {
       endTime: currentTime + getRandomInteger(1, 1000),
       nonce: 0,
       isPartiallyFillable: getRandomBoolean(),
+      hasCriteria: true,
+      tokenIdOrCriteria: 0,
       amount: getRandomInteger(1, 5),
       endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
@@ -176,7 +178,12 @@ describe("[ERC721] Random", async () => {
           ["address", "uint256[]"],
           [intent.buyToken, tokenIdsToFill]
         ),
-        fillTokenIds: [tokenIdsToFill],
+        fillTokenDetails: [
+          tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
+        ],
         executeAmounts: [amount.sub(surplus)],
       },
       []
@@ -234,6 +241,8 @@ describe("[ERC721] Random", async () => {
       endTime: currentTime + getRandomInteger(1, 1000),
       nonce: 0,
       isPartiallyFillable: getRandomBoolean(),
+      hasCriteria: true,
+      tokenIdOrCriteria: 0,
       amount: getRandomInteger(1, 5),
       endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
@@ -318,7 +327,12 @@ describe("[ERC721] Random", async () => {
           ["address", "uint128"],
           [intent.buyToken, amount.add(surplus)]
         ),
-        fillTokenIds: [tokenIdsToFill],
+        fillTokenDetails: [
+          tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
+        ],
         executeAmounts: [amount.add(surplus)],
       },
       []
