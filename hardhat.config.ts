@@ -3,6 +3,7 @@ import { HardhatUserConfig } from "hardhat/config";
 import "@nomiclabs/hardhat-ethers";
 import "@nomiclabs/hardhat-etherscan";
 import "@nomiclabs/hardhat-waffle";
+import "hardhat-gas-reporter";
 import "hardhat-tracer";
 
 const config: HardhatUserConfig = {
@@ -34,6 +35,9 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: String(process.env.ETHERSCAN_API_KEY),
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS ? true : false,
   },
 };
 
