@@ -8,7 +8,6 @@ import { ethers } from "hardhat";
 import {
   Authorization,
   Intent,
-  Side,
   getIntentHash,
   signAuthorization,
   signIntent,
@@ -59,9 +58,9 @@ describe("[ERC20] Authorization", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.SELL,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: false,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: bob.address,
       source: AddressZero,
@@ -95,7 +94,7 @@ describe("[ERC20] Authorization", async () => {
         {
           data: defaultAbiCoder.encode(
             ["address", "uint128"],
-            [intent.tokenOut, startAmount]
+            [intent.buyToken, startAmount]
           ),
           fillAmounts: [intent.amount],
           executeAmounts: [startAmount],
@@ -109,7 +108,7 @@ describe("[ERC20] Authorization", async () => {
         {
           data: defaultAbiCoder.encode(
             ["address", "uint128"],
-            [intent.tokenOut, startAmount]
+            [intent.buyToken, startAmount]
           ),
           fillAmounts: [intent.amount],
           executeAmounts: [startAmount],
@@ -162,7 +161,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, startAmount]
+              [intent.buyToken, startAmount]
             ),
             fillAmounts: [amountToFill],
             executeAmounts: [startAmount],
@@ -197,7 +196,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, startAmount]
+              [intent.buyToken, startAmount]
             ),
             fillAmounts: [amountToFill],
             executeAmounts: [startAmount],
@@ -231,7 +230,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, startAmount]
+              [intent.buyToken, startAmount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [startAmount],
@@ -246,9 +245,9 @@ describe("[ERC20] Authorization", async () => {
 
       // Generate intent
       const intent: Intent = {
-        side: Side.SELL,
-        tokenIn: token0.address,
-        tokenOut: token1.address,
+        isBuy: false,
+        buyToken: token1.address,
+        sellToken: token0.address,
         maker: alice.address,
         matchmaker: bob.address,
         source: AddressZero,
@@ -282,7 +281,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, startAmount]
+              [intent.buyToken, startAmount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [startAmount],
@@ -296,7 +295,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, startAmount]
+              [intent.buyToken, startAmount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [startAmount],
@@ -349,7 +348,7 @@ describe("[ERC20] Authorization", async () => {
             {
               data: defaultAbiCoder.encode(
                 ["address", "uint128"],
-                [intent.tokenOut, startAmount]
+                [intent.buyToken, startAmount]
               ),
               fillAmounts: [amountToFill],
               executeAmounts: [startAmount],
@@ -384,7 +383,7 @@ describe("[ERC20] Authorization", async () => {
             {
               data: defaultAbiCoder.encode(
                 ["address", "uint128"],
-                [intent.tokenOut, startAmount]
+                [intent.buyToken, startAmount]
               ),
               fillAmounts: [amountToFill],
               executeAmounts: [startAmount],
@@ -418,7 +417,7 @@ describe("[ERC20] Authorization", async () => {
             {
               data: defaultAbiCoder.encode(
                 ["address", "uint128"],
-                [intent.tokenOut, startAmount]
+                [intent.buyToken, startAmount]
               ),
               fillAmounts: [intent.amount],
               executeAmounts: [startAmount],
@@ -450,7 +449,7 @@ describe("[ERC20] Authorization", async () => {
             {
               data: defaultAbiCoder.encode(
                 ["address", "uint128"],
-                [intent.tokenOut, startAmount]
+                [intent.buyToken, startAmount]
               ),
               fillAmounts: [intent.amount],
               executeAmounts: [startAmount],
@@ -461,13 +460,13 @@ describe("[ERC20] Authorization", async () => {
           .to.emit(memswap, "IntentSolved")
           .withArgs(
             getIntentHash(intent),
-            intent.side,
-            intent.tokenIn,
-            intent.tokenOut,
+            intent.isBuy,
+            intent.buyToken,
+            intent.sellToken,
             intent.maker,
             solutionProxy.address,
-            intent.amount,
-            startAmount
+            startAmount,
+            intent.amount
           );
       }
     });
@@ -494,7 +493,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, startAmount]
+              [intent.buyToken, startAmount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [startAmount],
@@ -505,13 +504,13 @@ describe("[ERC20] Authorization", async () => {
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
-          intent.side,
-          intent.tokenIn,
-          intent.tokenOut,
+          intent.isBuy,
+          intent.buyToken,
+          intent.sellToken,
           intent.maker,
           solutionProxy.address,
-          intent.amount,
-          startAmount
+          startAmount,
+          intent.amount
         );
     }
   });
@@ -521,9 +520,9 @@ describe("[ERC20] Authorization", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.BUY,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: bob.address,
       source: AddressZero,
@@ -569,7 +568,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, intent.amount]
+              [intent.buyToken, intent.amount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [intent.endAmount],
@@ -601,7 +600,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, intent.amount]
+              [intent.buyToken, intent.amount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [intent.endAmount],
@@ -612,13 +611,13 @@ describe("[ERC20] Authorization", async () => {
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
-          intent.side,
-          intent.tokenIn,
-          intent.tokenOut,
+          intent.isBuy,
+          intent.buyToken,
+          intent.sellToken,
           intent.maker,
           solutionProxy.address,
-          intent.endAmount,
-          intent.amount
+          intent.amount,
+          intent.endAmount
         );
     }
   });
@@ -628,9 +627,9 @@ describe("[ERC20] Authorization", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.SELL,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: false,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: bob.address,
       source: AddressZero,
@@ -680,7 +679,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, startAmount]
+              [intent.buyToken, startAmount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [startAmount],
@@ -719,7 +718,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, startAmount]
+              [intent.buyToken, startAmount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [startAmount],
@@ -758,7 +757,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, startAmount]
+              [intent.buyToken, startAmount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [startAmount],
@@ -775,13 +774,13 @@ describe("[ERC20] Authorization", async () => {
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
-          intent.side,
-          intent.tokenIn,
-          intent.tokenOut,
+          intent.isBuy,
+          intent.buyToken,
+          intent.sellToken,
           intent.maker,
           solutionProxy.address,
-          intent.amount,
-          startAmount
+          startAmount,
+          intent.amount
         );
     }
   });
@@ -791,9 +790,9 @@ describe("[ERC20] Authorization", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.BUY,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: bob.address,
       source: AddressZero,
@@ -838,7 +837,7 @@ describe("[ERC20] Authorization", async () => {
           {
             data: defaultAbiCoder.encode(
               ["address", "uint128"],
-              [intent.tokenOut, intent.amount]
+              [intent.buyToken, intent.amount]
             ),
             fillAmounts: [intent.amount],
             executeAmounts: [intent.endAmount],
@@ -855,13 +854,13 @@ describe("[ERC20] Authorization", async () => {
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
-          intent.side,
-          intent.tokenIn,
-          intent.tokenOut,
+          intent.isBuy,
+          intent.buyToken,
+          intent.sellToken,
           intent.maker,
           solutionProxy.address,
-          intent.endAmount,
-          intent.amount
+          intent.amount,
+          intent.endAmount
         );
     }
   });

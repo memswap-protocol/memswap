@@ -5,7 +5,7 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { Intent, Side, getIntentHash, signIntent } from "./utils";
+import { Intent, getIntentHash, signIntent } from "./utils";
 import { PermitKind, bn, getCurrentTimestamp, signPermit } from "../utils";
 import { PERMIT2, USDC } from "../../src/common/addresses";
 
@@ -53,9 +53,9 @@ describe("[ERC20] Misc", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.SELL,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: false,
+      buyToken: token0.address,
+      sellToken: token1.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: AddressZero,
@@ -74,8 +74,8 @@ describe("[ERC20] Misc", async () => {
     };
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.amount);
-    await token0.connect(alice).approve(memswap.address, intent.amount);
+    await token1.connect(alice).mint(intent.amount);
+    await token1.connect(alice).approve(memswap.address, intent.amount);
 
     // Compute start amount
     const startAmount = bn(intent.endAmount).add(
@@ -105,7 +105,7 @@ describe("[ERC20] Misc", async () => {
       {
         data: defaultAbiCoder.encode(
           ["address", "uint128"],
-          [intent.tokenOut, startAmount]
+          [intent.buyToken, startAmount]
         ),
         fillAmounts: [intent.amount],
         executeAmounts: [intent.endAmount],
@@ -119,9 +119,9 @@ describe("[ERC20] Misc", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.SELL,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: false,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: AddressZero,
@@ -165,7 +165,7 @@ describe("[ERC20] Misc", async () => {
         {
           data: defaultAbiCoder.encode(
             ["address", "uint128"],
-            [intent.tokenOut, startAmount]
+            [intent.buyToken, startAmount]
           ),
           fillAmounts: [intent.amount],
           executeAmounts: [intent.endAmount],
@@ -180,9 +180,9 @@ describe("[ERC20] Misc", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.BUY,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: AddressZero,
@@ -223,7 +223,7 @@ describe("[ERC20] Misc", async () => {
         {
           data: defaultAbiCoder.encode(
             ["address", "uint128"],
-            [intent.tokenOut, startAmount]
+            [intent.buyToken, startAmount]
           ),
           fillAmounts: [intent.amount],
           executeAmounts: [intent.endAmount],
@@ -238,9 +238,9 @@ describe("[ERC20] Misc", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.BUY,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: AddressZero,
@@ -269,7 +269,7 @@ describe("[ERC20] Misc", async () => {
         {
           data: defaultAbiCoder.encode(
             ["address", "uint128"],
-            [intent.tokenOut, intent.amount]
+            [intent.buyToken, intent.amount]
           ),
           fillAmounts: [intent.amount],
           executeAmounts: [intent.endAmount],
@@ -281,7 +281,7 @@ describe("[ERC20] Misc", async () => {
     // Build and sign permit
     const permit = {
       details: {
-        token: intent.tokenIn,
+        token: intent.sellToken,
         amount: intent.endAmount,
         expiration: currentTime + 3600,
         nonce: 0,
@@ -296,7 +296,7 @@ describe("[ERC20] Misc", async () => {
       {
         data: defaultAbiCoder.encode(
           ["address", "uint128"],
-          [intent.tokenOut, intent.amount]
+          [intent.buyToken, intent.amount]
         ),
         fillAmounts: [intent.amount],
         executeAmounts: [intent.endAmount],

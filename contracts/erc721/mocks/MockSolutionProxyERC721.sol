@@ -66,7 +66,7 @@ contract MockSolutionProxyERC721 is ISolution {
         uint128[] memory,
         bytes memory data
     ) external {
-        if (intents[0].side == MemswapERC721.Side.BUY) {
+        if (intents[0].isBuy) {
             (address token, uint256[] memory tokenIds) = abi.decode(
                 data,
                 (address, uint256[])

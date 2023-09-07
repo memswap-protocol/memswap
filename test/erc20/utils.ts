@@ -10,15 +10,10 @@ import { MerkleTree } from "merkletreejs";
 
 // Contract utilities
 
-export enum Side {
-  BUY,
-  SELL,
-}
-
 export type Intent = {
-  side: Side;
-  tokenIn: string;
-  tokenOut: string;
+  isBuy: boolean;
+  buyToken: string;
+  sellToken: string;
   maker: string;
   matchmaker: string;
   source: string;
@@ -105,15 +100,15 @@ export const AUTHORIZATION_EIP712_TYPES = {
 export const INTENT_EIP712_TYPES = {
   Intent: [
     {
-      name: "side",
-      type: "uint8",
+      name: "isBuy",
+      type: "bool",
     },
     {
-      name: "tokenIn",
+      name: "buyToken",
       type: "address",
     },
     {
-      name: "tokenOut",
+      name: "sellToken",
       type: "address",
     },
     {
@@ -223,9 +218,9 @@ const getBulkSignatureDataWithProofs = (
   const leaves = elements.map((i) => hashElement(i));
 
   const defaultElement = {
-    side: 0,
-    tokenIn: AddressZero,
-    tokenOut: AddressZero,
+    isBuy: 0,
+    buyToken: AddressZero,
+    sellToken: AddressZero,
     maker: AddressZero,
     matchmaker: AddressZero,
     source: AddressZero,

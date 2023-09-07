@@ -92,7 +92,7 @@ contract SolutionProxyERC20 is ISolution {
         uint128 amountToFill = amountsToFill[0];
         uint128 amountToExecute = amountsToExecute[0];
 
-        if (intent.side == MemswapERC20.Side.BUY) {
+        if (intent.isBuy) {
             Call[] memory calls = abi.decode(data, (Call[]));
 
             // Make calls
@@ -108,20 +108,20 @@ contract SolutionProxyERC20 is ISolution {
 
             // Push outputs
 
-            bool outputETH = intent.tokenOut == address(0);
+            bool outputETH = intent.buyToken == address(0);
             if (outputETH) {
                 makeCall(Call(memswap, "", amountToFill));
             } else {
-                IERC20(intent.tokenOut).approve(memswap, amountToFill);
+                IERC20(intent.buyToken).approve(memswap, amountToFill);
             }
 
             // Take profits
 
             uint256 amountLeft;
 
-            amountLeft = IERC20(intent.tokenIn).balanceOf(address(this));
+            amountLeft = IERC20(intent.sellToken).balanceOf(address(this));
             if (amountLeft > 0) {
-                IERC20(intent.tokenIn).transfer(owner, amountLeft);
+                IERC20(intent.sellToken).transfer(owner, amountLeft);
             }
 
             amountLeft = address(this).balance;
@@ -144,7 +144,7 @@ contract SolutionProxyERC20 is ISolution {
 
             // Push outputs and take profits
 
-            bool outputETH = intent.tokenOut == address(0);
+            bool outputETH = intent.buyToken == address(0);
             if (outputETH) {
                 makeCall(Call(memswap, "", amountToExecute));
 
@@ -153,13 +153,13 @@ contract SolutionProxyERC20 is ISolution {
                     makeCall(Call(owner, "", amountLeft));
                 }
             } else {
-                IERC20(intent.tokenOut).approve(memswap, amountToExecute);
+                IERC20(intent.buyToken).approve(memswap, amountToExecute);
 
-                uint256 amountLeft = IERC20(intent.tokenOut).balanceOf(
+                uint256 amountLeft = IERC20(intent.buyToken).balanceOf(
                     address(this)
                 ) - amountToExecute;
                 if (amountLeft > 0) {
-                    IERC20(intent.tokenOut).transfer(owner, amountLeft);
+                    IERC20(intent.buyToken).transfer(owner, amountLeft);
                 }
             }
         }

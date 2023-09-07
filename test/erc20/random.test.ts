@@ -6,7 +6,7 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { Intent, Side, getIntentHash, signIntent } from "./utils";
+import { Intent, getIntentHash, signIntent } from "./utils";
 import {
   bn,
   getCurrentTimestamp,
@@ -62,9 +62,9 @@ describe("[ERC20] Random", async () => {
 
     // Generate an intent with random values
     const intent: Intent = {
-      side: Side.BUY,
-      tokenIn: getRandomBoolean() ? weth.address : token0.address,
-      tokenOut: getRandomBoolean() ? AddressZero : token1.address,
+      isBuy: true,
+      buyToken: getRandomBoolean() ? AddressZero : token1.address,
+      sellToken: getRandomBoolean() ? weth.address : token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: getRandomBoolean() ? AddressZero : carol.address,
@@ -88,7 +88,7 @@ describe("[ERC20] Random", async () => {
         )
       : intent.amount;
 
-    if (intent.tokenIn === weth.address) {
+    if (intent.sellToken === weth.address) {
       // Deposit and approve
       await alice.sendTransaction({
         to: weth.address,
@@ -136,11 +136,11 @@ describe("[ERC20] Random", async () => {
 
     // Get balances before the execution
     const makerBalanceBefore =
-      intent.tokenIn === weth.address
+      intent.sellToken === weth.address
         ? await weth.balanceOf(intent.maker)
         : await token0.balanceOf(intent.maker);
     const sourceBalanceBefore =
-      intent.tokenIn === weth.address
+      intent.sellToken === weth.address
         ? await weth.balanceOf(intent.source)
         : await token0.balanceOf(intent.source);
 
@@ -173,7 +173,7 @@ describe("[ERC20] Random", async () => {
       {
         data: defaultAbiCoder.encode(
           ["address", "uint128"],
-          [intent.tokenOut, fillAmount]
+          [intent.buyToken, fillAmount]
         ),
         fillAmounts: [fillAmount],
         executeAmounts: [amount.sub(surplus)],
@@ -187,23 +187,23 @@ describe("[ERC20] Random", async () => {
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
-          intent.side,
-          intent.tokenIn,
-          intent.tokenOut,
+          intent.isBuy,
+          intent.buyToken,
+          intent.sellToken,
           intent.maker,
           solutionProxy.address,
-          amount.sub(surplus).sub(fee).sub(surplusFee),
-          fillAmount
+          fillAmount,
+          amount.sub(surplus).sub(fee).sub(surplusFee)
         );
     }
 
     // Get balances after the execution
     const makerBalanceAfter =
-      intent.tokenIn === weth.address
+      intent.sellToken === weth.address
         ? await weth.balanceOf(intent.maker)
         : await token0.balanceOf(intent.maker);
     const sourceBalanceAfter =
-      intent.tokenIn === weth.address
+      intent.sellToken === weth.address
         ? await weth.balanceOf(intent.source)
         : await token0.balanceOf(intent.source);
 
@@ -221,9 +221,9 @@ describe("[ERC20] Random", async () => {
 
     // Generate an intent with random values
     const intent: Intent = {
-      side: Side.SELL,
-      tokenIn: getRandomBoolean() ? weth.address : token0.address,
-      tokenOut: getRandomBoolean() ? AddressZero : token1.address,
+      isBuy: false,
+      buyToken: getRandomBoolean() ? AddressZero : token1.address,
+      sellToken: getRandomBoolean() ? weth.address : token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: getRandomBoolean() ? AddressZero : carol.address,
@@ -247,7 +247,7 @@ describe("[ERC20] Random", async () => {
         )
       : intent.amount;
 
-    if (intent.tokenIn === weth.address) {
+    if (intent.sellToken === weth.address) {
       // Deposit and approve
       await alice.sendTransaction({
         to: weth.address,
@@ -297,11 +297,11 @@ describe("[ERC20] Random", async () => {
 
     // Get balances before the execution
     const makerBalanceBefore =
-      intent.tokenOut === AddressZero
+      intent.buyToken === AddressZero
         ? await ethers.provider.getBalance(intent.maker)
         : await token1.balanceOf(intent.maker);
     const sourceBalanceBefore =
-      intent.tokenOut === AddressZero
+      intent.buyToken === AddressZero
         ? await ethers.provider.getBalance(intent.source)
         : await token1.balanceOf(intent.source);
 
@@ -330,7 +330,7 @@ describe("[ERC20] Random", async () => {
       {
         data: defaultAbiCoder.encode(
           ["address", "uint128"],
-          [intent.tokenOut, amount.add(surplus)]
+          [intent.buyToken, amount.add(surplus)]
         ),
         fillAmounts: [fillAmount],
         executeAmounts: [amount.add(surplus)],
@@ -344,23 +344,23 @@ describe("[ERC20] Random", async () => {
         .to.emit(memswap, "IntentSolved")
         .withArgs(
           getIntentHash(intent),
-          intent.side,
-          intent.tokenIn,
-          intent.tokenOut,
+          intent.isBuy,
+          intent.buyToken,
+          intent.sellToken,
           intent.maker,
           solutionProxy.address,
-          fillAmount,
-          amount.add(surplus).sub(fee).sub(surplusFee)
+          amount.add(surplus).sub(fee).sub(surplusFee),
+          fillAmount
         );
     }
 
     // Get balances after the execution
     const makerBalanceAfter =
-      intent.tokenOut === AddressZero
+      intent.buyToken === AddressZero
         ? await ethers.provider.getBalance(intent.maker)
         : await token1.balanceOf(intent.maker);
     const sourceBalanceAfter =
-      intent.tokenOut === AddressZero
+      intent.buyToken === AddressZero
         ? await ethers.provider.getBalance(intent.source)
         : await token1.balanceOf(intent.source);
 

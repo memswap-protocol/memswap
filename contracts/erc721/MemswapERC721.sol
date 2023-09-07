@@ -18,29 +18,23 @@ contract MemswapERC721 is
 {
     // --- Structs and enums ---
 
-    enum Side {
-        BUY,
-        SELL
-    }
-
     struct Intent {
-        // When side = BUY:
-        // amount = amountOut
-        // endAmount = endAmountIn
-        // startAmountBps = startAmountInBps
-        // expectedAmountBps = expectedAmountInBps
+        // When isBuy = true:
+        // amount = buy amount
+        // endAmount = sell end amount
+        // startAmountBps = sell start amount bps
+        // expectedAmountBps = sell expected amount bps
 
-        // When side = SELL:
-        // amount = amountIn
-        // endAmount = endAmountOut
-        // startAmountBps = startAmountOutBps
-        // expectedAmountBps = expectedAmountOutBps
+        // When isBuy = false:
+        // amount = sell amount
+        // endAmount = buy end amount
+        // startAmountBps = buy start amount bps
+        // expectedAmountBps = buy expected amount bps
 
-        Side side;
-        // Token to sell
-        address tokenIn;
-        // Token to buy
-        address tokenOut;
+        // Exact output (isBuy = true) or exact input (isBuy = false)
+        bool isBuy;
+        address buyToken;
+        address sellToken;
         address maker;
         // The address allowed to solve or authorize others to solve
         address matchmaker;
@@ -65,13 +59,13 @@ contract MemswapERC721 is
     }
 
     struct Authorization {
-        // When side = BUY:
-        // fillAmountToCheck = amount to fill
-        // executeAmountToCheck = maximum amount pulled from user
+        // When isBuy = true:
+        // fillAmountToCheck = buy amount to fill
+        // executeAmountToCheck = maximum sell amount pulled from user
 
-        // When side = SELL:
-        // fillAmountToCheck = amount to fill
-        // executeAmountToCheck = minimum amount pushed to user
+        // When isBuy = false:
+        // fillAmountToCheck = sell amount to fill
+        // executeAmountToCheck = minimum buy amount pushed to user
 
         uint128 fillAmountToCheck;
         uint128 executeAmountToCheck;
@@ -84,13 +78,13 @@ contract MemswapERC721 is
     }
 
     struct Solution {
-        // When side = BUY:
+        // When isBuy = true:
         // fillTokenIds = token ids to push to user
-        // executeAmounts = amounts in to pull from user
+        // executeAmounts = sell amounts to pull from user
 
-        // When side = SELL:
-        // fillTokenIds = token ids to pull from user
-        // executeAmounts = amounts out to push to user
+        // When isBuy = false:
+        // fillAmounts = token ids to pull from user
+        // executeAmounts = buy amounts to push to user
 
         bytes data;
         uint256[][] fillTokenIds;
@@ -103,9 +97,9 @@ contract MemswapERC721 is
     event IntentPrevalidated(bytes32 indexed intentHash);
     event IntentSolved(
         bytes32 indexed intentHash,
-        Side side,
-        address tokenIn,
-        address tokenOut,
+        bool isBuy,
+        address buyToken,
+        address sellToken,
         address maker,
         address solver,
         uint128 amount,
@@ -165,9 +159,9 @@ contract MemswapERC721 is
         INTENT_TYPEHASH = keccak256(
             abi.encodePacked(
                 "Intent(",
-                "uint8 side,",
-                "address tokenIn,",
-                "address tokenOut,",
+                "bool isBuy,",
+                "address buyToken,",
+                "address sellToken,",
                 "address maker,",
                 "address matchmaker,",
                 "address source,",
@@ -299,7 +293,7 @@ contract MemswapERC721 is
      *         the invalidation of any intents signed with a lower nonce
      *         than the latest value.
      */
-    function incrementNonce() external nonReentrant {
+    function incrementNonce() external {
         unchecked {
             uint256 newNonce = nonce[msg.sender] + 1;
             nonce[msg.sender] = newNonce;
@@ -336,9 +330,7 @@ contract MemswapERC721 is
                     revert Unauthorized();
                 }
 
-                amountsToCheck[i] = intent.side == Side.SELL
-                    ? 0
-                    : type(uint128).max;
+                amountsToCheck[i] = intent.isBuy ? type(uint128).max : 0;
             }
         }
 
@@ -487,9 +479,9 @@ contract MemswapERC721 is
             bytes.concat(
                 abi.encode(
                     INTENT_TYPEHASH,
-                    intent.side,
-                    intent.tokenIn,
-                    intent.tokenOut,
+                    intent.isBuy,
+                    intent.buyToken,
+                    intent.sellToken,
                     intent.maker,
                     intent.matchmaker,
                     intent.source,
@@ -588,30 +580,12 @@ contract MemswapERC721 is
                 }
             }
 
-            if (intent.side == Side.SELL) {
-                // When side = SELL:
-                // amount = amountIn
-                // endAmount = endAmountOut
-                // startAmount = startAmountOut
-                // expectedAmount = expectedAmountOut
-
-                unchecked {
-                    for (uint256 j; j < actualAmountToFill; j++) {
-                        // Transfer outputs to maker
-                        _transferERC721(
-                            intent.maker,
-                            msg.sender,
-                            intent.tokenIn,
-                            tokenIdsToFill[i][j]
-                        );
-                    }
-                }
-            } else {
-                // When side = BUY:
-                // amount = amountOut
-                // endAmount = endAmountIn
-                // startAmount = startAmountIn
-                // expectedAmount = expectedAmountIn
+            if (intent.isBuy) {
+                // When isBuy = true:
+                // amount = buy amount
+                // endAmount = sell end amount
+                // startAmountBps = sell start amount bps
+                // expectedAmountBps = sell expected amount bps
 
                 uint128 endAmount = (intent.endAmount * actualAmountToFill) /
                     intent.amount;
@@ -666,7 +640,7 @@ contract MemswapERC721 is
                         _transferNativeOrERC20(
                             intent.maker,
                             intent.source,
-                            intent.tokenIn,
+                            intent.sellToken,
                             amount
                         );
 
@@ -679,21 +653,39 @@ contract MemswapERC721 is
                     _transferNativeOrERC20(
                         intent.maker,
                         msg.sender,
-                        intent.tokenIn,
+                        intent.sellToken,
                         executeAmount
                     );
                 }
 
                 emit IntentSolved(
                     intentHash,
-                    intent.side,
-                    address(intent.tokenIn),
-                    address(intent.tokenOut),
+                    intent.isBuy,
+                    intent.buyToken,
+                    intent.sellToken,
                     intent.maker,
                     msg.sender,
                     executeAmount,
                     actualTokenIdsToFill[i]
                 );
+            } else {
+                // When isBuy = false:
+                // amount = sell amount
+                // endAmount = buy end amount
+                // startAmountBps = buy start amount bps
+                // expectedAmountBps = buy expected amount bps
+
+                unchecked {
+                    for (uint256 j; j < actualAmountToFill; j++) {
+                        // Transfer outputs to maker
+                        _transferERC721(
+                            intent.maker,
+                            msg.sender,
+                            intent.sellToken,
+                            tokenIdsToFill[i][j]
+                        );
+                    }
+                }
             }
 
             unchecked {
@@ -713,12 +705,31 @@ contract MemswapERC721 is
             Intent calldata intent = intents[i];
             bytes32 intentHash = getIntentHash(intent);
 
-            if (intent.side == Side.SELL) {
-                // When side = SELL:
-                // amount = amountIn
-                // endAmount = endAmountOut
-                // startAmount = startAmountOut
-                // expectedAmount = expectedAmountOut
+            if (intent.isBuy) {
+                // When isBuy = true:
+                // amount = buy amount
+                // endAmount = sell end amount
+                // startAmountBps = sell start amount bps
+                // expectedAmountBps = sell expected amount bps
+
+                unchecked {
+                    uint256 tokenIdsLength = tokenIdsToFill[i].length;
+                    for (uint256 j; j < tokenIdsLength; j++) {
+                        // Transfer outputs to maker
+                        _transferERC721(
+                            msg.sender,
+                            intent.maker,
+                            intent.buyToken,
+                            tokenIdsToFill[i][j]
+                        );
+                    }
+                }
+            } else {
+                // When isBuy = false:
+                // amount = sell amount
+                // endAmount = buy end amount
+                // startAmountBps = buy start amount bps
+                // expectedAmountBps = buy expected amount bps
 
                 uint128 amountToFill = uint128(tokenIdsToFill[i].length);
 
@@ -775,7 +786,7 @@ contract MemswapERC721 is
                         _transferNativeOrERC20(
                             msg.sender,
                             intent.source,
-                            intent.tokenOut,
+                            intent.buyToken,
                             amount
                         );
 
@@ -788,40 +799,21 @@ contract MemswapERC721 is
                     _transferNativeOrERC20(
                         msg.sender,
                         intent.maker,
-                        intent.tokenOut,
+                        intent.buyToken,
                         executeAmount
                     );
                 }
 
                 emit IntentSolved(
                     intentHash,
-                    intent.side,
-                    address(intent.tokenIn),
-                    address(intent.tokenOut),
+                    intent.isBuy,
+                    intent.buyToken,
+                    intent.sellToken,
                     intent.maker,
                     msg.sender,
                     executeAmount,
                     tokenIdsToFill[i]
                 );
-            } else {
-                // When side = BUY:
-                // amount = amountOut
-                // endAmount = endAmountIn
-                // startAmount = startAmountIn
-                // expectedAmount = expectedAmountIn
-
-                unchecked {
-                    uint256 tokenIdsLength = tokenIdsToFill[i].length;
-                    for (uint256 j; j < tokenIdsLength; j++) {
-                        // Transfer outputs to maker
-                        _transferERC721(
-                            msg.sender,
-                            intent.maker,
-                            intent.tokenOut,
-                            tokenIdsToFill[i][j]
-                        );
-                    }
-                }
             }
 
             unchecked {
@@ -967,23 +959,23 @@ contract MemswapERC721 is
     function _lookupBulkOrderTypehash(
         uint256 treeHeight
     ) internal pure override returns (bytes32 typeHash) {
-        // kecca256("BatchIntent(Intent[2]...[2] tree)Intent(uint8 side,address tokenIn,address tokenOut,address maker,address matchmaker,address source,uint16 feeBps,uint16 surplusBps,uint32 startTime,uint32 endTime,uint256 nonce,bool isPartiallyFillable,uint128 amount,uint128 endAmount,uint16 startAmountBps,uint16 expectedAmountBps,bool hasDynamicSignature)")
+        // kecca256("BatchIntent(Intent[2]...[2] tree)Intent(bool isBuy,address buyToken,address sellToken,address maker,address matchmaker,address source,uint16 feeBps,uint16 surplusBps,uint32 startTime,uint32 endTime,uint256 nonce,bool isPartiallyFillable,uint128 amount,uint128 endAmount,uint16 startAmountBps,uint16 expectedAmountBps,bool hasDynamicSignature)")
         if (treeHeight == 1) {
-            typeHash = 0x752fe66f461ad26607dab37df65d9f145c404f6d987af0a1396c53aa63c4090f;
+            typeHash = 0x50da44c327bf23d4f64d99e3459a4e70fc3e7134590fcfdb85419ae6612f3e95;
         } else if (treeHeight == 2) {
-            typeHash = 0x2594282edb473d84da7e88a9b9f66f7fe3cd2c33e20e5b2c690421db86a32380;
+            typeHash = 0x389f2d657745b16d19115044d11ec501bb380e0338892e9e2cc562d7200a5d97;
         } else if (treeHeight == 3) {
-            typeHash = 0x76b81fdcb4be73e208608de69da4cba1fdec2fb82f31781205e378d92e98758e;
+            typeHash = 0x0a1cc95c01f4e6de58f7df7db8c737a0c5cd4eedbacc3ca48030f44c7912760e;
         } else if (treeHeight == 4) {
-            typeHash = 0xd9a65e15256d62ef180250f50ac26068de751b679b4f9ed7f1615e832c5e988e;
+            typeHash = 0xf93535acf42fde7aaef3040cb1cf18bd57c6082deb96534be10c67073eb65143;
         } else if (treeHeight == 5) {
-            typeHash = 0x9a36ed08b115bb0e421302aa0cdeb7072a9ceaa7eb0732ef2c7bbcdaaaf25abf;
+            typeHash = 0xafad9569cb3be0f4074234d3142f81d0359226d2889283a38866c4339e5e608f;
         } else if (treeHeight == 6) {
-            typeHash = 0x5cddea5c888c2bb7db8e1416408984d8c376bef466804fc27955802d1e66e580;
+            typeHash = 0xed9ca47d4f3ad3614f6c794afe4f6be18a9a6a797d5d655cac837c04746a6c9f;
         } else if (treeHeight == 7) {
-            typeHash = 0x31af46d3e7c43bed478af23e497cd1e4b8cd346912e6e5d83f380af2bc0607c5;
+            typeHash = 0x98950668eb0963e108fa7110c02ade925b22d1d691291031123e729a344c2cc9;
         } else if (treeHeight == 8) {
-            typeHash = 0x37e29d72978727485bc0d786835c69d98615b7402d54452b99e92709d29e546e;
+            typeHash = 0x934f1ad392c5e410163bed2bfbc4c0990d5faa3eb5f891ca494a9861d2dfe124;
         } else {
             revert MerkleTreeTooLarge();
         }

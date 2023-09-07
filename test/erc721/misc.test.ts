@@ -5,7 +5,7 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { Intent, Side, getIntentHash, signIntent } from "./utils";
+import { Intent, getIntentHash, signIntent } from "./utils";
 import { PermitKind, getCurrentTimestamp, signPermit } from "../utils";
 import { PERMIT2, USDC } from "../../src/common/addresses";
 
@@ -53,9 +53,9 @@ describe("[ERC721] Misc", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.BUY,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: AddressZero,
@@ -102,7 +102,7 @@ describe("[ERC721] Misc", async () => {
       {
         data: defaultAbiCoder.encode(
           ["address", "uint256[]"],
-          [intent.tokenOut, tokenIdsToFill]
+          [intent.buyToken, tokenIdsToFill]
         ),
         fillTokenIds: [tokenIdsToFill],
         executeAmounts: [intent.endAmount],
@@ -116,9 +116,9 @@ describe("[ERC721] Misc", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.BUY,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: AddressZero,
@@ -159,7 +159,7 @@ describe("[ERC721] Misc", async () => {
         {
           data: defaultAbiCoder.encode(
             ["address", "uint256[]"],
-            [intent.tokenOut, tokenIdsToFill]
+            [intent.buyToken, tokenIdsToFill]
           ),
           fillTokenIds: [tokenIdsToFill],
           executeAmounts: [intent.endAmount],
@@ -174,9 +174,9 @@ describe("[ERC721] Misc", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.BUY,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: AddressZero,
@@ -214,7 +214,7 @@ describe("[ERC721] Misc", async () => {
         {
           data: defaultAbiCoder.encode(
             ["address", "uint256[]"],
-            [intent.tokenOut, tokenIdsToFill]
+            [intent.buyToken, tokenIdsToFill]
           ),
           fillTokenIds: [tokenIdsToFill],
           executeAmounts: [intent.endAmount],
@@ -229,9 +229,9 @@ describe("[ERC721] Misc", async () => {
 
     // Generate intent
     const intent: Intent = {
-      side: Side.BUY,
-      tokenIn: token0.address,
-      tokenOut: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: AddressZero,
@@ -262,7 +262,7 @@ describe("[ERC721] Misc", async () => {
         {
           data: defaultAbiCoder.encode(
             ["address", "uint256[]"],
-            [intent.tokenOut, tokenIdsToFill]
+            [intent.buyToken, tokenIdsToFill]
           ),
           fillTokenIds: [tokenIdsToFill],
           executeAmounts: [intent.endAmount],
@@ -274,7 +274,7 @@ describe("[ERC721] Misc", async () => {
     // Build and sign permit
     const permit = {
       details: {
-        token: intent.tokenIn,
+        token: intent.sellToken,
         amount: intent.endAmount,
         expiration: currentTime + 3600,
         nonce: 0,
@@ -289,7 +289,7 @@ describe("[ERC721] Misc", async () => {
       {
         data: defaultAbiCoder.encode(
           ["address", "uint256[]"],
-          [intent.tokenOut, tokenIdsToFill]
+          [intent.buyToken, tokenIdsToFill]
         ),
         fillTokenIds: [tokenIdsToFill],
         executeAmounts: [intent.endAmount],

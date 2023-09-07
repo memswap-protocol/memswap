@@ -6,7 +6,7 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { Intent, Side, getIntentHash, bulkSign } from "./utils";
+import { Intent, getIntentHash, bulkSign } from "./utils";
 import { bn, getCurrentTimestamp, getRandomInteger } from "../utils";
 import { PERMIT2, USDC } from "../../src/common/addresses";
 
@@ -56,9 +56,9 @@ describe("[ERC721] Bulk-signing", async () => {
     const intents: Intent[] = [];
     for (let i = 0; i < count; i++) {
       intents.push({
-        side: Side.BUY,
-        tokenIn: token0.address,
-        tokenOut: token1.address,
+        isBuy: true,
+        buyToken: token1.address,
+        sellToken: token0.address,
         maker: alice.address,
         matchmaker: AddressZero,
         source: AddressZero,
@@ -116,7 +116,7 @@ describe("[ERC721] Bulk-signing", async () => {
         {
           data: defaultAbiCoder.encode(
             ["address", "uint256[]"],
-            [intent.tokenOut, tokenIdsToFill]
+            [intent.buyToken, tokenIdsToFill]
           ),
           fillTokenIds: [tokenIdsToFill],
           executeAmounts: [amount],
@@ -127,9 +127,9 @@ describe("[ERC721] Bulk-signing", async () => {
       .to.emit(memswap, "IntentSolved")
       .withArgs(
         getIntentHash(intent),
-        intent.side,
-        intent.tokenIn,
-        intent.tokenOut,
+        intent.isBuy,
+        intent.buyToken,
+        intent.sellToken,
         intent.maker,
         solutionProxy.address,
         amount,
