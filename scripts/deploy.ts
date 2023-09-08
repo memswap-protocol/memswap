@@ -1,7 +1,14 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import hre, { ethers } from "hardhat";
 
-import { MEMSWAP, WETH2, SOLVER } from "../src/common/addresses";
+import {
+  MEMSWAP_ERC20,
+  MEMSWAP_ERC721,
+  WETH2,
+  SOLVER,
+  PERMIT2,
+  USDC,
+} from "../src/common/addresses";
 
 const deployContract = async (
   deployer: SignerWithAddress,
@@ -27,13 +34,16 @@ const main = async () => {
   const [deployer] = await ethers.getSigners();
   const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
 
-  // await deployContract(deployer, "MemswapERC20");
-  // await deployContract(deployer, "WETH2");
-  // await deployContract(deployer, "SolutionProxyERC20", [
-  //   SOLVER[chainId],
-  //   MEMSWAP[chainId],
-  //   WETH2[chainId],
+  // await deployContract(deployer, "MemswapERC20", [
+  //   PERMIT2[chainId],
+  //   USDC[chainId],
   // ]);
+  // await deployContract(deployer, "WETH2");
+  await deployContract(deployer, "SolutionProxyERC20", [
+    SOLVER[chainId],
+    MEMSWAP_ERC20[chainId],
+    WETH2[chainId],
+  ]);
 };
 
 main()

@@ -1,1 +1,1 @@
-export * as signatureRelease from "./signature-release";
+export * as signatureReleaseERC20 from "./signature-release-erc20";

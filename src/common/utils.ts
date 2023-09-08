@@ -4,10 +4,11 @@ import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
 import { Contract } from "@ethersproject/contracts";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 
-import { MEMSWAP } from "./addresses";
-import { Authorization, Intent } from "./types";
+import { MEMSWAP_ERC20, MEMSWAP_ERC721 } from "./addresses";
+import { Authorization, IntentERC20, IntentERC721, Protocol } from "./types";
 
-export const BLOCK_TIME = 12;
+export const AVERAGE_BLOCK_TIME = 12;
+export const PESSIMISTIC_BLOCK_TIME = 15;
 
 export const bn = (value: BigNumberish) => BigNumber.from(value);
 
@@ -16,13 +17,16 @@ export const now = () => Math.floor(Date.now() / 1000);
 export const isTxIncluded = async (txHash: string, provider: Provider) =>
   provider.getTransactionReceipt(txHash).then((tx) => tx && tx.status === 1);
 
+export const isERC721Intent = (intent: IntentERC20 | IntentERC721) =>
+  "hasCriteria" in intent;
+
 export const isIntentFilled = async (
-  intent: Intent,
+  intent: IntentERC20 | IntentERC721,
   chainId: number,
   provider: Provider
 ) => {
   const memswap = new Contract(
-    MEMSWAP[chainId],
+    isERC721Intent(intent) ? MEMSWAP_ERC721[chainId] : MEMSWAP_ERC20[chainId],
     new Interface([
       `function intentStatus(bytes32 intentHash) view returns (
         (
@@ -51,14 +55,23 @@ export const getAuthorizationHash = (authorization: Authorization) =>
     authorization
   );
 
-export const getIntentHash = (intent: Intent) =>
-  _TypedDataEncoder.hashStruct("Intent", getEIP712TypesForIntent(), intent);
+export const getIntentHash = (intent: IntentERC20 | IntentERC721) =>
+  _TypedDataEncoder.hashStruct(
+    "Intent",
+    getEIP712TypesForIntent(
+      isERC721Intent(intent) ? Protocol.ERC721 : Protocol.ERC20
+    ),
+    intent
+  );
 
-export const getEIP712Domain = (chainId: number) => ({
-  name: "MemswapERC20",
+export const getEIP712Domain = (chainId: number, protocol: Protocol) => ({
+  name: protocol === Protocol.ERC20 ? "MemswapERC20" : "MemswapERC721",
   version: "1.0",
   chainId,
-  verifyingContract: MEMSWAP[chainId],
+  verifyingContract:
+    protocol === Protocol.ERC20
+      ? MEMSWAP_ERC20[chainId]
+      : MEMSWAP_ERC721[chainId],
 });
 
 export const getEIP712TypesForAuthorization = () => ({
@@ -86,18 +99,18 @@ export const getEIP712TypesForAuthorization = () => ({
   ],
 });
 
-export const getEIP712TypesForIntent = () => ({
+export const getEIP712TypesForIntent = (protocol: Protocol) => ({
   Intent: [
     {
-      name: "side",
-      type: "uint8",
+      name: "isBuy",
+      type: "bool",
     },
     {
-      name: "tokenIn",
+      name: "buyToken",
       type: "address",
     },
     {
-      name: "tokenOut",
+      name: "sellToken",
       type: "address",
     },
     {
@@ -136,6 +149,18 @@ export const getEIP712TypesForIntent = () => ({
       name: "isPartiallyFillable",
       type: "bool",
     },
+    ...(protocol === Protocol.ERC721
+      ? [
+          {
+            name: "hasCriteria",
+            type: "bool",
+          },
+          {
+            name: "tokenIdOrCriteria",
+            type: "uint256",
+          },
+        ]
+      : []),
     {
       name: "amount",
       type: "uint128",

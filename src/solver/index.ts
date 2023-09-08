@@ -4,11 +4,11 @@ import { ExpressAdapter } from "@bull-board/express";
 import express from "express";
 
 import { logger } from "../common/logger";
-import { Authorization, Intent } from "../common/types";
+import { Authorization, IntentERC20 } from "../common/types";
 import { config } from "./config";
 import * as jobs from "./jobs";
 import { redis } from "./redis";
-import { CachedSolution } from "./types";
+import { CachedSolutionERC20 } from "./types";
 
 // Log unhandled errors
 process.on("unhandledRejection", (error) => {
@@ -17,6 +17,10 @@ process.on("unhandledRejection", (error) => {
     JSON.stringify({ data: `Unhandled rejection: ${error}` })
   );
 });
+
+jobs.txListener.addToQueue(
+  "0xa6d54a760a262b6c257e7f955252ffd52e92640fec4e73fea1089f01201f638d"
+);
 
 // Initialize app
 const app = express();
@@ -27,7 +31,7 @@ serverAdapter.setBasePath("/admin/bullmq");
 createBullBoard({
   queues: [
     new BullMQAdapter(jobs.txListener.queue),
-    new BullMQAdapter(jobs.txSolver.queue),
+    new BullMQAdapter(jobs.txSolverERC20.queue),
   ],
   serverAdapter: serverAdapter,
 });
@@ -39,16 +43,16 @@ app.get("/lives", (_req, res) => {
   return res.json({ message: "Yes" });
 });
 
-app.post("/intents", async (req, res) => {
-  const intent = req.body.intent as Intent;
-  await jobs.txSolver.addToQueue(intent);
+app.post("/erc20/intents", async (req, res) => {
+  const intent = req.body.intent as IntentERC20;
+  await jobs.txSolverERC20.addToQueue(intent);
 
   return res.json({ message: "Success" });
 });
 
-app.post("/authorizations", async (req, res) => {
+app.post("/erc20/authorizations", async (req, res) => {
   const uuid = req.body.uuid as string | undefined;
-  const intent = req.body.intent as Intent | undefined;
+  const intent = req.body.intent as IntentERC20 | undefined;
   const approvalTxOrTxHash = req.body.approvalTxOrTxHash as string | undefined;
   const authorization = req.body.authorization as Authorization;
 
@@ -75,14 +79,14 @@ app.post("/authorizations", async (req, res) => {
   );
 
   if (uuid) {
-    const cachedSolution: CachedSolution | undefined = await redis
+    const cachedSolution: CachedSolutionERC20 | undefined = await redis
       .get(`solver:${uuid}`)
       .then((r) => (r ? JSON.parse(r) : undefined));
     if (!cachedSolution) {
       return res.status(400).send({ error: `Could not find uuid ${uuid}` });
     }
 
-    await jobs.txSolver.addToQueue(cachedSolution.intent, {
+    await jobs.txSolverERC20.addToQueue(cachedSolution.intent, {
       approvalTxOrTxHash: cachedSolution.approvalTxOrTxHash,
       existingSolution: cachedSolution.solution,
       authorization,
@@ -97,7 +101,7 @@ app.post("/authorizations", async (req, res) => {
       })
     );
   } else if (intent) {
-    await jobs.txSolver.addToQueue(intent, {
+    await jobs.txSolverERC20.addToQueue(intent, {
       approvalTxOrTxHash,
       authorization,
     });

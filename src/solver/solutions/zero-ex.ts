@@ -4,10 +4,10 @@ import axios from "axios";
 
 import { WETH2 } from "../../common/addresses";
 import { config } from "../config";
-import { SolutionDetails } from "../types";
 
 const ZEROEX_ETH = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 
+// TODO: Update logic to cover new intent structure
 export const solve = async (
   tokenIn: string,
   tokenOut: string,

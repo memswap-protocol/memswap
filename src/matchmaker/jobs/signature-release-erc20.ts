@@ -6,11 +6,10 @@ import { randomUUID } from "crypto";
 
 import { MATCHMAKER } from "../../common/addresses";
 import { logger } from "../../common/logger";
-import { Authorization, Intent, Side } from "../../common/types";
+import { Authorization, IntentERC20, Protocol } from "../../common/types";
 import {
-  BLOCK_TIME,
+  AVERAGE_BLOCK_TIME,
   bn,
-  getAuthorizationHash,
   getEIP712Domain,
   getEIP712TypesForAuthorization,
   getIntentHash,
@@ -19,7 +18,7 @@ import { config } from "../config";
 import { redis } from "../redis";
 import { Solution } from "../types";
 
-const COMPONENT = "signature-release";
+const COMPONENT = "signature-release-erc20";
 
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
@@ -83,12 +82,12 @@ const worker = new Worker(
                 blockDeadline: deadlineBlock,
               };
               authorization.signature = await matchmaker._signTypedData(
-                getEIP712Domain(config.chainId),
+                getEIP712Domain(config.chainId, Protocol.ERC20),
                 getEIP712TypesForAuthorization(),
                 authorization
               );
 
-              await axios.post(`${baseUrl}/authorizations`, {
+              await axios.post(`${baseUrl}/erc20/authorizations`, {
                 uuid,
                 authorization,
               });
@@ -155,7 +154,7 @@ export const isLocked = async (solutionKey: string) =>
 
 export const submitDirectlyToSolver = async (
   solvers: { address: string; baseUrl: string }[],
-  intent: Intent,
+  intent: IntentERC20,
   approvalTxOrTxHash?: string
 ) => {
   if (intent.matchmaker !== MATCHMAKER[config.chainId]) {
@@ -168,10 +167,10 @@ export const submitDirectlyToSolver = async (
   const blocksCount = 20;
 
   const latestBlock = await provider.getBlock("latest");
-  const timestamp = latestBlock.timestamp + blocksCount * BLOCK_TIME;
+  const timestamp = latestBlock.timestamp + blocksCount * AVERAGE_BLOCK_TIME;
 
   let executeAmountToCheck: string;
-  if (intent.side === Side.BUY) {
+  if (intent.isBuy) {
     const endAmount = bn(intent.endAmount);
     const startAmount = endAmount.sub(
       endAmount.mul(intent.startAmountBps).div(10000)
@@ -212,14 +211,12 @@ export const submitDirectlyToSolver = async (
         blockDeadline: latestBlock.number + blocksCount,
       };
       authorization.signature = await matchmaker._signTypedData(
-        getEIP712Domain(config.chainId),
+        getEIP712Domain(config.chainId, Protocol.ERC20),
         getEIP712TypesForAuthorization(),
         authorization
       );
 
-      console.log(`auth hash: ${getAuthorizationHash(authorization)}`);
-
-      await axios.post(`${baseUrl}/authorizations`, {
+      await axios.post(`${baseUrl}/erc20/authorizations`, {
         intent,
         approvalTxOrTxHash,
         authorization,

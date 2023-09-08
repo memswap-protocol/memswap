@@ -18,14 +18,15 @@ import { randomUUID } from "crypto";
 import "../monkey-patches/flashbots-bundle-provider";
 
 import {
-  SOLUTION_PROXY,
+  SOLUTION_PROXY_ERC20,
   MATCHMAKER,
   WETH2,
   WETH9,
 } from "../../common/addresses";
 import { logger } from "../../common/logger";
-import { Authorization, Intent, Side, Solution } from "../../common/types";
+import { Authorization, IntentERC20, SolutionERC20 } from "../../common/types";
 import {
+  PESSIMISTIC_BLOCK_TIME,
   bn,
   getAuthorizationHash,
   getIntentHash,
@@ -36,12 +37,10 @@ import {
 import { config } from "../config";
 import { redis } from "../redis";
 import * as solutions from "../solutions";
-import { BuySolutionData, SellSolutionData } from "../types";
+import { BuySolutionDataERC20, SellSolutionDataERC20 } from "../types";
 import { getFlashbotsProvider } from "../utils";
 
-const COMPONENT = "tx-solver";
-
-const BLOCK_TIME = 15;
+const COMPONENT = "tx-solver-erc20";
 
 // Warm-up
 getFlashbotsProvider();
@@ -60,9 +59,9 @@ const worker = new Worker(
   async (job) => {
     const { intent, approvalTxOrTxHash, existingSolution, authorization } =
       job.data as {
-        intent: Intent;
+        intent: IntentERC20;
         approvalTxOrTxHash?: string;
-        existingSolution?: Solution;
+        existingSolution?: SolutionERC20;
         authorization?: Authorization;
       };
 
@@ -101,7 +100,7 @@ const worker = new Worker(
       const memswapGas = 150000;
       const defaultGas = 200000;
 
-      let solution: Solution;
+      let solution: SolutionERC20;
       if (existingSolution) {
         // Reuse existing solution
 
@@ -110,10 +109,10 @@ const worker = new Worker(
         // Check and generate solution
 
         if (
-          (intent.tokenIn === WETH2[config.chainId] &&
-            intent.tokenOut === WETH9[config.chainId]) ||
-          (intent.tokenIn === WETH9[config.chainId] &&
-            intent.tokenOut === AddressZero)
+          (intent.sellToken === WETH2[config.chainId] &&
+            intent.buyToken === WETH9[config.chainId]) ||
+          (intent.sellToken === WETH9[config.chainId] &&
+            intent.buyToken === AddressZero)
         ) {
           logger.info(
             COMPONENT,
@@ -181,12 +180,14 @@ const worker = new Worker(
         );
 
         const latestBlock = await provider.getBlock("latest");
-        const latestTimestamp = latestBlock.timestamp + BLOCK_TIME;
+        const latestTimestamp = latestBlock.timestamp + PESSIMISTIC_BLOCK_TIME;
         const latestBaseFee = await provider
           .getBlock("pending")
           .then((b) => b!.baseFeePerGas!);
 
-        if (intent.side === Side.SELL) {
+        if (!intent.isBuy) {
+          // Sell
+
           const endAmount = intent.endAmount;
           const startAmount = bn(endAmount).add(
             bn(endAmount).mul(intent.startAmountBps).div(10000)
@@ -203,18 +204,18 @@ const worker = new Worker(
             intent,
             intent.amount,
             provider
-          )) as { data: SellSolutionData };
+          )) as { data: SellSolutionDataERC20 };
 
           const gasConsumed = bn(memswapGas)
             .add(solutionDetails.gasUsed ?? defaultGas)
             .toString();
 
-          if (bn(solutionDetails.minAmountOut).lt(minAmountOut)) {
+          if (bn(solutionDetails.minBuyAmount).lt(minAmountOut)) {
             logger.error(
               COMPONENT,
               JSON.stringify({
                 msg: "Solution not good enough",
-                solutionAmountOut: solutionDetails.minAmountOut,
+                solutionAmountOut: solutionDetails.minBuyAmount,
                 minAmountOut: minAmountOut.toString(),
                 intentHash,
                 approvalTxOrTxHash,
@@ -224,15 +225,15 @@ const worker = new Worker(
           }
 
           const tokenOutDecimals = await solutions.uniswap
-            .getToken(intent.tokenOut, provider)
+            .getToken(intent.buyToken, provider)
             .then((t) => t.decimals);
-          const grossProfitInTokenOut = bn(solutionDetails.minAmountOut).sub(
+          const grossProfitInTokenOut = bn(solutionDetails.minBuyAmount).sub(
             minAmountOut
           );
           const grossProfitInETH = grossProfitInTokenOut
             .mul(parseEther("1"))
             .div(
-              parseUnits(solutionDetails.tokenOutToEthRate, tokenOutDecimals)
+              parseUnits(solutionDetails.buyTokenToEthRate, tokenOutDecimals)
             );
 
           const gasFee = latestBaseFee
@@ -289,7 +290,7 @@ const worker = new Worker(
                 .div(10000)
                 .mul(
                   parseUnits(
-                    solutionDetails.tokenOutToEthRate,
+                    solutionDetails.buyTokenToEthRate,
                     tokenOutDecimals
                   )
                 )
@@ -353,18 +354,20 @@ const worker = new Worker(
             intent,
             intent.amount,
             provider
-          )) as { data: BuySolutionData };
+          )) as { data: BuySolutionDataERC20 };
+
+          console.log(JSON.stringify(solutionDetails, null, 2));
 
           const gasConsumed = bn(memswapGas)
             .add(solutionDetails.gasUsed ?? defaultGas)
             .toString();
 
-          if (bn(solutionDetails.maxAmountIn).gt(maxAmountIn)) {
+          if (bn(solutionDetails.maxSellAmount).gt(maxAmountIn)) {
             logger.error(
               COMPONENT,
               JSON.stringify({
                 msg: "Solution not good enough",
-                solutionAmountIn: solutionDetails.maxAmountIn,
+                solutionAmountIn: solutionDetails.maxSellAmount,
                 maxAmountIn: maxAmountIn.toString(),
                 intentHash,
                 approvalTxOrTxHash,
@@ -373,15 +376,17 @@ const worker = new Worker(
             return;
           }
 
-          const tokenInDecimals = await solutions.uniswap
-            .getToken(intent.tokenIn, provider)
+          const sellTokenDecimals = await solutions.uniswap
+            .getToken(intent.sellToken, provider)
             .then((t) => t.decimals);
-          const grossProfitInTokenIn = bn(solutionDetails.maxAmountIn).sub(
+          const grossProfitInSellToken = bn(solutionDetails.maxSellAmount).sub(
             maxAmountIn
           );
-          const grossProfitInETH = grossProfitInTokenIn
+          const grossProfitInETH = grossProfitInSellToken
             .mul(parseEther("1"))
-            .div(parseUnits(solutionDetails.tokenInToEthRate, tokenInDecimals));
+            .div(
+              parseUnits(solutionDetails.sellTokenToEthRate, sellTokenDecimals)
+            );
 
           const gasFee = latestBaseFee
             .add(maxPriorityFeePerGas)
@@ -394,7 +399,7 @@ const worker = new Worker(
               msg: "Profit breakdown",
               solutionDetails,
               maxAmountIn: maxAmountIn.toString(),
-              grossProfitInTokenIn: grossProfitInTokenIn.toString(),
+              grossProfitInSellToken: grossProfitInSellToken.toString(),
               grossProfitInETH: grossProfitInETH.toString(),
               netProfitInETH: netProfitInETH.toString(),
               gasConsumed,
@@ -436,7 +441,10 @@ const worker = new Worker(
                 .mul(5000)
                 .div(10000)
                 .mul(
-                  parseUnits(solutionDetails.tokenInToEthRate, tokenInDecimals)
+                  parseUnits(
+                    solutionDetails.sellTokenToEthRate,
+                    sellTokenDecimals
+                  )
                 )
                 .div(parseEther("1"))
             );
@@ -514,7 +522,7 @@ const worker = new Worker(
       const perfTime4 = performance.now();
 
       const getFillerTx = async (
-        intent: Intent,
+        intent: IntentERC20,
         authorization?: Authorization
       ) => {
         let method: string;
@@ -532,15 +540,15 @@ const worker = new Worker(
         return {
           signedTransaction: await solver.signTransaction({
             from: solver.address,
-            to: SOLUTION_PROXY[config.chainId],
+            to: SOLUTION_PROXY_ERC20[config.chainId],
             value: 0,
             data: new Interface([
               `
                 function ${method}(
                   (
-                    uint8 side,
-                    address tokenIn,
-                    address tokenOut,
+                    bool isBuy,
+                    address buyToken,
+                    address sellToken,
                     address maker,
                     address matchmaker,
                     address source,
@@ -560,9 +568,10 @@ const worker = new Worker(
                     bytes data,
                     uint128[] fillAmounts,
                     uint128[] executeAmounts
-                  ) solution${
+                  ) solution,
+                  ${
                     authorization
-                      ? `,
+                      ? `
                         (
                           (
                             uint128 fillAmountToCheck,
@@ -570,10 +579,16 @@ const worker = new Worker(
                             uint32 blockDeadline
                           ) authorization,
                           bytes signature
-                        )[] auths
+                        )[] auths,
                       `
                       : ""
                   }
+                  ${`
+                    (
+                      uint8 kind,
+                      bytes data
+                    )[] permits     
+                  `}
                 )
               `,
             ]).encodeFunctionData(
@@ -583,8 +598,9 @@ const worker = new Worker(
                     [intent],
                     solution,
                     [{ authorization, signature: authorization!.signature }],
+                    [],
                   ]
-                : [[intent], solution]
+                : [[intent], solution, []]
             ),
             type: 2,
             nonce: await provider.getTransactionCount(solver.address),
@@ -672,10 +688,10 @@ const worker = new Worker(
             `solver:${uuid}`,
             JSON.stringify({ intent, approvalTxOrTxHash, solution }),
             "EX",
-            BLOCK_TIME * 4
+            PESSIMISTIC_BLOCK_TIME * 4
           );
 
-          await axios.post(`${config.matchmakerBaseUrl}/solutions`, {
+          await axios.post(`${config.matchmakerBaseUrl}/erc20/solutions`, {
             uuid,
             baseUrl: config.solverBaseUrl,
             intent,
@@ -767,10 +783,10 @@ worker.on("error", (error) => {
 });
 
 export const addToQueue = async (
-  intent: Intent,
+  intent: IntentERC20,
   options?: {
     approvalTxOrTxHash?: string;
-    existingSolution?: Solution;
+    existingSolution?: SolutionERC20;
     authorization?: Authorization;
   },
   delay?: number

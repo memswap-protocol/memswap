@@ -1,12 +1,12 @@
-export enum Side {
-  BUY,
-  SELL,
+export enum Protocol {
+  ERC20,
+  ERC721,
 }
 
-export type Intent = {
-  side: Side;
-  tokenIn: string;
-  tokenOut: string;
+export type IntentERC20 = {
+  isBuy: boolean;
+  buyToken: string;
+  sellToken: string;
   maker: string;
   matchmaker: string;
   source: string;
@@ -20,8 +20,19 @@ export type Intent = {
   endAmount: string;
   startAmountBps: number;
   expectedAmountBps: number;
-  hasDynamicSignature: string;
+  hasDynamicSignature: boolean;
   signature: string;
+};
+
+export type IntentERC721 = IntentERC20 & {
+  hasCriteria: boolean;
+  tokenIdOrCriteria: string;
+};
+
+export type SolutionERC20 = {
+  data: string;
+  fillAmounts: string[];
+  executeAmounts: string[];
 };
 
 export type Authorization = {
@@ -31,12 +42,6 @@ export type Authorization = {
   executeAmountToCheck: string;
   blockDeadline: number;
   signature?: string;
-};
-
-export type Solution = {
-  data: string;
-  fillAmounts: string[];
-  executeAmounts: string[];
 };
 
 export type TxData = {

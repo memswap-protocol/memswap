@@ -15,10 +15,10 @@ import {
 import { AlphaRouter, SwapType } from "@uniswap/smart-order-router";
 
 import { PERMIT2, WETH2, WETH9 } from "../../common/addresses";
-import { Intent, Side } from "../../common/types";
+import { IntentERC20 } from "../../common/types";
 import { now } from "../../common/utils";
 import { config } from "../config";
-import { Call, SolutionDetails } from "../types";
+import { Call, SolutionDetailsERC20 } from "../types";
 
 export const getToken = async (
   address: string,
@@ -47,24 +47,24 @@ export const getToken = async (
 };
 
 export const solve = async (
-  intent: Intent,
+  intent: IntentERC20,
   fillAmount: string,
   provider: Provider
-): Promise<SolutionDetails> => {
+): Promise<SolutionDetailsERC20> => {
   const router = new AlphaRouter({
     chainId: config.chainId,
     provider: provider as any,
   });
 
   const ethToken = await getToken(AddressZero, provider);
-  const fromToken = await getToken(intent.tokenIn, provider);
-  const toToken = await getToken(intent.tokenOut, provider);
+  const fromToken = await getToken(intent.sellToken, provider);
+  const toToken = await getToken(intent.buyToken, provider);
 
-  const inETH = intent.tokenIn === WETH2[config.chainId];
-  if (intent.side === Side.BUY) {
-    // Buy `tokenOut` for `tokenIn`
+  const inETH = intent.sellToken === WETH2[config.chainId];
+  if (intent.isBuy) {
+    // Buy fixed amount of `buyToken` for variable amount of `sellToken`
 
-    const [actualRoute, tokenInToEthRate] = await Promise.all([
+    const [actualRoute, sellTokenToEthRate] = await Promise.all([
       router.route(
         CurrencyAmount.fromRawAmount(toToken, fillAmount),
         fromToken,
@@ -75,7 +75,7 @@ export const solve = async (
         }
       ),
       [WETH2[config.chainId], WETH9[config.chainId], AddressZero].includes(
-        intent.tokenIn
+        intent.sellToken
       )
         ? "1"
         : router
@@ -104,7 +104,7 @@ export const solve = async (
       data: {
         calls: [
           {
-            to: intent.tokenIn,
+            to: intent.sellToken,
             data: new Interface([
               "function approve(address spender, uint256 amount)",
               "function withdraw(uint256 amount)",
@@ -120,7 +120,7 @@ export const solve = async (
                 data: new Interface([
                   "function approve(address token, address spender, uint160 amount, uint48 expiration)",
                 ]).encodeFunctionData("approve", [
-                  intent.tokenIn,
+                  intent.sellToken,
                   actualRoute!.methodParameters!.to,
                   maxAmountIn,
                   now() + 3600,
@@ -134,15 +134,15 @@ export const solve = async (
             value: inETH ? maxAmountIn : "0",
           },
         ].filter(Boolean) as Call[],
-        maxAmountIn: maxAmountIn.toString(),
-        tokenInToEthRate,
+        maxSellAmount: maxAmountIn.toString(),
+        sellTokenToEthRate,
         gasUsed: actualRoute!.estimatedGasUsed.toString(),
       },
     };
   } else {
-    // Sell `tokenIn` to `tokenOut`
+    // Sell fixed amount of `sellToken` for variable amount of `buyToken`
 
-    const [actualRoute, tokenOutToEthRate] = await Promise.all([
+    const [actualRoute, buyTokenToEthRate] = await Promise.all([
       router.route(
         CurrencyAmount.fromRawAmount(fromToken, fillAmount),
         toToken,
@@ -153,7 +153,7 @@ export const solve = async (
         }
       ),
       [WETH2[config.chainId], WETH9[config.chainId], AddressZero].includes(
-        intent.tokenOut
+        intent.buyToken
       )
         ? "1"
         : router
@@ -177,7 +177,7 @@ export const solve = async (
       data: {
         calls: [
           {
-            to: intent.tokenIn,
+            to: intent.sellToken,
             data: new Interface([
               "function approve(address spender, uint256 amount)",
               "function withdraw(uint256 amount)",
@@ -193,7 +193,7 @@ export const solve = async (
                 data: new Interface([
                   "function approve(address token, address spender, uint160 amount, uint48 expiration)",
                 ]).encodeFunctionData("approve", [
-                  intent.tokenIn,
+                  intent.sellToken,
                   actualRoute!.methodParameters!.to,
                   fillAmount,
                   now() + 3600,
@@ -207,11 +207,11 @@ export const solve = async (
             value: inETH ? fillAmount : "0",
           },
         ].filter(Boolean) as Call[],
-        minAmountOut: parseUnits(
+        minBuyAmount: parseUnits(
           actualRoute!.quote.toExact(),
           actualRoute!.quote.currency.decimals
         ).toString(),
-        tokenOutToEthRate,
+        buyTokenToEthRate,
         gasUsed: actualRoute!.estimatedGasUsed.toString(),
       },
     };

@@ -311,7 +311,7 @@ contract MemswapERC20 is
         Intent[] calldata intents,
         Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
-    ) external nonReentrant executePermits(permits) {
+    ) external payable nonReentrant executePermits(permits) {
         uint128[] memory amountsToCheck;
 
         // Check
@@ -351,7 +351,7 @@ contract MemswapERC20 is
         Intent[] calldata intents,
         Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
-    ) external nonReentrant executePermits(permits) {
+    ) external payable nonReentrant executePermits(permits) {
         uint128[] memory amountsToCheck;
 
         // Check
@@ -393,7 +393,7 @@ contract MemswapERC20 is
         Solution calldata solution,
         AuthorizationWithSignature[] calldata auths,
         PermitExecutor.Permit[] calldata permits
-    ) external nonReentrant executePermits(permits) {
+    ) external payable nonReentrant executePermits(permits) {
         uint128[] memory amountsToCheck;
 
         // Check
@@ -824,12 +824,14 @@ contract MemswapERC20 is
         );
 
         // Solve
-        ISolution(msg.sender).callback(
-            intents,
-            actualAmountsToFill,
-            amountsToExecute,
-            solution.data
-        );
+        if (solution.data.length > 0) {
+            ISolution(msg.sender).callback(
+                intents,
+                actualAmountsToFill,
+                amountsToExecute,
+                solution.data
+            );
+        }
 
         // Post-process
         _postProcess(

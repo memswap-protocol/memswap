@@ -1,4 +1,4 @@
-import { Intent, Solution } from "../common/types";
+import { IntentERC20, SolutionERC20 } from "../common/types";
 
 export type Call = {
   to: string;
@@ -6,32 +6,32 @@ export type Call = {
   value: string;
 };
 
-export type SellSolutionData = {
+export type SellSolutionDataERC20 = {
   calls: Call[];
-  minAmountOut: string;
-  tokenOutToEthRate: string;
+  minBuyAmount: string;
+  buyTokenToEthRate: string;
   gasUsed: string;
 };
 
-export type BuySolutionData = {
+export type BuySolutionDataERC20 = {
   calls: Call[];
-  maxAmountIn: string;
-  tokenInToEthRate: string;
+  maxSellAmount: string;
+  sellTokenToEthRate: string;
   gasUsed: string;
 };
 
-export type SolutionDetails =
+export type SolutionDetailsERC20 =
   | {
       kind: "sell";
-      data: SellSolutionData;
+      data: SellSolutionDataERC20;
     }
   | {
       kind: "buy";
-      data: BuySolutionData;
+      data: BuySolutionDataERC20;
     };
 
-export type CachedSolution = {
-  intent: Intent;
-  solution: Solution;
+export type CachedSolutionERC20 = {
+  intent: IntentERC20;
+  solution: SolutionERC20;
   approvalTxOrTxHash?: string;
 };

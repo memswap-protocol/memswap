@@ -45,13 +45,23 @@ contract SolutionProxyERC20 is ISolution {
 
     receive() external payable {}
 
+    // --- Modifiers ---
+
+    modifier restrictCaller(address caller) {
+        if (msg.sender != caller) {
+            revert Unauthorized();
+        }
+
+        _;
+    }
+
     // --- Public methods ---
 
     function solve(
         MemswapERC20.Intent[] calldata intents,
         MemswapERC20.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
-    ) external {
+    ) external restrictCaller(owner) {
         MemswapERC20(payable(memswap)).solve(intents, solution, permits);
     }
 
@@ -59,7 +69,7 @@ contract SolutionProxyERC20 is ISolution {
         MemswapERC20.Intent[] calldata intents,
         MemswapERC20.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
-    ) external {
+    ) external restrictCaller(owner) {
         MemswapERC20(payable(memswap)).solveWithOnChainAuthorizationCheck(
             intents,
             solution,
@@ -72,7 +82,7 @@ contract SolutionProxyERC20 is ISolution {
         MemswapERC20.Solution calldata solution,
         MemswapERC20.AuthorizationWithSignature[] calldata auths,
         PermitExecutor.Permit[] calldata permits
-    ) external {
+    ) external restrictCaller(owner) {
         MemswapERC20(payable(memswap)).solveWithSignatureAuthorizationCheck(
             intents,
             solution,
@@ -86,7 +96,7 @@ contract SolutionProxyERC20 is ISolution {
         uint128[] memory amountsToFill,
         uint128[] memory amountsToExecute,
         bytes memory data
-    ) external {
+    ) external restrictCaller(memswap) {
         // Assumes a single intent is filled at once
         MemswapERC20.Intent memory intent = intents[0];
         uint128 amountToFill = amountsToFill[0];

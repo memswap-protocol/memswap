@@ -4,10 +4,10 @@ import { ExpressAdapter } from "@bull-board/express";
 import express from "express";
 
 import { logger } from "../common/logger";
-import { Intent } from "../common/types";
+import { IntentERC20 } from "../common/types";
 import { config } from "./config";
 import * as jobs from "./jobs";
-import { processSolution } from "./solutions";
+import * as solutions from "./solutions";
 
 // Log unhandled errors
 process.on("unhandledRejection", (error) => {
@@ -24,7 +24,7 @@ const app = express();
 const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath("/admin/bullmq");
 createBullBoard({
-  queues: [new BullMQAdapter(jobs.signatureRelease.queue)],
+  queues: [new BullMQAdapter(jobs.signatureReleaseERC20.queue)],
   serverAdapter: serverAdapter,
 });
 
@@ -35,10 +35,10 @@ app.get("/lives", (_, res) => {
   return res.json({ message: "yes" });
 });
 
-app.post("/intents/private", async (req, res) => {
+app.post("/erc20/intents/private", async (req, res) => {
   const { approvalTxOrTxHash, intent } = req.body as {
     approvalTxOrTxHash?: string;
-    intent: Intent;
+    intent: IntentERC20;
   };
 
   if (!config.knownSolvers.length) {
@@ -46,7 +46,7 @@ app.post("/intents/private", async (req, res) => {
   }
 
   // Send to a single solver
-  await jobs.signatureRelease.submitDirectlyToSolver(
+  await jobs.signatureReleaseERC20.submitDirectlyToSolver(
     config.knownSolvers.slice(0, 1).map((s) => {
       const [address, baseUrl] = s.split(" ");
       return { address, baseUrl };
@@ -58,10 +58,10 @@ app.post("/intents/private", async (req, res) => {
   return res.json({ message: "Success" });
 });
 
-app.post("/intents/public", async (req, res) => {
+app.post("/erc20/intents/public", async (req, res) => {
   const { approvalTxOrTxHash, intent } = req.body as {
     approvalTxOrTxHash?: string;
-    intent: Intent;
+    intent: IntentERC20;
   };
 
   if (!config.knownSolvers.length) {
@@ -69,7 +69,7 @@ app.post("/intents/public", async (req, res) => {
   }
 
   // Send to all solvers
-  await jobs.signatureRelease.submitDirectlyToSolver(
+  await jobs.signatureReleaseERC20.submitDirectlyToSolver(
     config.knownSolvers.map((s) => {
       const [address, baseUrl] = s.split(" ");
       return { address, baseUrl };
@@ -83,11 +83,11 @@ app.post("/intents/public", async (req, res) => {
   return res.json({ message: "Success" });
 });
 
-app.post("/solutions", async (req, res) => {
+app.post("/erc20/solutions", async (req, res) => {
   const { uuid, baseUrl, intent, txs } = req.body as {
     uuid: string;
     baseUrl: string;
-    intent: Intent;
+    intent: IntentERC20;
     txs: string[];
   };
 
@@ -95,7 +95,7 @@ app.post("/solutions", async (req, res) => {
     return res.status(400).json({ message: "Invalid parameters" });
   }
 
-  const result = await processSolution(uuid, baseUrl, intent, txs);
+  const result = await solutions.erc20.process(uuid, baseUrl, intent, txs);
   if (result.status === "error") {
     return res.status(400).json({ error: result.error });
   } else if (result.status === "success") {
