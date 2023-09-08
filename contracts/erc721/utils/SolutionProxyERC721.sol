@@ -2,14 +2,15 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
-import {MemswapERC20} from "../MemswapERC20.sol";
+import {MemswapERC721} from "../MemswapERC721.sol";
 import {PermitExecutor} from "../../common/PermitExecutor.sol";
 import {WETH2} from "../../common/WETH2.sol";
 
 import {ISolution} from "../interfaces/ISolution.sol";
 
-contract SolutionProxyERC20 is ISolution {
+contract SolutionProxyERC721 is ISolution {
     // --- Structs ---
 
     struct Call {
@@ -59,19 +60,19 @@ contract SolutionProxyERC20 is ISolution {
     // --- Public methods ---
 
     function solve(
-        MemswapERC20.Intent[] calldata intents,
-        MemswapERC20.Solution calldata solution,
+        MemswapERC721.Intent[] calldata intents,
+        MemswapERC721.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
     ) external restrictCaller(owner) {
-        MemswapERC20(payable(memswap)).solve(intents, solution, permits);
+        MemswapERC721(payable(memswap)).solve(intents, solution, permits);
     }
 
     function solveWithOnChainAuthorizationCheck(
-        MemswapERC20.Intent[] calldata intents,
-        MemswapERC20.Solution calldata solution,
+        MemswapERC721.Intent[] calldata intents,
+        MemswapERC721.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
     ) external restrictCaller(owner) {
-        MemswapERC20(payable(memswap)).solveWithOnChainAuthorizationCheck(
+        MemswapERC721(payable(memswap)).solveWithOnChainAuthorizationCheck(
             intents,
             solution,
             permits
@@ -79,12 +80,12 @@ contract SolutionProxyERC20 is ISolution {
     }
 
     function solveWithSignatureAuthorizationCheck(
-        MemswapERC20.Intent[] calldata intents,
-        MemswapERC20.Solution calldata solution,
-        MemswapERC20.AuthorizationWithSignature[] calldata auths,
+        MemswapERC721.Intent[] calldata intents,
+        MemswapERC721.Solution calldata solution,
+        MemswapERC721.AuthorizationWithSignature[] calldata auths,
         PermitExecutor.Permit[] calldata permits
     ) external restrictCaller(owner) {
-        MemswapERC20(payable(memswap)).solveWithSignatureAuthorizationCheck(
+        MemswapERC721(payable(memswap)).solveWithSignatureAuthorizationCheck(
             intents,
             solution,
             auths,
@@ -93,9 +94,9 @@ contract SolutionProxyERC20 is ISolution {
     }
 
     function callback(
-        MemswapERC20.Intent[] memory intents,
-        uint128[] memory amountsToFill,
-        uint128[] memory amountsToExecute,
+        MemswapERC721.Intent[] memory intents,
+        MemswapERC721.TokenDetails[][] memory tokenDetailsToFill,
+        uint128[] memory,
         bytes memory data
     ) external override restrictCaller(memswap) {
         // Assumes a single intent is filled at once
@@ -103,31 +104,33 @@ contract SolutionProxyERC20 is ISolution {
             revert NotSupported();
         }
 
-        MemswapERC20.Intent memory intent = intents[0];
-        uint128 amountToFill = amountsToFill[0];
-        uint128 amountToExecute = amountsToExecute[0];
+        MemswapERC721.Intent memory intent = intents[0];
+        MemswapERC721.TokenDetails[] memory detailsToFill = tokenDetailsToFill[
+            0
+        ];
 
         if (intent.isBuy) {
             Call[] memory calls = abi.decode(data, (Call[]));
 
             // Make calls
 
-            uint256 length = calls.length;
-            for (uint256 i; i < length; ) {
-                makeCall(calls[i]);
-
-                unchecked {
-                    ++i;
+            unchecked {
+                uint256 length = calls.length;
+                for (uint256 i; i < length; i++) {
+                    makeCall(calls[i]);
                 }
             }
 
             // Push outputs
 
-            bool outputETH = intent.buyToken == address(0);
-            if (outputETH) {
-                makeCall(Call(memswap, "", amountToFill));
-            } else {
-                IERC20(intent.buyToken).approve(memswap, amountToFill);
+            unchecked {
+                uint256 length = detailsToFill.length;
+                for (uint256 i; i < length; i++) {
+                    IERC721(intent.buyToken).approve(
+                        memswap,
+                        detailsToFill[i].tokenId
+                    );
+                }
             }
 
             // Take profits
@@ -144,39 +147,7 @@ contract SolutionProxyERC20 is ISolution {
                 makeCall(Call(owner, "", amountLeft));
             }
         } else {
-            Call[] memory calls = abi.decode(data, (Call[]));
-
-            // Make calls
-
-            uint256 length = calls.length;
-            for (uint256 i; i < length; ) {
-                makeCall(calls[i]);
-
-                unchecked {
-                    ++i;
-                }
-            }
-
-            // Push outputs and take profits
-
-            bool outputETH = intent.buyToken == address(0);
-            if (outputETH) {
-                makeCall(Call(memswap, "", amountToExecute));
-
-                uint256 amountLeft = address(this).balance;
-                if (amountLeft > 0) {
-                    makeCall(Call(owner, "", amountLeft));
-                }
-            } else {
-                IERC20(intent.buyToken).approve(memswap, amountToExecute);
-
-                uint256 amountLeft = IERC20(intent.buyToken).balanceOf(
-                    address(this)
-                ) - amountToExecute;
-                if (amountLeft > 0) {
-                    IERC20(intent.buyToken).transfer(owner, amountLeft);
-                }
-            }
+            revert NotSupported();
         }
     }
 

@@ -323,7 +323,7 @@ contract MemswapERC721 is
         Intent[] calldata intents,
         Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
-    ) external nonReentrant executePermits(permits) {
+    ) external payable nonReentrant executePermits(permits) {
         uint128[] memory amountsToCheck;
 
         // Check
@@ -363,7 +363,7 @@ contract MemswapERC721 is
         Intent[] calldata intents,
         Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
-    ) external nonReentrant executePermits(permits) {
+    ) external payable nonReentrant executePermits(permits) {
         uint128[] memory amountsToCheck;
 
         // Check
@@ -408,7 +408,7 @@ contract MemswapERC721 is
         Solution calldata solution,
         AuthorizationWithSignature[] calldata auths,
         PermitExecutor.Permit[] calldata permits
-    ) external nonReentrant executePermits(permits) {
+    ) external payable nonReentrant executePermits(permits) {
         uint128[] memory amountsToCheck;
 
         // Check
@@ -910,11 +910,14 @@ contract MemswapERC721 is
         );
 
         // Solve
-        ISolution(msg.sender).callback(
-            intents,
-            amountsToExecute,
-            solution.data
-        );
+        if (solution.data.length > 0) {
+            ISolution(msg.sender).callback(
+                intents,
+                actualTokenDetailsToFill,
+                amountsToExecute,
+                solution.data
+            );
+        }
 
         // Post-process
         _postProcess(
