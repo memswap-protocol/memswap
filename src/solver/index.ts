@@ -18,10 +18,6 @@ process.on("unhandledRejection", (error) => {
   );
 });
 
-jobs.txListener.addToQueue(
-  "0xa6d54a760a262b6c257e7f955252ffd52e92640fec4e73fea1089f01201f638d"
-);
-
 // Initialize app
 const app = express();
 
@@ -32,6 +28,7 @@ createBullBoard({
   queues: [
     new BullMQAdapter(jobs.txListener.queue),
     new BullMQAdapter(jobs.txSolverERC20.queue),
+    new BullMQAdapter(jobs.txSolverERC721.queue),
   ],
   serverAdapter: serverAdapter,
 });

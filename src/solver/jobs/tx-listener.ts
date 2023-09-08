@@ -13,8 +13,8 @@ import {
   isERC721Intent,
 } from "../../common/utils";
 import { config } from "../config";
+import * as jobs from "../jobs";
 import { redis } from "../redis";
-import * as txSolver from "./tx-solver-erc20";
 
 const COMPONENT = "tx-listener";
 
@@ -263,7 +263,7 @@ const worker = new Worker(
             nonce: result[10].toString(),
             isPartiallyFillable: result[11],
             hasCriteria: result[12],
-            tokenIdOrCriteria: result[13].toLowerCase(),
+            tokenIdOrCriteria: result[13].toString(),
             amount: result[14].toString(),
             endAmount: result[15].toString(),
             startAmountBps: result[16],
@@ -300,9 +300,15 @@ const worker = new Worker(
           return;
         }
 
-        await txSolver.addToQueue(intent, {
-          approvalTxOrTxHash,
-        });
+        if (isERC721Intent(intent)) {
+          await jobs.txSolverERC721.addToQueue(intent as IntentERC721, {
+            approvalTxOrTxHash,
+          });
+        } else {
+          await jobs.txSolverERC20.addToQueue(intent as IntentERC20, {
+            approvalTxOrTxHash,
+          });
+        }
       }
     } catch (error: any) {
       logger.error(

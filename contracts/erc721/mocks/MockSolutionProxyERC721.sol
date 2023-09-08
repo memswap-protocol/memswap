@@ -63,9 +63,10 @@ contract MockSolutionProxyERC721 is ISolution {
 
     function callback(
         MemswapERC721.Intent[] memory intents,
+        MemswapERC721.TokenDetails[][] memory,
         uint128[] memory,
         bytes memory data
-    ) external {
+    ) external override {
         if (intents[0].isBuy) {
             (address token, uint256[] memory tokenIds) = abi.decode(
                 data,

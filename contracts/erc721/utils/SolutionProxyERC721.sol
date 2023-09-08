@@ -95,7 +95,7 @@ contract SolutionProxyERC721 is ISolution {
 
     function callback(
         MemswapERC721.Intent[] memory intents,
-        MemswapERC721.TokenDetails[][] memory tokenDetailsToFill,
+        MemswapERC721.TokenDetails[][] memory,
         uint128[] memory,
         bytes memory data
     ) external override restrictCaller(memswap) {
@@ -105,9 +105,6 @@ contract SolutionProxyERC721 is ISolution {
         }
 
         MemswapERC721.Intent memory intent = intents[0];
-        MemswapERC721.TokenDetails[] memory detailsToFill = tokenDetailsToFill[
-            0
-        ];
 
         if (intent.isBuy) {
             Call[] memory calls = abi.decode(data, (Call[]));
@@ -124,12 +121,12 @@ contract SolutionProxyERC721 is ISolution {
             // Push outputs
 
             unchecked {
-                uint256 length = detailsToFill.length;
-                for (uint256 i; i < length; i++) {
-                    IERC721(intent.buyToken).approve(
-                        memswap,
-                        detailsToFill[i].tokenId
-                    );
+                bool isApproved = IERC721(intent.buyToken).isApprovedForAll(
+                    address(this),
+                    memswap
+                );
+                if (!isApproved) {
+                    IERC721(intent.buyToken).setApprovalForAll(memswap, true);
                 }
             }
 

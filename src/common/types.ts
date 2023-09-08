@@ -35,6 +35,20 @@ export type SolutionERC20 = {
   executeAmounts: string[];
 };
 
+export type TokenDetails = {
+  tokenId: string;
+  criteriaProof: string[];
+};
+
+export type SolutionERC721 = {
+  // ERC721 solutions are not self-contained like ERC20
+  // (might depend on multiple pre-transactions)
+  txs: TxData[];
+  data: string;
+  fillTokenDetails: TokenDetails[][];
+  executeAmounts: string[];
+};
+
 export type Authorization = {
   intentHash: string;
   solver: string;
@@ -48,4 +62,5 @@ export type TxData = {
   from: string;
   to: string;
   data: string;
+  gasLimit?: number;
 };

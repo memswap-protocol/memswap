@@ -136,7 +136,7 @@ export const solve = async (
         ].filter(Boolean) as Call[],
         maxSellAmount: maxAmountIn.toString(),
         sellTokenToEthRate,
-        gasUsed: actualRoute!.estimatedGasUsed.toString(),
+        gasUsed: actualRoute!.estimatedGasUsed.toNumber(),
       },
     };
   } else {
@@ -212,7 +212,7 @@ export const solve = async (
           actualRoute!.quote.currency.decimals
         ).toString(),
         buyTokenToEthRate,
-        gasUsed: actualRoute!.estimatedGasUsed.toString(),
+        gasUsed: actualRoute!.estimatedGasUsed.toNumber(),
       },
     };
   }

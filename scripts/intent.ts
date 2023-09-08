@@ -9,6 +9,7 @@ import axios from "axios";
 import {
   MATCHMAKER,
   MEMSWAP_ERC20,
+  MEMSWAP_ERC721,
   USDC,
   WETH2,
   WETH9,
@@ -18,7 +19,7 @@ import {
   getEIP712TypesForIntent,
   now,
 } from "../src/common/utils";
-import { IntentERC20, Protocol } from "../src/common/types";
+import { IntentERC20, IntentERC721, Protocol } from "../src/common/types";
 
 // Required env variables:
 // - JSON_URL: url for the http provider
@@ -36,16 +37,16 @@ const main = async () => {
     USDC: USDC[chainId],
   };
 
-  const buyToken = CURRENCIES.USDC;
+  const buyToken = "0x77566d540d1e207dff8da205ed78750f9a1e7c55";
   const sellToken = CURRENCIES.ETH_IN;
 
   // Create intent
-  const intent: IntentERC20 = {
-    isBuy: false,
+  const intent: IntentERC721 = {
+    isBuy: true,
     buyToken,
     sellToken,
     maker: maker.address,
-    matchmaker: MATCHMAKER[chainId],
+    matchmaker: AddressZero,
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,
@@ -55,8 +56,10 @@ const main = async () => {
       .then((b) => b!.timestamp + 3600 * 24),
     nonce: "0",
     isPartiallyFillable: false,
-    amount: parseUnits("0.001", 18).toString(),
-    endAmount: parseUnits("10000", 6).toString(),
+    hasCriteria: true,
+    tokenIdOrCriteria: "0",
+    amount: "1",
+    endAmount: parseUnits("0.015", 18).toString(),
     startAmountBps: 1000,
     expectedAmountBps: 500,
     hasDynamicSignature: false,
@@ -64,8 +67,8 @@ const main = async () => {
     signature: "0x",
   };
   intent.signature = await maker._signTypedData(
-    getEIP712Domain(chainId, Protocol.ERC20),
-    getEIP712TypesForIntent(Protocol.ERC20),
+    getEIP712Domain(chainId, Protocol.ERC721),
+    getEIP712TypesForIntent(Protocol.ERC721),
     intent
   );
 
@@ -89,7 +92,7 @@ const main = async () => {
       : "approve";
   const data =
     memswapWeth.interface.encodeFunctionData(approveMethod, [
-      MEMSWAP_ERC20[chainId],
+      MEMSWAP_ERC721[chainId],
       amountToApprove,
     ]) +
     defaultAbiCoder
@@ -107,6 +110,8 @@ const main = async () => {
           "uint32",
           "uint256",
           "bool",
+          "bool",
+          "uint256",
           "uint128",
           "uint128",
           "uint16",
@@ -127,6 +132,8 @@ const main = async () => {
           intent.endTime,
           intent.nonce,
           intent.isPartiallyFillable,
+          intent.hasCriteria,
+          intent.tokenIdOrCriteria,
           intent.amount,
           intent.endAmount,
           intent.startAmountBps,

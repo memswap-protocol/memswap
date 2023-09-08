@@ -34,14 +34,14 @@ const main = async () => {
   const [deployer] = await ethers.getSigners();
   const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
 
-  // await deployContract(deployer, "MemswapERC20", [
+  // await deployContract(deployer, "MemswapERC721", [
   //   PERMIT2[chainId],
   //   USDC[chainId],
   // ]);
   // await deployContract(deployer, "WETH2");
-  await deployContract(deployer, "SolutionProxyERC20", [
+  await deployContract(deployer, "SolutionProxyERC721", [
     SOLVER[chainId],
-    MEMSWAP_ERC20[chainId],
+    MEMSWAP_ERC721[chainId],
     WETH2[chainId],
   ]);
 };

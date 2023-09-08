@@ -4,18 +4,10 @@ import { JsonRpcProvider } from "@ethersproject/providers";
 import { parse, serialize } from "@ethersproject/transactions";
 import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
-import {
-  FlashbotsBundleProvider,
-  FlashbotsBundleRawTransaction,
-  FlashbotsBundleResolution,
-} from "@flashbots/ethers-provider-bundle";
-import * as txSimulator from "@georgeroman/evm-tx-simulator";
+import { FlashbotsBundleRawTransaction } from "@flashbots/ethers-provider-bundle";
 import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
-
-// Monkey-patch the flashbots bundle provider to support relaying via bloxroute
-import "../monkey-patches/flashbots-bundle-provider";
 
 import {
   SOLUTION_PROXY_ERC20,
@@ -38,12 +30,14 @@ import { config } from "../config";
 import { redis } from "../redis";
 import * as solutions from "../solutions";
 import { BuySolutionDataERC20, SellSolutionDataERC20 } from "../types";
-import { getFlashbotsProvider } from "../utils";
+import {
+  getFlashbotsProvider,
+  relayViaBloxroute,
+  relayViaFlashbots,
+  relayViaTransaction,
+} from "../utils";
 
 const COMPONENT = "tx-solver-erc20";
-
-// Warm-up
-getFlashbotsProvider();
 
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
@@ -356,8 +350,6 @@ const worker = new Worker(
             provider
           )) as { data: BuySolutionDataERC20 };
 
-          console.log(JSON.stringify(solutionDetails, null, 2));
-
           const gasConsumed = bn(memswapGas)
             .add(solutionDetails.gasUsed ?? defaultGas)
             .toString();
@@ -648,7 +640,8 @@ const worker = new Worker(
             provider,
             flashbotsProvider,
             txs,
-            targetBlock
+            targetBlock,
+            COMPONENT
           );
         } else {
           // At this point, for sure the approval transaction was already included, so we can skip it
@@ -658,7 +651,8 @@ const worker = new Worker(
           await relayViaTransaction(
             intentHash,
             provider,
-            fillerTx.signedTransaction
+            fillerTx.signedTransaction,
+            COMPONENT
           );
         }
       } else {
@@ -725,7 +719,8 @@ const worker = new Worker(
               provider,
               flashbotsProvider,
               txs,
-              targetBlock
+              targetBlock,
+              COMPONENT
             );
           } else {
             // At this point, for sure the approval transaction was already included, so we can skip it
@@ -735,7 +730,8 @@ const worker = new Worker(
             await relayViaTransaction(
               intentHash,
               provider,
-              fillerTx.signedTransaction
+              fillerTx.signedTransaction,
+              COMPONENT
             );
           }
         }
@@ -808,257 +804,3 @@ export const addToQueue = async (
           : ""),
     }
   );
-
-// Relay methods
-
-const relayViaTransaction = async (
-  intentHash: string,
-  provider: JsonRpcProvider,
-  tx: string
-) => {
-  const parsedTx = parse(tx);
-  try {
-    await txSimulator.getCallResult(
-      {
-        from: parsedTx.from!,
-        to: parsedTx.to!,
-        data: parsedTx.data,
-        value: parsedTx.value,
-        gas: parsedTx.gasLimit,
-        gasPrice: parsedTx.maxFeePerGas!,
-      },
-      provider
-    );
-  } catch {
-    logger.error(
-      COMPONENT,
-      JSON.stringify({
-        msg: "Simulation failed",
-        intentHash,
-        parsedTx,
-      })
-    );
-
-    throw new Error("Simulation failed");
-  }
-
-  logger.info(
-    COMPONENT,
-    JSON.stringify({
-      msg: "Relaying using regular transaction",
-      intentHash,
-    })
-  );
-
-  const txResponse = await provider.sendTransaction(tx).then((tx) => tx.wait());
-
-  logger.info(
-    COMPONENT,
-    JSON.stringify({
-      msg: "Transaction included",
-      intentHash,
-      txHash: txResponse.transactionHash,
-    })
-  );
-};
-
-const relayViaFlashbots = async (
-  intentHash: string,
-  provider: JsonRpcProvider,
-  flashbotsProvider: FlashbotsBundleProvider,
-  txs: FlashbotsBundleRawTransaction[],
-  targetBlock: number
-) => {
-  const signedBundle = await flashbotsProvider.signBundle(txs);
-
-  const simulationResult: { error?: string; results: [{ error?: string }] } =
-    (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
-  if (simulationResult.error || simulationResult.results.some((r) => r.error)) {
-    logger.error(
-      COMPONENT,
-      JSON.stringify({
-        msg: "Bundle simulation failed",
-        intentHash,
-        simulationResult,
-        txs,
-      })
-    );
-
-    throw new Error("Bundle simulation failed");
-  }
-
-  const receipt = await flashbotsProvider.sendRawBundle(
-    signedBundle,
-    targetBlock
-  );
-  const hash = (receipt as any).bundleHash;
-
-  logger.info(
-    COMPONENT,
-    JSON.stringify({
-      msg: "Bundle relayed using flashbots",
-      intentHash,
-      targetBlock,
-      bundleHash: hash,
-    })
-  );
-
-  const waitResponse = await (receipt as any).wait();
-  if (
-    waitResponse === FlashbotsBundleResolution.BundleIncluded ||
-    waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
-  ) {
-    if (
-      await isTxIncluded(
-        parse(txs[txs.length - 1].signedTransaction).hash!,
-        provider
-      )
-    ) {
-      logger.info(
-        COMPONENT,
-        JSON.stringify({
-          msg: "Bundle included",
-          intentHash,
-          targetBlock,
-          bundleHash: hash,
-        })
-      );
-    } else {
-      logger.info(
-        COMPONENT,
-        JSON.stringify({
-          msg: "Bundle not included",
-          intentHash,
-          targetBlock,
-          bundleHash: hash,
-        })
-      );
-
-      throw new Error("Bundle not included");
-    }
-  } else {
-    logger.info(
-      COMPONENT,
-      JSON.stringify({
-        msg: "Bundle not included",
-        intentHash,
-        targetBlock,
-        bundleHash: hash,
-      })
-    );
-
-    throw new Error("Bundle not included");
-  }
-};
-
-const relayViaBloxroute = async (
-  intentHash: string,
-  provider: JsonRpcProvider,
-  flashbotsProvider: FlashbotsBundleProvider,
-  txs: FlashbotsBundleRawTransaction[],
-  targetBlock: number
-) => {
-  // Simulate via flashbots
-  const signedBundle = await flashbotsProvider.signBundle(txs);
-  const simulationResult: { error?: string; results: [{ error?: string }] } =
-    (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
-  if (simulationResult.error || simulationResult.results.some((r) => r.error)) {
-    logger.error(
-      COMPONENT,
-      JSON.stringify({
-        msg: "Bundle simulation failed",
-        intentHash,
-        simulationResult,
-        txs,
-      })
-    );
-
-    throw new Error("Bundle simulation failed");
-  }
-
-  logger.info(
-    COMPONENT,
-    JSON.stringify({
-      msg: "Bloxroute debug",
-      params: {
-        id: "1",
-        method: "blxr_submit_bundle",
-        params: {
-          transaction: txs.map((tx) => tx.signedTransaction.slice(2)),
-          block_number: "0x" + targetBlock.toString(16),
-          mev_builders: {
-            bloxroute: "",
-            flashbots: "",
-            builder0x69: "",
-            beaverbuild: "",
-            buildai: "",
-            all: "",
-          },
-        },
-      },
-    })
-  );
-
-  const receipt = await (flashbotsProvider as any).blxrSubmitBundle(
-    txs,
-    targetBlock
-  );
-  const hash = (receipt as any).bundleHash;
-
-  logger.info(
-    COMPONENT,
-    JSON.stringify({
-      msg: "Bundle relayed using bloxroute",
-      intentHash,
-      targetBlock,
-      bundleHash: hash,
-    })
-  );
-
-  const waitResponse = await (receipt as any).wait();
-  if (
-    waitResponse === FlashbotsBundleResolution.BundleIncluded ||
-    waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
-  ) {
-    if (
-      await isTxIncluded(
-        parse(txs[txs.length - 1].signedTransaction).hash!,
-        provider
-      )
-    ) {
-      logger.info(
-        COMPONENT,
-        JSON.stringify({
-          msg: "Bundle included",
-          intentHash,
-          targetBlock,
-          bundleHash: hash,
-        })
-      );
-    } else {
-      logger.info(
-        COMPONENT,
-        JSON.stringify({
-          msg: "Bundle not included",
-          intentHash,
-          targetBlock,
-          bundleHash: hash,
-        })
-      );
-
-      throw new Error("Bundle not included");
-    }
-  } else {
-    logger.info(
-      COMPONENT,
-      JSON.stringify({
-        msg: "Bundle not included",
-        intentHash,
-        targetBlock,
-        bundleHash: hash,
-      })
-    );
-
-    throw new Error("Bundle not included");
-  }
-};
