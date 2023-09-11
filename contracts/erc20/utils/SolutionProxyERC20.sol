@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {MemswapERC20} from "../MemswapERC20.sol";
 import {PermitExecutor} from "../../common/PermitExecutor.sol";
-import {WETH2} from "../../common/WETH2.sol";
 
 import {ISolution} from "../interfaces/ISolution.sol";
 
@@ -28,18 +27,12 @@ contract SolutionProxyERC20 is ISolution {
 
     address public immutable owner;
     address public immutable memswap;
-    address public immutable weth2;
 
     // --- Constructor ---
 
-    constructor(
-        address ownerAddress,
-        address memswapAddress,
-        address weth2Address
-    ) {
+    constructor(address ownerAddress, address memswapAddress) {
         owner = ownerAddress;
         memswap = memswapAddress;
-        weth2 = weth2Address;
     }
 
     // --- Fallback ---

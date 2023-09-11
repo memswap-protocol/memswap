@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 import {MemswapERC721} from "../MemswapERC721.sol";
 import {PermitExecutor} from "../../common/PermitExecutor.sol";
-import {WETH2} from "../../common/WETH2.sol";
 
 import {ISolution} from "../interfaces/ISolution.sol";
 
@@ -29,18 +28,12 @@ contract SolutionProxyERC721 is ISolution {
 
     address public immutable owner;
     address public immutable memswap;
-    address public immutable weth2;
 
     // --- Constructor ---
 
-    constructor(
-        address ownerAddress,
-        address memswapAddress,
-        address weth2Address
-    ) {
+    constructor(address ownerAddress, address memswapAddress) {
         owner = ownerAddress;
         memswap = memswapAddress;
-        weth2 = weth2Address;
     }
 
     // --- Fallback ---

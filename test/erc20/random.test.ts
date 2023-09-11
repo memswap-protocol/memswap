@@ -22,7 +22,7 @@ describe("[ERC20] Random", async () => {
   let carol: SignerWithAddress;
 
   let memswap: Contract;
-  let weth: Contract;
+  let memeth: Contract;
 
   let solutionProxy: Contract;
   let token0: Contract;
@@ -34,8 +34,8 @@ describe("[ERC20] Random", async () => {
     memswap = await ethers
       .getContractFactory("MemswapERC20")
       .then((factory) => factory.deploy());
-    weth = await ethers
-      .getContractFactory("WETH2")
+    memeth = await ethers
+      .getContractFactory("MEMETH")
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
@@ -62,7 +62,7 @@ describe("[ERC20] Random", async () => {
     const intent: Intent = {
       isBuy: true,
       buyToken: getRandomBoolean() ? AddressZero : token1.address,
-      sellToken: getRandomBoolean() ? weth.address : token0.address,
+      sellToken: getRandomBoolean() ? memeth.address : token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: getRandomBoolean() ? AddressZero : carol.address,
@@ -86,10 +86,10 @@ describe("[ERC20] Random", async () => {
         )
       : intent.amount;
 
-    if (intent.sellToken === weth.address) {
+    if (intent.sellToken === memeth.address) {
       // Deposit and approve
       await alice.sendTransaction({
-        to: weth.address,
+        to: memeth.address,
         data: new Interface([
           "function depositAndApprove(address spender, uint256 amount)",
         ]).encodeFunctionData("depositAndApprove", [
@@ -134,12 +134,12 @@ describe("[ERC20] Random", async () => {
 
     // Get balances before the execution
     const makerBalanceBefore =
-      intent.sellToken === weth.address
-        ? await weth.balanceOf(intent.maker)
+      intent.sellToken === memeth.address
+        ? await memeth.balanceOf(intent.maker)
         : await token0.balanceOf(intent.maker);
     const sourceBalanceBefore =
-      intent.sellToken === weth.address
-        ? await weth.balanceOf(intent.source)
+      intent.sellToken === memeth.address
+        ? await memeth.balanceOf(intent.source)
         : await token0.balanceOf(intent.source);
 
     // Optionally have some surplus (eg. from amount required by intent)
@@ -197,12 +197,12 @@ describe("[ERC20] Random", async () => {
 
     // Get balances after the execution
     const makerBalanceAfter =
-      intent.sellToken === weth.address
-        ? await weth.balanceOf(intent.maker)
+      intent.sellToken === memeth.address
+        ? await memeth.balanceOf(intent.maker)
         : await token0.balanceOf(intent.maker);
     const sourceBalanceAfter =
-      intent.sellToken === weth.address
-        ? await weth.balanceOf(intent.source)
+      intent.sellToken === memeth.address
+        ? await memeth.balanceOf(intent.source)
         : await token0.balanceOf(intent.source);
 
     // Make sure the maker and the source got the right amounts
@@ -221,7 +221,7 @@ describe("[ERC20] Random", async () => {
     const intent: Intent = {
       isBuy: false,
       buyToken: getRandomBoolean() ? AddressZero : token1.address,
-      sellToken: getRandomBoolean() ? weth.address : token0.address,
+      sellToken: getRandomBoolean() ? memeth.address : token0.address,
       maker: alice.address,
       matchmaker: AddressZero,
       source: getRandomBoolean() ? AddressZero : carol.address,
@@ -245,10 +245,10 @@ describe("[ERC20] Random", async () => {
         )
       : intent.amount;
 
-    if (intent.sellToken === weth.address) {
+    if (intent.sellToken === memeth.address) {
       // Deposit and approve
       await alice.sendTransaction({
-        to: weth.address,
+        to: memeth.address,
         data: new Interface([
           "function depositAndApprove(address spender, uint256 amount)",
         ]).encodeFunctionData("depositAndApprove", [

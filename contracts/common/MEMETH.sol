@@ -2,9 +2,9 @@
 pragma solidity ^0.8.9;
 
 // Fork of the canonical `WETH9` contract that supports `depositAndApprove`
-contract WETH2 {
-    string public name = "Wrapped Ether 2";
-    string public symbol = "WETH2";
+contract MEMETH {
+    string public name = "Memswap Ether";
+    string public symbol = "MEMETH";
     uint8 public decimals = 18;
 
     event Approval(address indexed src, address indexed guy, uint256 wad);
