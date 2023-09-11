@@ -69,15 +69,15 @@ describe("[ERC721] Misc", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 2,
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
       signature: "0x",
     };
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
 
     const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
@@ -112,7 +112,7 @@ describe("[ERC721] Misc", async () => {
             criteriaProof: [],
           })),
         ],
-        executeAmounts: [intent.endAmount],
+        executeAmounts: [intent.expectedAmount],
       },
       []
     );
@@ -139,15 +139,15 @@ describe("[ERC721] Misc", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 2,
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
 
     const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
@@ -176,7 +176,7 @@ describe("[ERC721] Misc", async () => {
               criteriaProof: [],
             })),
           ],
-          executeAmounts: [intent.endAmount],
+          executeAmounts: [intent.expectedAmount],
         },
         []
       )
@@ -204,15 +204,15 @@ describe("[ERC721] Misc", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 2,
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
 
     const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
@@ -238,7 +238,7 @@ describe("[ERC721] Misc", async () => {
               criteriaProof: [],
             })),
           ],
-          executeAmounts: [intent.endAmount],
+          executeAmounts: [intent.expectedAmount],
         },
         []
       )
@@ -266,15 +266,17 @@ describe("[ERC721] Misc", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 2,
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve Permit2
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(PERMIT2[chainId], intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0
+      .connect(alice)
+      .approve(PERMIT2[chainId], intent.expectedAmount);
 
     const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
@@ -293,7 +295,7 @@ describe("[ERC721] Misc", async () => {
               criteriaProof: [],
             })),
           ],
-          executeAmounts: [intent.endAmount],
+          executeAmounts: [intent.expectedAmount],
         },
         []
       )
@@ -303,7 +305,7 @@ describe("[ERC721] Misc", async () => {
     const permit = {
       details: {
         token: intent.sellToken,
-        amount: intent.endAmount,
+        amount: intent.expectedAmount,
         expiration: currentTime + 3600,
         nonce: 0,
       },
@@ -325,7 +327,7 @@ describe("[ERC721] Misc", async () => {
             criteriaProof: [],
           })),
         ],
-        executeAmounts: [intent.endAmount],
+        executeAmounts: [intent.expectedAmount],
       },
       [
         {

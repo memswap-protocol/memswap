@@ -70,9 +70,9 @@ describe("[ERC20] Authorization", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -81,8 +81,8 @@ describe("[ERC20] Authorization", async () => {
     await token0.connect(alice).approve(memswap.address, intent.amount);
 
     // Compute start amount
-    const startAmount = bn(intent.endAmount).add(
-      bn(intent.endAmount).mul(intent.startAmountBps).div(10000)
+    const startAmount = bn(intent.expectedAmount).add(
+      bn(intent.expectedAmount).mul(intent.startAmountBps).div(10000)
     );
 
     // Without authorization, cannot fill an intent of a different matchmaker
@@ -121,7 +121,7 @@ describe("[ERC20] Authorization", async () => {
         intentHash: getIntentHash(intent),
         solver: solutionProxy.address,
         fillAmountToCheck: intent.amount,
-        executeAmountToCheck: intent.endAmount,
+        executeAmountToCheck: intent.expectedAmount,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -143,7 +143,7 @@ describe("[ERC20] Authorization", async () => {
         intentHash: getIntentHash(intent),
         solver: solutionProxy.address,
         fillAmountToCheck: amountAuthorized,
-        executeAmountToCheck: intent.endAmount,
+        executeAmountToCheck: intent.expectedAmount,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -178,7 +178,7 @@ describe("[ERC20] Authorization", async () => {
         intentHash: getIntentHash(intent),
         solver: solutionProxy.address,
         fillAmountToCheck: amountAuthorized,
-        executeAmountToCheck: intent.endAmount,
+        executeAmountToCheck: intent.expectedAmount,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 1),
@@ -257,9 +257,9 @@ describe("[ERC20] Authorization", async () => {
         isPartiallyFillable: true,
         isSmartOrder: false,
         amount: ethers.utils.parseEther("0.5"),
-        endAmount: ethers.utils.parseEther("0.3"),
+        expectedAmount: ethers.utils.parseEther("0.3"),
         startAmountBps: 0,
-        expectedAmountBps: 0,
+        endAmountBps: 0,
       };
       intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -268,8 +268,8 @@ describe("[ERC20] Authorization", async () => {
       await token0.connect(alice).approve(memswap.address, intent.amount);
 
       // Compute start amount
-      const startAmount = bn(intent.endAmount).add(
-        bn(intent.endAmount).mul(intent.startAmountBps).div(10000)
+      const startAmount = bn(intent.expectedAmount).add(
+        bn(intent.expectedAmount).mul(intent.startAmountBps).div(10000)
       );
 
       // Without authorization, cannot fill an intent of a different matchmaker
@@ -308,7 +308,7 @@ describe("[ERC20] Authorization", async () => {
           intentHash: getIntentHash(intent),
           solver: solutionProxy.address,
           fillAmountToCheck: intent.amount,
-          executeAmountToCheck: intent.endAmount,
+          executeAmountToCheck: intent.expectedAmount,
           blockDeadline: await ethers.provider
             .getBlock("latest")
             .then((b) => b.number + 2),
@@ -330,7 +330,7 @@ describe("[ERC20] Authorization", async () => {
           intentHash: getIntentHash(intent),
           solver: solutionProxy.address,
           fillAmountToCheck: amountAuthorized,
-          executeAmountToCheck: intent.endAmount,
+          executeAmountToCheck: intent.expectedAmount,
           blockDeadline: await ethers.provider
             .getBlock("latest")
             .then((b) => b.number + 2),
@@ -365,7 +365,7 @@ describe("[ERC20] Authorization", async () => {
           intentHash: getIntentHash(intent),
           solver: solutionProxy.address,
           fillAmountToCheck: amountAuthorized,
-          executeAmountToCheck: intent.endAmount,
+          executeAmountToCheck: intent.expectedAmount,
           blockDeadline: await ethers.provider
             .getBlock("latest")
             .then((b) => b.number + 1),
@@ -431,7 +431,7 @@ describe("[ERC20] Authorization", async () => {
           intentHash: getIntentHash(intent),
           solver: solutionProxy.address,
           fillAmountToCheck: intent.amount,
-          executeAmountToCheck: intent.endAmount,
+          executeAmountToCheck: intent.expectedAmount,
           blockDeadline: await ethers.provider
             .getBlock("latest")
             .then((b) => b.number + 2),
@@ -532,19 +532,19 @@ describe("[ERC20] Authorization", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
 
     // Cannot fill less at a worse rate than authorized
     {
-      const amountToCheck = bn(intent.endAmount).sub(1);
+      const amountToCheck = bn(intent.expectedAmount).sub(1);
 
       const authorization: Authorization = {
         intentHash: getIntentHash(intent),
@@ -569,7 +569,7 @@ describe("[ERC20] Authorization", async () => {
               [intent.buyToken, intent.amount]
             ),
             fillAmounts: [intent.amount],
-            executeAmounts: [intent.endAmount],
+            executeAmounts: [intent.expectedAmount],
           },
           []
         )
@@ -582,7 +582,7 @@ describe("[ERC20] Authorization", async () => {
         intentHash: getIntentHash(intent),
         solver: solutionProxy.address,
         fillAmountToCheck: intent.amount,
-        executeAmountToCheck: intent.endAmount,
+        executeAmountToCheck: intent.expectedAmount,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -601,7 +601,7 @@ describe("[ERC20] Authorization", async () => {
               [intent.buyToken, intent.amount]
             ),
             fillAmounts: [intent.amount],
-            executeAmounts: [intent.endAmount],
+            executeAmounts: [intent.expectedAmount],
           },
           []
         )
@@ -615,7 +615,7 @@ describe("[ERC20] Authorization", async () => {
           intent.maker,
           solutionProxy.address,
           intent.amount,
-          intent.endAmount
+          intent.expectedAmount
         );
     }
   });
@@ -639,9 +639,9 @@ describe("[ERC20] Authorization", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -650,8 +650,8 @@ describe("[ERC20] Authorization", async () => {
     await token0.connect(alice).approve(memswap.address, intent.amount);
 
     // Compute start amount
-    const startAmount = bn(intent.endAmount).add(
-      bn(intent.endAmount).mul(intent.startAmountBps).div(10000)
+    const startAmount = bn(intent.expectedAmount).add(
+      bn(intent.expectedAmount).mul(intent.startAmountBps).div(10000)
     );
 
     // Authorization must come from the intent solver
@@ -802,15 +802,15 @@ describe("[ERC20] Authorization", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
 
     // Successful fill
     {
@@ -818,7 +818,7 @@ describe("[ERC20] Authorization", async () => {
         intentHash: getIntentHash(intent),
         solver: solutionProxy.address,
         fillAmountToCheck: intent.amount,
-        executeAmountToCheck: intent.endAmount,
+        executeAmountToCheck: intent.expectedAmount,
         blockDeadline: await ethers.provider
           .getBlock("latest")
           .then((b) => b.number + 2),
@@ -838,7 +838,7 @@ describe("[ERC20] Authorization", async () => {
               [intent.buyToken, intent.amount]
             ),
             fillAmounts: [intent.amount],
-            executeAmounts: [intent.endAmount],
+            executeAmounts: [intent.expectedAmount],
           },
           [
             {
@@ -858,7 +858,7 @@ describe("[ERC20] Authorization", async () => {
           intent.maker,
           solutionProxy.address,
           intent.amount,
-          intent.endAmount
+          intent.expectedAmount
         );
     }
   });

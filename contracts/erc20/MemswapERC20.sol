@@ -20,15 +20,15 @@ contract MemswapERC20 is
     struct Intent {
         // When isBuy = true:
         // amount = buy amount
-        // endAmount = sell end amount
+        // expectedAmount = sell expected amount
         // startAmountBps = sell start amount bps
-        // expectedAmountBps = sell expected amount bps
+        // endAmountBps = sell end amount bps
 
         // When isBuy = false:
         // amount = sell amount
-        // endAmount = buy end amount
+        // expectedAmount = buy expected amount
         // startAmountBps = buy start amount bps
-        // expectedAmountBps = buy expected amount bps
+        // endAmountBps = buy end amount bps
 
         // Exact output (isBuy = true) or exact input (isBuy = false)
         bool isBuy;
@@ -45,9 +45,9 @@ contract MemswapERC20 is
         bool isPartiallyFillable;
         bool isSmartOrder;
         uint128 amount;
-        uint128 endAmount;
+        uint128 expectedAmount;
         uint16 startAmountBps;
-        uint16 expectedAmountBps;
+        uint16 endAmountBps;
         bytes signature;
     }
 
@@ -167,9 +167,9 @@ contract MemswapERC20 is
                 "bool isPartiallyFillable,",
                 "bool isSmartOrder,",
                 "uint128 amount,",
-                "uint128 endAmount,",
+                "uint128 expectedAmount,",
                 "uint16 startAmountBps,",
-                "uint16 expectedAmountBps",
+                "uint16 endAmountBps",
                 ")"
             )
         );
@@ -520,9 +520,9 @@ contract MemswapERC20 is
                     intent.isPartiallyFillable,
                     intent.isSmartOrder,
                     intent.amount,
-                    intent.endAmount,
+                    intent.expectedAmount,
                     intent.startAmountBps,
-                    intent.expectedAmountBps
+                    intent.endAmountBps
                 )
             )
         );
@@ -604,17 +604,17 @@ contract MemswapERC20 is
             if (intent.isBuy) {
                 // When isBuy = true:
                 // amount = buy amount
-                // endAmount = sell end amount
+                // expectedAmount = sell expected amount
                 // startAmountBps = sell start amount bps
-                // expectedAmountBps = sell expected amount bps
+                // endAmountBps = sell end amount bps
 
-                uint128 endAmount = (intent.endAmount * actualAmountToFill) /
-                    intent.amount;
-                uint128 startAmount = endAmount -
-                    (endAmount * intent.startAmountBps) /
+                uint128 expectedAmount = (intent.expectedAmount *
+                    actualAmountToFill) / intent.amount;
+                uint128 startAmount = expectedAmount -
+                    (expectedAmount * intent.startAmountBps) /
                     10000;
-                uint128 expectedAmount = endAmount -
-                    (endAmount * intent.expectedAmountBps) /
+                uint128 endAmount = expectedAmount +
+                    (expectedAmount * intent.endAmountBps) /
                     10000;
 
                 //                                                           (now() - startTime)
@@ -692,9 +692,9 @@ contract MemswapERC20 is
             } else {
                 // When isBuy = false:
                 // amount = sell amount
-                // endAmount = buy end amount
+                // expectedAmount = buy expected amount
                 // startAmountBps = buy start amount bps
-                // expectedAmountBps = buy expected amount bps
+                // endAmountBps = buy end amount bps
 
                 // Transfer inputs to solver
                 _transferNativeOrERC20(
@@ -725,9 +725,9 @@ contract MemswapERC20 is
             if (intent.isBuy) {
                 // When isBuy = true:
                 // amount = buy amount
-                // endAmount = sell end amount
+                // expectedAmount = sell expected amount
                 // startAmountBps = sell start amount bps
-                // expectedAmountBps = sell expected amount bps
+                // endAmountBps = sell end amount bps
 
                 // Transfer outputs to maker
                 _transferNativeOrERC20(
@@ -739,17 +739,17 @@ contract MemswapERC20 is
             } else {
                 // When isBuy = false:
                 // amount = sell amount
-                // endAmount = buy end amount
+                // expectedAmount = buy expected amount
                 // startAmountBps = buy start amount bps
-                // expectedAmountBps = buy expected amount bps
+                // endAmountBps = buy end amount bps
 
-                uint128 endAmount = (intent.endAmount * amountsToFill[i]) /
-                    intent.amount;
-                uint128 startAmount = endAmount +
-                    (endAmount * intent.startAmountBps) /
+                uint128 expectedAmount = (intent.expectedAmount *
+                    amountsToFill[i]) / intent.amount;
+                uint128 startAmount = expectedAmount +
+                    (expectedAmount * intent.startAmountBps) /
                     10000;
-                uint128 expectedAmount = endAmount +
-                    (endAmount * intent.expectedAmountBps) /
+                uint128 endAmount = expectedAmount -
+                    (expectedAmount * intent.endAmountBps) /
                     10000;
 
                 //                                                           (now() - startTime)
@@ -992,23 +992,23 @@ contract MemswapERC20 is
     function _lookupBulkOrderTypehash(
         uint256 treeHeight
     ) internal pure override returns (bytes32 typeHash) {
-        // kecca256("BatchIntent(Intent[2]...[2] tree)Intent(bool isBuy,address buyToken,address sellToken,address maker,address solver,address source,uint16 feeBps,uint16 surplusBps,uint32 startTime,uint32 endTime,uint256 nonce,bool isPartiallyFillable,bool isSmartOrder,uint128 amount,uint128 endAmount,uint16 startAmountBps,uint16 expectedAmountBps)")
+        // keccak256("BatchIntent(Intent[2]...[2] tree)Intent(bool isBuy,address buyToken,address sellToken,address maker,address solver,address source,uint16 feeBps,uint16 surplusBps,uint32 startTime,uint32 endTime,uint256 nonce,bool isPartiallyFillable,bool isSmartOrder,uint128 amount,uint128 expectedAmount,uint16 startAmountBps,uint16 endAmountBps)")
         if (treeHeight == 1) {
-            typeHash = 0x58d4087338a63742cea24efad814b65144758ee6edb9148c8f61ad0562c1329e;
+            typeHash = 0xa33b5aa75ac40bed1a728b680179e705f830a835644c92cbc29ce05420f42594;
         } else if (treeHeight == 2) {
-            typeHash = 0x0878f598f63158b6b1466e231ae5736031cb6e962a3fd653bda920befa82a41f;
+            typeHash = 0x0075abe3175cb1ea558c9142bd1d99eb8aa4aae73a7e97c2ece615c6e9428524;
         } else if (treeHeight == 3) {
-            typeHash = 0xf5abbef93a89a2459ef1253be2616f2b763753642ec411443f680d159689fd0a;
+            typeHash = 0x6cebd3402fce1409c074e71d680be61d413e50802bda3251cfb2740610669172;
         } else if (treeHeight == 4) {
-            typeHash = 0xe01b70bf04fd440cf9eeda8da244c05c8ba9923cd8a6c40abde6ca04ca6b146b;
+            typeHash = 0x805e8f474da3c3868fc84008d838d8c1896d3941f3e29ddd3ce55a77a0a94916;
         } else if (treeHeight == 5) {
-            typeHash = 0xdde38fb5958e2413be9f3ea9eb5b363db19a383ba6f4be75e6d4d3b921ebad2d;
+            typeHash = 0x8a38fbe0d44eadc66a8f5373f0ac1fb83ae6f3a4cb3b8223fdb736f0e26bb7df;
         } else if (treeHeight == 6) {
-            typeHash = 0x041e26fd18116b69ee745f27fb646a42d6c3ddf1068121de5c06fa741ed757a8;
+            typeHash = 0x587b480581f5ebf33e563c251172806602e85de65d7a657876c9bf38057bcbc2;
         } else if (treeHeight == 7) {
-            typeHash = 0xc2a5fb33c1692c75d8c01bd597d8f34237076fcb987104c5d4f4758d95275ca2;
+            typeHash = 0x057eb3e6b469a4d44583af2478316f5fccae2d7f9d1f747c5ee13533b0552bf0;
         } else if (treeHeight == 8) {
-            typeHash = 0xda7951bbe464e4a840ca92a63adf783259535c0c4b06d782c86efafafffff9e2;
+            typeHash = 0x1264dbb058cef4de3f73e7662aac86323c0209aba4c8d4b5553378de201c663c;
         } else {
             revert MerkleTreeTooLarge();
         }

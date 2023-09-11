@@ -28,9 +28,9 @@ export type Intent = {
   isCriteriaOrder: boolean;
   tokenIdOrCriteria: BigNumberish;
   amount: BigNumberish;
-  endAmount: BigNumberish;
+  expectedAmount: BigNumberish;
   startAmountBps: number;
-  expectedAmountBps: number;
+  endAmountBps: number;
   signature?: string;
 };
 
@@ -167,7 +167,7 @@ export const INTENT_EIP712_TYPES = {
       type: "uint128",
     },
     {
-      name: "endAmount",
+      name: "expectedAmount",
       type: "uint128",
     },
     {
@@ -175,7 +175,7 @@ export const INTENT_EIP712_TYPES = {
       type: "uint16",
     },
     {
-      name: "expectedAmountBps",
+      name: "endAmountBps",
       type: "uint16",
     },
   ],
@@ -245,9 +245,9 @@ const getBulkSignatureDataWithProofs = (
     isCriteriaOrder: false,
     tokenIdOrCriteria: 0,
     amount: 0,
-    endAmount: 0,
+    expectedAmount: 0,
     startAmountBps: 0,
-    expectedAmountBps: 0,
+    endAmountBps: 0,
   };
   const defaultLeaf = hashElement(defaultElement);
 

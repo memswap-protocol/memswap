@@ -78,15 +78,15 @@ describe("[ERC721] Criteria", async () => {
       isCriteriaOrder: false,
       tokenIdOrCriteria: 999,
       amount: 2,
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
 
     // When the intent has no criteria, a single token id can be used for filling
     await expect(
@@ -105,7 +105,7 @@ describe("[ERC721] Criteria", async () => {
               },
             ],
           ],
-          executeAmounts: [bn(intent.endAmount).div(2)],
+          executeAmounts: [bn(intent.expectedAmount).div(2)],
         },
         []
       )
@@ -127,7 +127,7 @@ describe("[ERC721] Criteria", async () => {
             },
           ],
         ],
-        executeAmounts: [bn(intent.endAmount).div(2)],
+        executeAmounts: [bn(intent.expectedAmount).div(2)],
       },
       []
     );
@@ -154,15 +154,15 @@ describe("[ERC721] Criteria", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 4,
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
 
     // When the criteria is `0`, any token id can be used for filling
     const randomTokenId = getRandomInteger(1, 100000);
@@ -181,7 +181,7 @@ describe("[ERC721] Criteria", async () => {
             },
           ],
         ],
-        executeAmounts: [bn(intent.endAmount).div(4)],
+        executeAmounts: [bn(intent.expectedAmount).div(4)],
       },
       []
     );
@@ -220,15 +220,17 @@ describe("[ERC721] Criteria", async () => {
         isCriteriaOrder: true,
         tokenIdOrCriteria: criteria,
         amount: 1,
-        endAmount: ethers.utils.parseEther("0.3"),
+        expectedAmount: ethers.utils.parseEther("0.3"),
         startAmountBps: 0,
-        expectedAmountBps: 0,
+        endAmountBps: 0,
       };
       intent.signature = await signIntent(alice, memswap.address, intent);
 
       // Mint and approve
-      await token0.connect(alice).mint(intent.endAmount);
-      await token0.connect(alice).approve(memswap.address, intent.endAmount);
+      await token0.connect(alice).mint(intent.expectedAmount);
+      await token0
+        .connect(alice)
+        .approve(memswap.address, intent.expectedAmount);
 
       const randomTokenId = getRandomBoolean()
         ? criteriaTokenIds[getRandomInteger(0, criteriaTokenIds.length - 1)]
@@ -249,7 +251,7 @@ describe("[ERC721] Criteria", async () => {
                 },
               ],
             ],
-            executeAmounts: [intent.endAmount],
+            executeAmounts: [intent.expectedAmount],
           },
           []
         );
@@ -270,7 +272,7 @@ describe("[ERC721] Criteria", async () => {
                   },
                 ],
               ],
-              executeAmounts: [intent.endAmount],
+              executeAmounts: [intent.expectedAmount],
             },
             []
           )

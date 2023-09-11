@@ -74,9 +74,9 @@ describe("[ERC20] Misc", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
       signature: "0x",
     };
 
@@ -85,8 +85,8 @@ describe("[ERC20] Misc", async () => {
     await token1.connect(alice).approve(memswap.address, intent.amount);
 
     // Compute start amount
-    const startAmount = bn(intent.endAmount).add(
-      bn(intent.endAmount).mul(intent.startAmountBps).div(10000)
+    const startAmount = bn(intent.expectedAmount).add(
+      bn(intent.expectedAmount).mul(intent.startAmountBps).div(10000)
     );
 
     // Only the maker can prevalidate
@@ -115,7 +115,7 @@ describe("[ERC20] Misc", async () => {
           [intent.buyToken, startAmount]
         ),
         fillAmounts: [intent.amount],
-        executeAmounts: [intent.endAmount],
+        executeAmounts: [intent.expectedAmount],
       },
       []
     );
@@ -140,9 +140,9 @@ describe("[ERC20] Misc", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -151,8 +151,8 @@ describe("[ERC20] Misc", async () => {
     await token0.connect(alice).approve(memswap.address, intent.amount);
 
     // Compute start amount
-    const startAmount = bn(intent.endAmount).add(
-      bn(intent.endAmount).mul(intent.startAmountBps).div(10000)
+    const startAmount = bn(intent.expectedAmount).add(
+      bn(intent.expectedAmount).mul(intent.startAmountBps).div(10000)
     );
 
     // Only the maker can cancel
@@ -175,7 +175,7 @@ describe("[ERC20] Misc", async () => {
             [intent.buyToken, startAmount]
           ),
           fillAmounts: [intent.amount],
-          executeAmounts: [intent.endAmount],
+          executeAmounts: [intent.expectedAmount],
         },
         []
       )
@@ -201,9 +201,9 @@ describe("[ERC20] Misc", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -212,8 +212,8 @@ describe("[ERC20] Misc", async () => {
     await token1.connect(alice).approve(memswap.address, intent.amount);
 
     // Compute start amount
-    const startAmount = bn(intent.endAmount).sub(
-      bn(intent.endAmount).mul(intent.startAmountBps).div(10000)
+    const startAmount = bn(intent.expectedAmount).sub(
+      bn(intent.expectedAmount).mul(intent.startAmountBps).div(10000)
     );
 
     // Increment nonce
@@ -233,7 +233,7 @@ describe("[ERC20] Misc", async () => {
             [intent.buyToken, startAmount]
           ),
           fillAmounts: [intent.amount],
-          executeAmounts: [intent.endAmount],
+          executeAmounts: [intent.expectedAmount],
         },
         []
       )
@@ -259,15 +259,17 @@ describe("[ERC20] Misc", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve Permit2
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(PERMIT2[chainId], intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0
+      .connect(alice)
+      .approve(PERMIT2[chainId], intent.expectedAmount);
 
     // If not permit was passed, the solution transaction will revert
     await expect(
@@ -279,7 +281,7 @@ describe("[ERC20] Misc", async () => {
             [intent.buyToken, intent.amount]
           ),
           fillAmounts: [intent.amount],
-          executeAmounts: [intent.endAmount],
+          executeAmounts: [intent.expectedAmount],
         },
         []
       )
@@ -289,7 +291,7 @@ describe("[ERC20] Misc", async () => {
     const permit = {
       details: {
         token: intent.sellToken,
-        amount: intent.endAmount,
+        amount: intent.expectedAmount,
         expiration: currentTime + 3600,
         nonce: 0,
       },
@@ -306,7 +308,7 @@ describe("[ERC20] Misc", async () => {
           [intent.buyToken, intent.amount]
         ),
         fillAmounts: [intent.amount],
-        executeAmounts: [intent.endAmount],
+        executeAmounts: [intent.expectedAmount],
       },
       [
         {
@@ -343,14 +345,14 @@ describe("[ERC20] Misc", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint
-    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
 
     // If not permit was passed, the solution transaction will revert
     await expect(
@@ -362,7 +364,7 @@ describe("[ERC20] Misc", async () => {
             [intent.buyToken, intent.amount]
           ),
           fillAmounts: [intent.amount],
-          executeAmounts: [intent.endAmount],
+          executeAmounts: [intent.expectedAmount],
         },
         []
       )
@@ -372,7 +374,7 @@ describe("[ERC20] Misc", async () => {
     const permit = {
       owner: alice.address,
       spender: memswap.address,
-      value: intent.endAmount,
+      value: intent.expectedAmount,
       nonce: 0,
       deadline: currentTime + 3600,
     };
@@ -393,7 +395,7 @@ describe("[ERC20] Misc", async () => {
           [intent.buyToken, intent.amount]
         ),
         fillAmounts: [intent.amount],
-        executeAmounts: [intent.endAmount],
+        executeAmounts: [intent.expectedAmount],
       },
       [
         {
@@ -444,9 +446,9 @@ describe("[ERC20] Misc", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -455,8 +457,8 @@ describe("[ERC20] Misc", async () => {
     await token1.connect(alice).approve(memswap.address, intent.amount);
 
     // Compute start amount
-    const startAmount = bn(intent.endAmount).add(
-      bn(intent.endAmount).mul(intent.startAmountBps).div(10000)
+    const startAmount = bn(intent.expectedAmount).add(
+      bn(intent.expectedAmount).mul(intent.startAmountBps).div(10000)
     );
 
     // Save private data that wil get overridden
@@ -477,7 +479,7 @@ describe("[ERC20] Misc", async () => {
             [intent.buyToken, startAmount]
           ),
           fillAmounts: [intent.amount],
-          executeAmounts: [intent.endAmount],
+          executeAmounts: [intent.expectedAmount],
         },
         []
       )
@@ -501,7 +503,7 @@ describe("[ERC20] Misc", async () => {
           [intent.buyToken, startAmount]
         ),
         fillAmounts: [intent.amount],
-        executeAmounts: [intent.endAmount],
+        executeAmounts: [intent.expectedAmount],
       },
       []
     );
@@ -526,15 +528,15 @@ describe("[ERC20] Misc", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve sell token
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
 
     // Mint and approve buy token
     await token1.connect(bob).mint(intent.amount);
@@ -554,7 +556,7 @@ describe("[ERC20] Misc", async () => {
       {
         data: "0x",
         fillAmounts: [intent.amount],
-        executeAmounts: [intent.endAmount],
+        executeAmounts: [intent.expectedAmount],
       },
       []
     );
@@ -575,10 +577,10 @@ describe("[ERC20] Misc", async () => {
       intent.amount
     );
     expect(sellBalancesBefore.alice.sub(sellBalancesAfter.alice)).to.eq(
-      intent.endAmount
+      intent.expectedAmount
     );
     expect(sellBalancesAfter.bob.sub(sellBalancesBefore.bob)).to.eq(
-      intent.endAmount
+      intent.expectedAmount
     );
   });
 
@@ -601,15 +603,15 @@ describe("[ERC20] Misc", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
-      endAmount: ethers.utils.parseEther("0.3"),
+      expectedAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      expectedAmountBps: 0,
+      endAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve sell token
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+    await token0.connect(alice).mint(intent.expectedAmount);
+    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
 
     const buyBalancesBefore = {
       alice: await ethers.provider.getBalance(alice.address),
@@ -625,7 +627,7 @@ describe("[ERC20] Misc", async () => {
       {
         data: "0x",
         fillAmounts: [intent.amount],
-        executeAmounts: [intent.endAmount],
+        executeAmounts: [intent.expectedAmount],
       },
       [],
       {
@@ -650,10 +652,10 @@ describe("[ERC20] Misc", async () => {
       intent.amount
     );
     expect(sellBalancesBefore.alice.sub(sellBalancesAfter.alice)).to.eq(
-      intent.endAmount
+      intent.expectedAmount
     );
     expect(sellBalancesAfter.bob.sub(sellBalancesBefore.bob)).to.eq(
-      intent.endAmount
+      intent.expectedAmount
     );
   });
 });

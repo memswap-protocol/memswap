@@ -76,15 +76,14 @@ describe("[ERC721] Random", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: getRandomInteger(1, 5),
-      endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
+      expectedAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
-      expectedAmountBps: getRandomInteger(500, 800),
+      endAmountBps: getRandomInteger(500, 800),
     };
 
-    // Generate a random fill amount (for partially-fillable intents)
-    const fillAmount = intent.isPartiallyFillable
-      ? getRandomInteger(1, Number(intent.amount))
-      : intent.amount;
+    const intentEndAmount = bn(intent.expectedAmount).add(
+      bn(intent.expectedAmount).mul(intent.endAmountBps).div(10000)
+    );
 
     if (intent.sellToken === memeth.address) {
       // Deposit and approve
@@ -94,14 +93,14 @@ describe("[ERC721] Random", async () => {
           "function depositAndApprove(address spender, uint256 amount)",
         ]).encodeFunctionData("depositAndApprove", [
           memswap.address,
-          intent.endAmount,
+          intentEndAmount,
         ]),
-        value: intent.endAmount,
+        value: intentEndAmount,
       });
     } else {
       // Mint and approve
-      await token0.connect(alice).mint(intent.endAmount);
-      await token0.connect(alice).approve(memswap.address, intent.endAmount);
+      await token0.connect(alice).mint(intentEndAmount);
+      await token0.connect(alice).approve(memswap.address, intentEndAmount);
     }
 
     // Sign the intent
@@ -117,13 +116,20 @@ describe("[ERC721] Random", async () => {
       )
     );
 
+    // Generate a random fill amount (for partially-fillable intents)
+    const fillAmount = intent.isPartiallyFillable
+      ? getRandomInteger(1, Number(intent.amount))
+      : intent.amount;
+
     // Compute the start / expected / end amounts
-    const endAmount = bn(intent.endAmount).mul(fillAmount).div(intent.amount);
-    const startAmount = bn(endAmount).sub(
-      bn(endAmount).mul(intent.startAmountBps).div(10000)
+    const expectedAmount = bn(intent.expectedAmount)
+      .mul(fillAmount)
+      .div(intent.amount);
+    const startAmount = bn(expectedAmount).sub(
+      bn(expectedAmount).mul(intent.startAmountBps).div(10000)
     );
-    const expectedAmount = bn(endAmount).sub(
-      bn(endAmount).mul(intent.expectedAmountBps).div(10000)
+    const endAmount = bn(expectedAmount).add(
+      bn(expectedAmount).mul(intent.endAmountBps).div(10000)
     );
 
     // Compute the required amount at above timestamp
@@ -243,9 +249,9 @@ describe("[ERC721] Random", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: getRandomInteger(1, 5),
-      endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
+      expectedAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
-      expectedAmountBps: getRandomInteger(500, 800),
+      endAmountBps: getRandomInteger(500, 800),
     };
 
     // Generate a random fill amount (for partially-fillable intents)
@@ -272,12 +278,14 @@ describe("[ERC721] Random", async () => {
     await time.setNextBlockTimestamp(nextBlockTime);
 
     // Compute the start / expected / end amounts
-    const endAmount = bn(intent.endAmount).mul(fillAmount).div(intent.amount);
-    const startAmount = bn(endAmount).add(
-      bn(endAmount).mul(intent.startAmountBps).div(10000)
+    const expectedAmount = bn(intent.expectedAmount)
+      .mul(fillAmount)
+      .div(intent.amount);
+    const startAmount = bn(expectedAmount).add(
+      bn(expectedAmount).mul(intent.startAmountBps).div(10000)
     );
-    const expectedAmount = bn(endAmount).add(
-      bn(endAmount).mul(intent.expectedAmountBps).div(10000)
+    const endAmount = bn(expectedAmount).sub(
+      bn(expectedAmount).mul(intent.endAmountBps).div(10000)
     );
 
     // Compute the required amount at above timestamp
