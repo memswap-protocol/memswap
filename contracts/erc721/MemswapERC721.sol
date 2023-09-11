@@ -141,6 +141,7 @@ contract MemswapERC721 is
     bytes32 public immutable INTENT_TYPEHASH;
 
     mapping(address => uint256) public nonce;
+    mapping(bytes32 => bytes32) public intentPrivateData;
     mapping(bytes32 => IntentStatus) public intentStatus;
     mapping(bytes32 => Authorization) public authorization;
 
@@ -307,6 +308,40 @@ contract MemswapERC721 is
     }
 
     /**
+     * @notice Reveal intents by making available data assumed to not be publicly
+     *         available (maker + signature prefix). This method should be called
+     *         right before the solution transaction, ideally bundled, so that no
+     *         details are revealed sooner than it should be.
+     *
+     * @param intents Intents to reveal
+     */
+    function reveal(Intent[] memory intents) external {
+        unchecked {
+            uint256 intentsLength = intents.length;
+            for (uint256 i; i < intentsLength; i++) {
+                Intent memory intent = intents[i];
+
+                // Ensure the intent is valid
+                bytes32 intentHash = getIntentHash(intent);
+                _verifySignature(intentHash, intent.maker, intent.signature);
+
+                // Extract the private data (intent + signature prefix)
+                address maker = intent.maker;
+                bytes12 signaturePrefix = bytes12(intent.signature);
+
+                // Override the maker with the zero address to get the correct partial intent hash
+                intent.maker = address(0);
+
+                // Store the private data (intent + signature prefix)
+                bytes32 partialIntentHash = getIntentHash(intent);
+                intentPrivateData[partialIntentHash] = bytes32(
+                    abi.encodePacked(maker, signaturePrefix)
+                );
+            }
+        }
+    }
+
+    /**
      * @notice Solve intents
      *
      * @param intents Intents to solve
@@ -314,7 +349,7 @@ contract MemswapERC721 is
      * @param permits Permits to execute prior to the solution
      */
     function solve(
-        Intent[] calldata intents,
+        Intent[] memory intents,
         Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
     ) external payable nonReentrant executePermits(permits) {
@@ -325,7 +360,8 @@ contract MemswapERC721 is
             uint256 intentsLength = intents.length;
             amountsToCheck = new uint128[](intentsLength);
             for (uint256 i; i < intentsLength; i++) {
-                Intent calldata intent = intents[i];
+                Intent memory intent = intents[i];
+                _includePrivateData(intent);
 
                 // The intent must be open or tied to the current solver
                 if (
@@ -353,7 +389,7 @@ contract MemswapERC721 is
      * @param permits Permits to execute prior to the solution
      */
     function solveWithOnChainAuthorizationCheck(
-        Intent[] calldata intents,
+        Intent[] memory intents,
         Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
     ) external payable nonReentrant executePermits(permits) {
@@ -364,7 +400,8 @@ contract MemswapERC721 is
             uint256 intentsLength = intents.length;
             amountsToCheck = new uint128[](intentsLength);
             for (uint256 i; i < intentsLength; i++) {
-                Intent calldata intent = intents[i];
+                Intent memory intent = intents[i];
+                _includePrivateData(intent);
 
                 bytes32 intentHash = getIntentHash(intent);
                 bytes32 authId = keccak256(
@@ -397,7 +434,7 @@ contract MemswapERC721 is
      * @param permits Permits to execute prior to the solution
      */
     function solveWithSignatureAuthorizationCheck(
-        Intent[] calldata intents,
+        Intent[] memory intents,
         Solution calldata solution,
         AuthorizationWithSignature[] calldata auths,
         PermitExecutor.Permit[] calldata permits
@@ -409,7 +446,9 @@ contract MemswapERC721 is
             uint256 intentsLength = intents.length;
             amountsToCheck = new uint128[](intentsLength);
             for (uint256 i; i < intentsLength; i++) {
-                Intent calldata intent = intents[i];
+                Intent memory intent = intents[i];
+                _includePrivateData(intent);
+
                 AuthorizationWithSignature calldata authWithSig = auths[i];
                 Authorization calldata auth = authWithSig.authorization;
 
@@ -512,7 +551,7 @@ contract MemswapERC721 is
     // Internal methods
 
     function _preProcess(
-        Intent[] calldata intents,
+        Intent[] memory intents,
         TokenDetails[][] memory tokenDetailsToFill,
         uint128[] memory amountsToExecute,
         uint128[] memory amountsToCheck
@@ -521,7 +560,7 @@ contract MemswapERC721 is
 
         uint256 intentsLength = intents.length;
         for (uint256 i; i < intentsLength; ) {
-            Intent calldata intent = intents[i];
+            Intent memory intent = intents[i];
             bytes32 intentHash = getIntentHash(intent);
 
             // Verify start and end times
@@ -729,14 +768,14 @@ contract MemswapERC721 is
     }
 
     function _postProcess(
-        Intent[] calldata intents,
+        Intent[] memory intents,
         TokenDetails[][] memory tokenDetailsToFill,
         uint128[] memory amountsToExecute,
         uint128[] memory amountsToCheck
     ) internal {
         uint256 intentsLength = intents.length;
         for (uint256 i; i < intentsLength; ) {
-            Intent calldata intent = intents[i];
+            Intent memory intent = intents[i];
             bytes32 intentHash = getIntentHash(intent);
 
             if (intent.isBuy) {
@@ -887,7 +926,7 @@ contract MemswapERC721 is
      * @param solution Solution for the intent
      */
     function _solve(
-        Intent[] calldata intents,
+        Intent[] memory intents,
         Solution calldata solution,
         uint128[] memory amountsToCheck
     ) internal {
@@ -954,13 +993,50 @@ contract MemswapERC721 is
         bytes32 intentHash,
         address maker,
         bool hasDynamicSignature,
-        bytes calldata signature
+        bytes memory signature
     ) internal {
         _verifySignature(intentHash, maker, signature);
 
         // Mark the intent as validated if allowed
         if (!hasDynamicSignature) {
             intentStatus[intentHash].isPrevalidated = true;
+        }
+    }
+
+    /**
+     * @dev Make any private data available for an intent
+     *
+     * @param intent Intent to make private data available for
+     */
+    function _includePrivateData(Intent memory intent) internal view {
+        if (intent.maker == address(0)) {
+            bytes32 intentHash = getIntentHash(intent);
+            bytes32 privateData = intentPrivateData[intentHash];
+
+            // For byte conversions, right bits are stripped (we use `bytes20(...)`)
+            address revealedMaker = address(uint160(bytes20(privateData)));
+            // For numeric conversions, left bits are stripped (we use `uint96(uint256(...))`)
+            bytes12 revealedSignaturePrefix = bytes12(
+                uint96(uint256(privateData))
+            );
+
+            // Override the maker
+            intent.maker = revealedMaker;
+
+            // Override the signature prefix
+            bytes memory signature = intent.signature;
+            assembly {
+                mstore(
+                    add(signature, 0x20),
+                    or(
+                        and(
+                            mload(add(signature, 0x20)),
+                            not(shl(160, 0xFFFFFFFFFFFFFFFFFFFFFFFF))
+                        ),
+                        revealedSignaturePrefix
+                    )
+                )
+            }
         }
     }
 

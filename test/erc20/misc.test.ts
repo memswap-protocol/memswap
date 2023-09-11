@@ -425,6 +425,88 @@ describe("[ERC20] Misc", async () => {
     );
   });
 
+  it("Private data", async () => {
+    const currentTime = await getCurrentTimestamp();
+
+    // Generate intent
+    const intent: Intent = {
+      isBuy: false,
+      buyToken: token0.address,
+      sellToken: token1.address,
+      maker: alice.address,
+      solver: AddressZero,
+      source: AddressZero,
+      feeBps: 0,
+      surplusBps: 0,
+      startTime: currentTime,
+      endTime: currentTime + 60,
+      nonce: 0,
+      isPartiallyFillable: true,
+      isSmartOrder: false,
+      amount: ethers.utils.parseEther("0.5"),
+      endAmount: ethers.utils.parseEther("0.3"),
+      startAmountBps: 0,
+      expectedAmountBps: 0,
+    };
+    intent.signature = await signIntent(alice, memswap.address, intent);
+
+    // Mint and approve
+    await token1.connect(alice).mint(intent.amount);
+    await token1.connect(alice).approve(memswap.address, intent.amount);
+
+    // Compute start amount
+    const startAmount = bn(intent.endAmount).add(
+      bn(intent.endAmount).mul(intent.startAmountBps).div(10000)
+    );
+
+    // Save private data that wil get overridden
+    const privateMaker = intent.maker;
+    const privateSignaturePrefix = intent.signature.slice(0, 26);
+
+    // Hide private data (maker + signature prefix)
+    intent.maker = AddressZero;
+    intent.signature = "0x" + "00".repeat(12) + intent.signature.slice(26);
+
+    // Intent cannot be solved without first revealing the private data
+    await expect(
+      solutionProxy.connect(bob).solve(
+        [intent],
+        {
+          data: defaultAbiCoder.encode(
+            ["address", "uint128"],
+            [intent.buyToken, startAmount]
+          ),
+          fillAmounts: [intent.amount],
+          executeAmounts: [intent.endAmount],
+        },
+        []
+      )
+    ).to.be.revertedWith("InvalidSignature");
+
+    // Reveal private data
+    intent.maker = privateMaker;
+    intent.signature = privateSignaturePrefix + intent.signature.slice(26);
+    await memswap.connect(alice).reveal([intent]);
+
+    // Hide private data (maker + signature prefix)
+    intent.maker = AddressZero;
+    intent.signature = "0x" + "00".repeat(12) + intent.signature.slice(26);
+
+    // Once the private data is revealed we can successfully solve
+    await solutionProxy.connect(bob).solve(
+      [intent],
+      {
+        data: defaultAbiCoder.encode(
+          ["address", "uint128"],
+          [intent.buyToken, startAmount]
+        ),
+        fillAmounts: [intent.amount],
+        executeAmounts: [intent.endAmount],
+      },
+      []
+    );
+  });
+
   it("Direct filling with erc20", async () => {
     const currentTime = await getCurrentTimestamp();
 
