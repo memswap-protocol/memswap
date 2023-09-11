@@ -13,7 +13,6 @@ import {
   signIntent,
 } from "./utils";
 import { bn, getCurrentTimestamp } from "../utils";
-import { PERMIT2, USDC } from "../../src/common/addresses";
 
 describe("[ERC20] Authorization", async () => {
   let deployer: SignerWithAddress;
@@ -31,10 +30,9 @@ describe("[ERC20] Authorization", async () => {
   beforeEach(async () => {
     [deployer, alice, bob, carol, dan] = await ethers.getSigners();
 
-    const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
     memswap = await ethers
       .getContractFactory("MemswapERC20")
-      .then((factory) => factory.deploy(PERMIT2[chainId], USDC[chainId]));
+      .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
       .getContractFactory("MockSolutionProxyERC20")

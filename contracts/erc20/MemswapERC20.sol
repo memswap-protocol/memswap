@@ -136,13 +136,7 @@ contract MemswapERC20 is
 
     // --- Constructor ---
 
-    constructor(
-        address permit2Address,
-        address usdcAddress
-    )
-        EIP712("MemswapERC20", "1.0")
-        PermitExecutor(permit2Address, usdcAddress)
-    {
+    constructor() EIP712("MemswapERC20", "1.0") {
         AUTHORIZATION_TYPEHASH = keccak256(
             abi.encodePacked(
                 "Authorization(",
@@ -908,7 +902,7 @@ contract MemswapERC20 is
                 success = true;
             } catch {
                 // Secondly, attempt to transfer via permit2
-                _transferFrom(from, to, uint160(amount), token);
+                _permit2TransferFrom(from, to, uint160(amount), token);
                 success = true;
             }
         }

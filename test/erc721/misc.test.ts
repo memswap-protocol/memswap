@@ -6,8 +6,8 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import { Intent, getIntentHash, signIntent } from "./utils";
-import { PermitKind, getCurrentTimestamp, signPermit } from "../utils";
-import { PERMIT2, USDC } from "../../src/common/addresses";
+import { PermitKind, getCurrentTimestamp, signPermit2 } from "../utils";
+import { PERMIT2 } from "../../src/common/addresses";
 
 describe("[ERC721] Misc", async () => {
   let chainId: number;
@@ -29,7 +29,7 @@ describe("[ERC721] Misc", async () => {
 
     memswap = await ethers
       .getContractFactory("MemswapERC721")
-      .then((factory) => factory.deploy(PERMIT2[chainId], USDC[chainId]));
+      .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
       .getContractFactory("MockSolutionProxyERC721")
@@ -245,7 +245,7 @@ describe("[ERC721] Misc", async () => {
     ).to.be.revertedWith("InvalidSignature");
   });
 
-  it("Permit", async () => {
+  it("Permit2 permit", async () => {
     const currentTime = await getCurrentTimestamp();
 
     // Generate intent
@@ -310,7 +310,7 @@ describe("[ERC721] Misc", async () => {
       spender: memswap.address,
       sigDeadline: currentTime + 3600,
     };
-    const permitSignature = await signPermit(alice, PERMIT2[chainId], permit);
+    const permitSignature = await signPermit2(alice, PERMIT2[chainId], permit);
 
     await solutionProxy.connect(bob).solve(
       [intent],

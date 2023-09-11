@@ -8,7 +8,6 @@ import { ethers } from "hardhat";
 
 import { Intent, getIntentHash, bulkSign } from "./utils";
 import { bn, getCurrentTimestamp, getRandomInteger } from "../utils";
-import { PERMIT2, USDC } from "../../src/common/addresses";
 
 describe("[ERC20] Bulk-signing", async () => {
   let chainId: number;
@@ -30,7 +29,7 @@ describe("[ERC20] Bulk-signing", async () => {
 
     memswap = await ethers
       .getContractFactory("MemswapERC20")
-      .then((factory) => factory.deploy(PERMIT2[chainId], USDC[chainId]));
+      .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
       .getContractFactory("MockSolutionProxyERC20")

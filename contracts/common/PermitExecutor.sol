@@ -2,14 +2,14 @@
 pragma solidity ^0.8.19;
 
 import {IPermit2} from "./interfaces/IPermit2.sol";
-import {IUSDC} from "./interfaces/IUSDC.sol";
+import {IEIP2612} from "./interfaces/IEIP2612.sol";
 
 contract PermitExecutor {
     // --- Structs and enums ---
 
     enum Kind {
-        PERMIT2,
-        USDC
+        EIP2612,
+        PERMIT2
     }
 
     struct Permit {
@@ -19,15 +19,8 @@ contract PermitExecutor {
 
     // --- Public fields ---
 
-    address public immutable permit2;
-    address public immutable usdc;
-
-    // --- Constructor ---
-
-    constructor(address permit2Address, address usdcAddress) {
-        permit2 = permit2Address;
-        usdc = usdcAddress;
-    }
+    address public immutable permit2 =
+        0x000000000022D473030F116dDEE9F6B43aC78BA3;
 
     // --- Modifiers ---
 
@@ -41,19 +34,9 @@ contract PermitExecutor {
             uint256 permitsLength = permits.length;
             for (uint256 i; i < permitsLength; i++) {
                 Permit calldata permit = permits[i];
-                if (permit.kind == Kind.PERMIT2) {
+                if (permit.kind == Kind.EIP2612) {
                     (
-                        address owner,
-                        IPermit2.PermitSingle memory permitSingle,
-                        bytes memory signature
-                    ) = abi.decode(
-                            permit.data,
-                            (address, IPermit2.PermitSingle, bytes)
-                        );
-
-                    IPermit2(permit2).permit(owner, permitSingle, signature);
-                } else {
-                    (
+                        address token,
                         address owner,
                         address spender,
                         uint256 value,
@@ -66,6 +49,7 @@ contract PermitExecutor {
                             (
                                 address,
                                 address,
+                                address,
                                 uint256,
                                 uint256,
                                 uint8,
@@ -74,7 +58,7 @@ contract PermitExecutor {
                             )
                         );
 
-                    IUSDC(usdc).permit(
+                    IEIP2612(token).permit(
                         owner,
                         spender,
                         value,
@@ -83,6 +67,17 @@ contract PermitExecutor {
                         r,
                         s
                     );
+                } else {
+                    (
+                        address owner,
+                        IPermit2.PermitSingle memory permitSingle,
+                        bytes memory signature
+                    ) = abi.decode(
+                            permit.data,
+                            (address, IPermit2.PermitSingle, bytes)
+                        );
+
+                    IPermit2(permit2).permit(owner, permitSingle, signature);
                 }
             }
         }
@@ -92,7 +87,7 @@ contract PermitExecutor {
 
     // --- Internal methods ---
 
-    function _transferFrom(
+    function _permit2TransferFrom(
         address from,
         address to,
         uint160 amount,

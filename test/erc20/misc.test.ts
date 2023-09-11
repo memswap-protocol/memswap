@@ -1,4 +1,5 @@
 import { defaultAbiCoder } from "@ethersproject/abi";
+import { splitSignature } from "@ethersproject/bytes";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -6,8 +7,14 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import { Intent, getIntentHash, signIntent } from "./utils";
-import { PermitKind, bn, getCurrentTimestamp, signPermit } from "../utils";
-import { PERMIT2, USDC } from "../../src/common/addresses";
+import {
+  PermitKind,
+  bn,
+  getCurrentTimestamp,
+  signPermit2,
+  signPermitEIP2612,
+} from "../utils";
+import { PERMIT2 } from "../../src/common/addresses";
 
 describe("[ERC20] Misc", async () => {
   let chainId: number;
@@ -29,7 +36,7 @@ describe("[ERC20] Misc", async () => {
 
     memswap = await ethers
       .getContractFactory("MemswapERC20")
-      .then((factory) => factory.deploy(PERMIT2[chainId], USDC[chainId]));
+      .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
       .getContractFactory("MockSolutionProxyERC20")
@@ -233,7 +240,7 @@ describe("[ERC20] Misc", async () => {
     ).to.be.revertedWith("InvalidSignature");
   });
 
-  it("Permit", async () => {
+  it("Permit2 permit", async () => {
     const currentTime = await getCurrentTimestamp();
 
     // Generate intent
@@ -289,7 +296,7 @@ describe("[ERC20] Misc", async () => {
       spender: memswap.address,
       sigDeadline: currentTime + 3600,
     };
-    const permitSignature = await signPermit(alice, PERMIT2[chainId], permit);
+    const permitSignature = await signPermit2(alice, PERMIT2[chainId], permit);
 
     await solutionProxy.connect(bob).solve(
       [intent],
@@ -311,6 +318,107 @@ describe("[ERC20] Misc", async () => {
               "bytes",
             ],
             [alice.address, permit, permitSignature]
+          ),
+        },
+      ]
+    );
+  });
+
+  it("EIP2612 permit", async () => {
+    const currentTime = await getCurrentTimestamp();
+
+    // Generate intent
+    const intent: Intent = {
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
+      maker: alice.address,
+      matchmaker: AddressZero,
+      source: AddressZero,
+      feeBps: 0,
+      surplusBps: 0,
+      startTime: currentTime,
+      endTime: currentTime + 60,
+      nonce: 0,
+      isPartiallyFillable: true,
+      amount: ethers.utils.parseEther("0.5"),
+      endAmount: ethers.utils.parseEther("0.3"),
+      startAmountBps: 0,
+      expectedAmountBps: 0,
+      hasDynamicSignature: false,
+    };
+    intent.signature = await signIntent(alice, memswap.address, intent);
+
+    // Mint
+    await token0.connect(alice).mint(intent.endAmount);
+
+    // If not permit was passed, the solution transaction will revert
+    await expect(
+      solutionProxy.connect(bob).solve(
+        [intent],
+        {
+          data: defaultAbiCoder.encode(
+            ["address", "uint128"],
+            [intent.buyToken, intent.amount]
+          ),
+          fillAmounts: [intent.amount],
+          executeAmounts: [intent.endAmount],
+        },
+        []
+      )
+    ).to.be.reverted;
+
+    // Build and sign permit
+    const permit = {
+      owner: alice.address,
+      spender: memswap.address,
+      value: intent.endAmount,
+      nonce: 0,
+      deadline: currentTime + 3600,
+    };
+    const permitSignature = await signPermitEIP2612(
+      alice,
+      intent.sellToken,
+      permit
+    ).then((signature) => splitSignature(signature));
+    (permit as any).v = permitSignature.v;
+    (permit as any).r = permitSignature.r;
+    (permit as any).s = permitSignature.s;
+
+    await solutionProxy.connect(bob).solve(
+      [intent],
+      {
+        data: defaultAbiCoder.encode(
+          ["address", "uint128"],
+          [intent.buyToken, intent.amount]
+        ),
+        fillAmounts: [intent.amount],
+        executeAmounts: [intent.endAmount],
+      },
+      [
+        {
+          kind: PermitKind.EIP2612,
+          data: defaultAbiCoder.encode(
+            [
+              "address",
+              "address",
+              "address",
+              "uint256",
+              "uint256",
+              "uint8",
+              "bytes32",
+              "bytes32",
+            ],
+            [
+              intent.sellToken,
+              permit.owner,
+              permit.spender,
+              permit.value,
+              permit.deadline,
+              (permit as any).v,
+              (permit as any).r,
+              (permit as any).s,
+            ]
           ),
         },
       ]

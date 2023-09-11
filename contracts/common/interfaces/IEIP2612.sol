@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-interface IUSDC {
+interface IEIP2612 {
     function permit(
         address owner,
         address spender,

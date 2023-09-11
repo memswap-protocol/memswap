@@ -1,4 +1,6 @@
+import { Interface } from "@ethersproject/abi";
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
+import { Contract } from "@ethersproject/contracts";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { ethers } from "hardhat";
 
@@ -23,26 +25,60 @@ export const getRandomFloat = (min: number, max: number) =>
 // Contract utilities
 
 export enum PermitKind {
+  EIP2612,
   PERMIT2,
-  USDC,
 }
 
-export const signPermit = async (
+export const signPermit2 = async (
   signer: SignerWithAddress,
   contract: string,
   permit: any
 ) =>
   signer._signTypedData(
-    EIP712_DOMAIN(contract, await signer.getChainId()),
+    EIP712_DOMAIN_FOR_PERMIT2(contract, await signer.getChainId()),
     PERMIT2_EIP712_TYPES,
     permit
   );
 
-export const EIP712_DOMAIN = (contract: string, chainId: number) => ({
+export const signPermitEIP2612 = async (
+  signer: SignerWithAddress,
+  contract: string,
+  permit: any
+) =>
+  signer._signTypedData(
+    await EIP712_DOMAIN_FOR_EIP2612(contract, await signer.getChainId()),
+    EIP2612_EIP712_TYPES,
+    permit
+  );
+
+export const EIP712_DOMAIN_FOR_PERMIT2 = (
+  contract: string,
+  chainId: number
+) => ({
   name: "Permit2",
   chainId,
   verifyingContract: contract,
 });
+
+export const EIP712_DOMAIN_FOR_EIP2612 = async (
+  contract: string,
+  chainId: number
+) => {
+  const c = new Contract(
+    contract,
+    new Interface([
+      "function name() view returns (string)",
+      "function version() view returns (string)",
+    ]),
+    ethers.provider
+  );
+  return {
+    name: await c.name(),
+    version: await c.version(),
+    chainId,
+    verifyingContract: contract,
+  };
+};
 
 export const PERMIT2_EIP712_TYPES = {
   PermitSingle: [
@@ -75,6 +111,31 @@ export const PERMIT2_EIP712_TYPES = {
     {
       name: "nonce",
       type: "uint48",
+    },
+  ],
+};
+
+export const EIP2612_EIP712_TYPES = {
+  Permit: [
+    {
+      name: "owner",
+      type: "address",
+    },
+    {
+      name: "spender",
+      type: "address",
+    },
+    {
+      name: "value",
+      type: "uint256",
+    },
+    {
+      name: "nonce",
+      type: "uint256",
+    },
+    {
+      name: "deadline",
+      type: "uint256",
     },
   ],
 };

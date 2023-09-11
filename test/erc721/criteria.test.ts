@@ -17,7 +17,6 @@ import {
   getRandomBoolean,
   getRandomInteger,
 } from "../utils";
-import { PERMIT2, USDC } from "../../src/common/addresses";
 
 describe("[ERC721] Criteria", async () => {
   let chainId: number;
@@ -39,7 +38,7 @@ describe("[ERC721] Criteria", async () => {
 
     memswap = await ethers
       .getContractFactory("MemswapERC721")
-      .then((factory) => factory.deploy(PERMIT2[chainId], USDC[chainId]));
+      .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
       .getContractFactory("MockSolutionProxyERC721")
