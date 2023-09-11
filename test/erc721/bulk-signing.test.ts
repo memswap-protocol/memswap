@@ -59,7 +59,7 @@ describe("[ERC721] Bulk-signing", async () => {
         buyToken: token1.address,
         sellToken: token0.address,
         maker: alice.address,
-        matchmaker: AddressZero,
+        solver: AddressZero,
         source: AddressZero,
         feeBps: 0,
         surplusBps: 0,
@@ -67,13 +67,13 @@ describe("[ERC721] Bulk-signing", async () => {
         endTime: currentTime + 60,
         nonce: 0,
         isPartiallyFillable: true,
-        hasCriteria: true,
+        isSmartOrder: false,
+        isCriteriaOrder: true,
         tokenIdOrCriteria: 0,
         amount: 1,
         endAmount: ethers.utils.parseEther("0.3"),
         startAmountBps: 0,
         expectedAmountBps: 0,
-        hasDynamicSignature: false,
       });
     }
 

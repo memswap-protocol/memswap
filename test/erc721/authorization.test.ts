@@ -60,7 +60,7 @@ describe("[ERC721] Authorization", async () => {
       buyToken: token0.address,
       sellToken: token1.address,
       maker: alice.address,
-      matchmaker: bob.address,
+      solver: bob.address,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -68,13 +68,13 @@ describe("[ERC721] Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
-      hasCriteria: true,
+      isSmartOrder: false,
+      isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 3,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -324,7 +324,7 @@ describe("[ERC721] Authorization", async () => {
       buyToken: token1.address,
       sellToken: token0.address,
       maker: alice.address,
-      matchmaker: bob.address,
+      solver: bob.address,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -332,13 +332,13 @@ describe("[ERC721] Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
-      hasCriteria: true,
+      isSmartOrder: false,
+      isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 3,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -445,7 +445,7 @@ describe("[ERC721] Authorization", async () => {
       buyToken: token0.address,
       sellToken: token1.address,
       maker: alice.address,
-      matchmaker: bob.address,
+      solver: bob.address,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -453,13 +453,13 @@ describe("[ERC721] Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
-      hasCriteria: true,
+      isSmartOrder: false,
+      isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -628,7 +628,7 @@ describe("[ERC721] Authorization", async () => {
       buyToken: token1.address,
       sellToken: token0.address,
       maker: alice.address,
-      matchmaker: bob.address,
+      solver: bob.address,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -636,13 +636,13 @@ describe("[ERC721] Authorization", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
-      hasCriteria: true,
+      isSmartOrder: false,
+      isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 4,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 

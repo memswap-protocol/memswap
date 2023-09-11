@@ -15,7 +15,7 @@ export type Intent = {
   buyToken: string;
   sellToken: string;
   maker: string;
-  matchmaker: string;
+  solver: string;
   source: string;
   feeBps: number;
   surplusBps: number;
@@ -23,11 +23,11 @@ export type Intent = {
   endTime: number;
   nonce: BigNumberish;
   isPartiallyFillable: boolean;
+  isSmartOrder: boolean;
   amount: BigNumberish;
   endAmount: BigNumberish;
   startAmountBps: number;
   expectedAmountBps: number;
-  hasDynamicSignature: boolean;
   signature?: string;
 };
 
@@ -116,7 +116,7 @@ export const INTENT_EIP712_TYPES = {
       type: "address",
     },
     {
-      name: "matchmaker",
+      name: "solver",
       type: "address",
     },
     {
@@ -148,6 +148,10 @@ export const INTENT_EIP712_TYPES = {
       type: "bool",
     },
     {
+      name: "isSmartOrder",
+      type: "bool",
+    },
+    {
       name: "amount",
       type: "uint128",
     },
@@ -162,10 +166,6 @@ export const INTENT_EIP712_TYPES = {
     {
       name: "expectedAmountBps",
       type: "uint16",
-    },
-    {
-      name: "hasDynamicSignature",
-      type: "bool",
     },
   ],
 };
@@ -222,7 +222,7 @@ const getBulkSignatureDataWithProofs = (
     buyToken: AddressZero,
     sellToken: AddressZero,
     maker: AddressZero,
-    matchmaker: AddressZero,
+    solver: AddressZero,
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,
@@ -230,11 +230,11 @@ const getBulkSignatureDataWithProofs = (
     endTime: 0,
     nonce: 0,
     isPartiallyFillable: false,
+    isSmartOrder: false,
     amount: 0,
     endAmount: 0,
     startAmountBps: 0,
     expectedAmountBps: 0,
-    hasDynamicSignature: false,
   };
   const defaultLeaf = hashElement(defaultElement);
 

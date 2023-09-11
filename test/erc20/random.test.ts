@@ -64,7 +64,7 @@ describe("[ERC20] Random", async () => {
       buyToken: getRandomBoolean() ? AddressZero : token1.address,
       sellToken: getRandomBoolean() ? memeth.address : token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: getRandomBoolean() ? AddressZero : carol.address,
       feeBps: getRandomInteger(0, 1000),
       surplusBps: getRandomInteger(0, 1000),
@@ -72,11 +72,11 @@ describe("[ERC20] Random", async () => {
       endTime: currentTime + getRandomInteger(1, 1000),
       nonce: 0,
       isPartiallyFillable: getRandomBoolean(),
+      isSmartOrder: false,
       amount: ethers.utils.parseEther(getRandomFloat(0.01, 1)),
       endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
       expectedAmountBps: getRandomInteger(500, 800),
-      hasDynamicSignature: false,
     };
 
     // Generate a random fill amount (for partially-fillable intents)
@@ -223,7 +223,7 @@ describe("[ERC20] Random", async () => {
       buyToken: getRandomBoolean() ? AddressZero : token1.address,
       sellToken: getRandomBoolean() ? memeth.address : token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: getRandomBoolean() ? AddressZero : carol.address,
       feeBps: getRandomInteger(0, 1000),
       surplusBps: getRandomInteger(0, 1000),
@@ -231,11 +231,11 @@ describe("[ERC20] Random", async () => {
       endTime: currentTime + getRandomInteger(1, 1000),
       nonce: 0,
       isPartiallyFillable: getRandomBoolean(),
+      isSmartOrder: false,
       amount: ethers.utils.parseEther(getRandomFloat(0.01, 1)),
       endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
       expectedAmountBps: getRandomInteger(500, 800),
-      hasDynamicSignature: false,
     };
 
     // Generate a random fill amount (for partially-fillable intents)

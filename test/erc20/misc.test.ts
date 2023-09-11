@@ -64,7 +64,7 @@ describe("[ERC20] Misc", async () => {
       buyToken: token0.address,
       sellToken: token1.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -72,11 +72,11 @@ describe("[ERC20] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
       signature: "0x",
     };
 
@@ -94,14 +94,14 @@ describe("[ERC20] Misc", async () => {
       "InvalidSignature"
     );
 
-    // Cannot prevalidate dynamic signature intents
-    intent.hasDynamicSignature = true;
+    // Cannot prevalidate smart order intents
+    intent.isSmartOrder = true;
     await expect(
       memswap.connect(alice).prevalidate([intent])
     ).to.be.revertedWith("IntentCannotBePrevalidated");
 
     // Prevalidate
-    intent.hasDynamicSignature = false;
+    intent.isSmartOrder = false;
     await expect(memswap.connect(alice).prevalidate([intent]))
       .to.emit(memswap, "IntentPrevalidated")
       .withArgs(getIntentHash(intent));
@@ -130,7 +130,7 @@ describe("[ERC20] Misc", async () => {
       buyToken: token1.address,
       sellToken: token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -138,11 +138,11 @@ describe("[ERC20] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -191,7 +191,7 @@ describe("[ERC20] Misc", async () => {
       buyToken: token1.address,
       sellToken: token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -199,11 +199,11 @@ describe("[ERC20] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -249,7 +249,7 @@ describe("[ERC20] Misc", async () => {
       buyToken: token1.address,
       sellToken: token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -257,11 +257,11 @@ describe("[ERC20] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -333,7 +333,7 @@ describe("[ERC20] Misc", async () => {
       buyToken: token1.address,
       sellToken: token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -341,11 +341,11 @@ describe("[ERC20] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -434,7 +434,7 @@ describe("[ERC20] Misc", async () => {
       buyToken: token1.address,
       sellToken: token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -442,11 +442,11 @@ describe("[ERC20] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -509,7 +509,7 @@ describe("[ERC20] Misc", async () => {
       buyToken: AddressZero,
       sellToken: token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -517,11 +517,11 @@ describe("[ERC20] Misc", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
+      isSmartOrder: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 

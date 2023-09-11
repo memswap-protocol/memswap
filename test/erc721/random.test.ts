@@ -64,7 +64,7 @@ describe("[ERC721] Random", async () => {
       buyToken: token1.address,
       sellToken: getRandomBoolean() ? memeth.address : token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: getRandomBoolean() ? AddressZero : carol.address,
       feeBps: getRandomInteger(0, 1000),
       surplusBps: getRandomInteger(0, 1000),
@@ -72,13 +72,13 @@ describe("[ERC721] Random", async () => {
       endTime: currentTime + getRandomInteger(1, 1000),
       nonce: 0,
       isPartiallyFillable: getRandomBoolean(),
-      hasCriteria: true,
+      isSmartOrder: false,
+      isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: getRandomInteger(1, 5),
       endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
       expectedAmountBps: getRandomInteger(500, 800),
-      hasDynamicSignature: false,
     };
 
     // Generate a random fill amount (for partially-fillable intents)
@@ -231,7 +231,7 @@ describe("[ERC721] Random", async () => {
       buyToken: getRandomBoolean() ? AddressZero : token0.address,
       sellToken: token1.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: getRandomBoolean() ? AddressZero : carol.address,
       feeBps: getRandomInteger(0, 1000),
       surplusBps: getRandomInteger(0, 1000),
@@ -239,13 +239,13 @@ describe("[ERC721] Random", async () => {
       endTime: currentTime + getRandomInteger(1, 1000),
       nonce: 0,
       isPartiallyFillable: getRandomBoolean(),
-      hasCriteria: true,
+      isSmartOrder: false,
+      isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: getRandomInteger(1, 5),
       endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
       expectedAmountBps: getRandomInteger(500, 800),
-      hasDynamicSignature: false,
     };
 
     // Generate a random fill amount (for partially-fillable intents)

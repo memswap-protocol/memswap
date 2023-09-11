@@ -37,20 +37,20 @@ contract MemswapERC721 is
         address sellToken;
         address maker;
         // The address allowed to solve or authorize others to solve
-        address matchmaker;
+        address solver;
         address source;
         uint16 feeBps;
         uint16 surplusBps;
         uint32 startTime;
         uint32 endTime;
         bool isPartiallyFillable;
-        bool hasCriteria;
+        bool isSmartOrder;
+        bool isCriteriaOrder;
         uint256 tokenIdOrCriteria;
         uint128 amount;
         uint128 endAmount;
         uint16 startAmountBps;
         uint16 expectedAmountBps;
-        bool hasDynamicSignature;
         bytes signature;
     }
 
@@ -166,7 +166,7 @@ contract MemswapERC721 is
                 "address buyToken,",
                 "address sellToken,",
                 "address maker,",
-                "address matchmaker,",
+                "address solver,",
                 "address source,",
                 "uint16 feeBps,",
                 "uint16 surplusBps,",
@@ -174,13 +174,13 @@ contract MemswapERC721 is
                 "uint32 endTime,",
                 "uint256 nonce,",
                 "bool isPartiallyFillable,",
-                "bool hasCriteria,",
+                "bool isSmartOrder,",
+                "bool isCriteriaOrder,",
                 "uint256 tokenIdOrCriteria,",
                 "uint128 amount,",
                 "uint128 endAmount,",
                 "uint16 startAmountBps,",
-                "uint16 expectedAmountBps,",
-                "bool hasDynamicSignature"
+                "uint16 expectedAmountBps",
                 ")"
             )
         );
@@ -210,7 +210,7 @@ contract MemswapERC721 is
                 Intent calldata intent = intents[i];
                 Authorization calldata auth = auths[i];
 
-                if (intent.matchmaker != msg.sender) {
+                if (intent.solver != msg.sender) {
                     revert Unauthorized();
                 }
 
@@ -251,7 +251,7 @@ contract MemswapERC721 is
             uint256 intentsLength = intents.length;
             for (uint256 i; i < intentsLength; i++) {
                 Intent calldata intent = intents[i];
-                if (intent.hasDynamicSignature) {
+                if (intent.isSmartOrder) {
                     revert IntentCannotBePrevalidated();
                 }
 
@@ -260,7 +260,7 @@ contract MemswapERC721 is
                 _prevalidateIntent(
                     intentHash,
                     intent.maker,
-                    intent.hasDynamicSignature,
+                    intent.isSmartOrder,
                     intent.signature
                 );
                 emit IntentPrevalidated(intentHash);
@@ -329,8 +329,7 @@ contract MemswapERC721 is
 
                 // The intent must be open or tied to the current solver
                 if (
-                    intent.matchmaker != address(0) &&
-                    intent.matchmaker != msg.sender
+                    intent.solver != address(0) && intent.solver != msg.sender
                 ) {
                     revert Unauthorized();
                 }
@@ -345,9 +344,9 @@ contract MemswapERC721 is
 
     /**
      * @notice Solve intents with authorization (compared to the regular `solve`,
-     *         this method allows solving intents of a matchmaker as long as there
-     *         is a valid authorization in-place for the current solver). The auth
-     *         will be done on-chain (via a transaction from the matchmaker).
+     *         this method allows solving intents of a solver as long as there is
+     *         a valid authorization in-place for the current solver). The checks
+     *         for authorization will be done via a storage slot check.
      *
      * @param intents Intents to solve
      * @param solution Solution
@@ -388,9 +387,9 @@ contract MemswapERC721 is
 
     /**
      * @notice Solve intents with authorization (compared to the regular `solve`,
-     *         this method allows solving intents of a matchmaker as long as there
-     *         is a valid authorization in-place for the current solver). The auth
-     *         will be done off-chain (via a signature from the matchmaker).
+     *         this method allows solving intents of a solver as long as there is
+     *         a valid authorization in-place for the current solver). The checks
+     *         for authorization will be done via a signature.
      *
      * @param intents Intents to solve
      * @param solution Solution for the intent
@@ -423,7 +422,7 @@ contract MemswapERC721 is
                 bytes32 digest = _getEIP712Hash(authorizationHash);
 
                 _assertValidSignature(
-                    intent.matchmaker,
+                    intent.solver,
                     digest,
                     digest,
                     authWithSig.signature.length,
@@ -488,7 +487,7 @@ contract MemswapERC721 is
                     intent.buyToken,
                     intent.sellToken,
                     intent.maker,
-                    intent.matchmaker,
+                    intent.solver,
                     intent.source,
                     intent.feeBps,
                     intent.surplusBps,
@@ -498,13 +497,13 @@ contract MemswapERC721 is
                 ),
                 abi.encode(
                     intent.isPartiallyFillable,
-                    intent.hasCriteria,
+                    intent.isSmartOrder,
+                    intent.isCriteriaOrder,
                     intent.tokenIdOrCriteria,
                     intent.amount,
                     intent.endAmount,
                     intent.startAmountBps,
-                    intent.expectedAmountBps,
-                    intent.hasDynamicSignature
+                    intent.expectedAmountBps
                 )
             )
         );
@@ -551,7 +550,7 @@ contract MemswapERC721 is
                 _prevalidateIntent(
                     intentHash,
                     intent.maker,
-                    intent.hasDynamicSignature,
+                    intent.isSmartOrder,
                     intent.signature
                 );
             }
@@ -698,7 +697,7 @@ contract MemswapERC721 is
                     for (uint256 j; j < actualAmountToFill; j++) {
                         TokenDetails memory details = tokenDetailsToFill[i][j];
 
-                        if (intent.hasCriteria) {
+                        if (intent.isCriteriaOrder) {
                             if (intent.tokenIdOrCriteria != 0) {
                                 _verifyCriteriaProof(
                                     details.tokenId,
@@ -752,7 +751,7 @@ contract MemswapERC721 is
                     for (uint256 j; j < tokenDetailsLength; j++) {
                         TokenDetails memory details = tokenDetailsToFill[i][j];
 
-                        if (intent.hasCriteria) {
+                        if (intent.isCriteriaOrder) {
                             if (intent.tokenIdOrCriteria != 0) {
                                 _verifyCriteriaProof(
                                     details.tokenId,
@@ -1073,21 +1072,21 @@ contract MemswapERC721 is
     ) internal pure override returns (bytes32 typeHash) {
         // kecca256("BatchIntent(Intent[2]...[2] tree)Intent(bool isBuy,address buyToken,address sellToken,address maker,address matchmaker,address source,uint16 feeBps,uint16 surplusBps,uint32 startTime,uint32 endTime,uint256 nonce,bool isPartiallyFillable,bool hasCriteria,uint256 tokenIdOrCriteria,uint128 amount,uint128 endAmount,uint16 startAmountBps,uint16 expectedAmountBps,bool hasDynamicSignature)")
         if (treeHeight == 1) {
-            typeHash = 0x6414dc2e722703d4aac87c7be1ab009e5d64d7bd7ffb489ae5dbbffa1247039f;
+            typeHash = 0xd816b95a11d40d32035f81a04cfdf1c5ec0824d5bd737f56f07c9b7ba1f48cf0;
         } else if (treeHeight == 2) {
-            typeHash = 0xed4a7d66246b49ec2e6f47e703213becfbfb4d371249a932369b2ee8f586ebe8;
+            typeHash = 0x635255fbff32fdc0de1ea086ac3b980a482aab837c959678ddc747aff917d8f2;
         } else if (treeHeight == 3) {
-            typeHash = 0xee2b042cb062f90fd4566218744c9449334144e38506c60939c0cc1f6efa1c0f;
+            typeHash = 0x2495330cc098a21759208e1e2a52928af2da4da2eb91602510d7f802799f0545;
         } else if (treeHeight == 4) {
-            typeHash = 0x6efe93d27121fd1a27e0879e3c0ed9c51749876b0cf9c4f839b3fccf9a321d29;
+            typeHash = 0x44d6b9ee9078785878dc4a7e6861911c727e4ecd700ce89285c3e34dfe17447d;
         } else if (treeHeight == 5) {
-            typeHash = 0xd7378d011389e99086e687e0e6b93fc1bbe92a275868579f21a23c4f81e94ed9;
+            typeHash = 0xb751c63860c7d6d023c60ce1c5778a2241f3617f27f16a9c1d8a8818348f509a;
         } else if (treeHeight == 6) {
-            typeHash = 0x033a8c4c8524201c2741980b1782fa13fcbace6741e61bb41332051816abbd3f;
+            typeHash = 0x5acb5ce19e40ef6bf66a9a0a3dbe00e7f2be0fad966ead55c775eeacad8b851f;
         } else if (treeHeight == 7) {
-            typeHash = 0x02eafa0cae7883550649cf888eba79f91223ece12fab8d3def8cefcfe1069342;
+            typeHash = 0x9496383c5e1cf9357fa1195c016a7b3d5a8cb55d01f96143ca7f348e3a19dc4e;
         } else if (treeHeight == 8) {
-            typeHash = 0xfdf1fc107d44639036bfd27132def37b16686f128aca34dac460cd28cd6c7b62;
+            typeHash = 0xd8b574aec11b6732fd05f0e0c1b3bd24084c1d0078d9c9f6aebbdaffff96f88c;
         } else {
             revert MerkleTreeTooLarge();
         }

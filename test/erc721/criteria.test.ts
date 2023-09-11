@@ -66,7 +66,7 @@ describe("[ERC721] Criteria", async () => {
       buyToken: token1.address,
       sellToken: token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -74,13 +74,13 @@ describe("[ERC721] Criteria", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
-      hasCriteria: false,
+      isSmartOrder: false,
+      isCriteriaOrder: false,
       tokenIdOrCriteria: 999,
       amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -142,7 +142,7 @@ describe("[ERC721] Criteria", async () => {
       buyToken: token1.address,
       sellToken: token0.address,
       maker: alice.address,
-      matchmaker: AddressZero,
+      solver: AddressZero,
       source: AddressZero,
       feeBps: 0,
       surplusBps: 0,
@@ -150,13 +150,13 @@ describe("[ERC721] Criteria", async () => {
       endTime: currentTime + 60,
       nonce: 0,
       isPartiallyFillable: true,
-      hasCriteria: true,
+      isSmartOrder: false,
+      isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 4,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
-      hasDynamicSignature: false,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
@@ -208,7 +208,7 @@ describe("[ERC721] Criteria", async () => {
         buyToken: token1.address,
         sellToken: token0.address,
         maker: alice.address,
-        matchmaker: AddressZero,
+        solver: AddressZero,
         source: AddressZero,
         feeBps: 0,
         surplusBps: 0,
@@ -216,13 +216,13 @@ describe("[ERC721] Criteria", async () => {
         endTime: currentTime + 60,
         nonce: 0,
         isPartiallyFillable: true,
-        hasCriteria: true,
+        isSmartOrder: false,
+        isCriteriaOrder: true,
         tokenIdOrCriteria: criteria,
         amount: 1,
         endAmount: ethers.utils.parseEther("0.3"),
         startAmountBps: 0,
         expectedAmountBps: 0,
-        hasDynamicSignature: false,
       };
       intent.signature = await signIntent(alice, memswap.address, intent);
 
