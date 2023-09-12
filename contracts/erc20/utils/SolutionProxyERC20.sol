@@ -74,13 +74,15 @@ contract SolutionProxyERC20 is ISolution {
     function solveWithSignatureAuthorizationCheck(
         MemswapERC20.Intent calldata intent,
         MemswapERC20.Solution calldata solution,
-        MemswapERC20.AuthorizationWithSignature calldata auth,
+        MemswapERC20.Authorization calldata auth,
+        bytes calldata authSignature,
         PermitExecutor.Permit[] calldata permits
     ) external restrictCaller(owner) {
         MemswapERC20(payable(memswap)).solveWithSignatureAuthorizationCheck(
             intent,
             solution,
             auth,
+            authSignature,
             permits
         );
     }

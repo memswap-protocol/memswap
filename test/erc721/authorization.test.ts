@@ -454,10 +454,8 @@ describe("[ERC721] Authorization", async () => {
               criteriaProof: [],
             })),
           },
-          {
-            authorization,
-            signature: authorization.signature,
-          },
+          authorization,
+          authorization.signature,
           []
         )
       ).to.be.revertedWith("InvalidSignature");
@@ -490,10 +488,8 @@ describe("[ERC721] Authorization", async () => {
               criteriaProof: [],
             })),
           },
-          {
-            authorization,
-            signature: authorization.signature,
-          },
+          authorization,
+          authorization.signature,
           []
         )
       ).to.be.revertedWith("InvalidSignature");
@@ -526,10 +522,8 @@ describe("[ERC721] Authorization", async () => {
               criteriaProof: [],
             })),
           },
-          {
-            authorization,
-            signature: authorization.signature,
-          },
+          authorization,
+          authorization.signature,
           []
         )
       )
@@ -607,10 +601,8 @@ describe("[ERC721] Authorization", async () => {
               criteriaProof: [],
             })),
           },
-          {
-            authorization,
-            signature: authorization.signature,
-          },
+          authorization,
+          authorization.signature,
           []
         )
       )

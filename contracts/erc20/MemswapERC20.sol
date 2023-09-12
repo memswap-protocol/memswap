@@ -71,11 +71,6 @@ contract MemswapERC20 is
         uint32 blockDeadline;
     }
 
-    struct AuthorizationWithSignature {
-        Authorization authorization;
-        bytes signature;
-    }
-
     struct Solution {
         // When isBuy = true:
         // fillAmount = buy amount to fill
@@ -387,12 +382,14 @@ contract MemswapERC20 is
      * @param intent Intent to solve
      * @param solution Solution for the intent
      * @param auth Authorization
+     * @param authSignature Authorization signature
      * @param permits Permits to execute prior to the solution
      */
     function solveWithSignatureAuthorizationCheck(
         Intent memory intent,
         Solution calldata solution,
-        AuthorizationWithSignature calldata auth,
+        Authorization calldata auth,
+        bytes calldata authSignature,
         PermitExecutor.Permit[] calldata permits
     ) external payable nonReentrant executePermits(permits) {
         // Make any private data available
@@ -403,20 +400,20 @@ contract MemswapERC20 is
         bytes32 authorizationHash = getAuthorizationHash(
             intentHash,
             msg.sender,
-            auth.authorization
+            auth
         );
         bytes32 digest = _getEIP712Hash(authorizationHash);
         _assertValidSignature(
             intent.solver,
             digest,
             digest,
-            auth.signature.length,
-            auth.signature
+            authSignature.length,
+            authSignature
         );
-        _checkAuthorization(auth.authorization, solution.fillAmount);
+        _checkAuthorization(auth, solution.fillAmount);
 
         // Solve
-        _solve(intent, solution, auth.authorization.executeAmountToCheck);
+        _solve(intent, solution, auth.executeAmountToCheck);
     }
 
     // View methods

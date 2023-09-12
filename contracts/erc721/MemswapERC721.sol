@@ -74,11 +74,6 @@ contract MemswapERC721 is
         uint32 blockDeadline;
     }
 
-    struct AuthorizationWithSignature {
-        Authorization authorization;
-        bytes signature;
-    }
-
     struct TokenDetails {
         uint256 tokenId;
         bytes32[] criteriaProof;
@@ -399,12 +394,14 @@ contract MemswapERC721 is
      * @param intent Intent to solve
      * @param solution Solution for the intent
      * @param auth Authorization
+     * @param authSignature Authorization signature
      * @param permits Permits to execute prior to the solution
      */
     function solveWithSignatureAuthorizationCheck(
         Intent memory intent,
         Solution calldata solution,
-        AuthorizationWithSignature calldata auth,
+        Authorization calldata auth,
+        bytes calldata authSignature,
         PermitExecutor.Permit[] calldata permits
     ) external payable nonReentrant executePermits(permits) {
         // Make any private data available
@@ -415,23 +412,20 @@ contract MemswapERC721 is
         bytes32 authorizationHash = getAuthorizationHash(
             intentHash,
             msg.sender,
-            auth.authorization
+            auth
         );
         bytes32 digest = _getEIP712Hash(authorizationHash);
         _assertValidSignature(
             intent.solver,
             digest,
             digest,
-            auth.signature.length,
-            auth.signature
+            authSignature.length,
+            authSignature
         );
-        _checkAuthorization(
-            auth.authorization,
-            uint128(solution.fillTokenDetails.length)
-        );
+        _checkAuthorization(auth, uint128(solution.fillTokenDetails.length));
 
         // Solve
-        _solve(intent, solution, auth.authorization.executeAmountToCheck);
+        _solve(intent, solution, auth.executeAmountToCheck);
     }
 
     // View methods

@@ -50,13 +50,15 @@ contract MockSolutionProxyERC721 is ISolution {
     function solveWithSignatureAuthorizationCheck(
         MemswapERC721.Intent calldata intent,
         MemswapERC721.Solution calldata solution,
-        MemswapERC721.AuthorizationWithSignature calldata auth,
+        MemswapERC721.Authorization calldata auth,
+        bytes calldata authSignature,
         PermitExecutor.Permit[] calldata permits
     ) external {
         MemswapERC721(payable(memswap)).solveWithSignatureAuthorizationCheck(
             intent,
             solution,
             auth,
+            authSignature,
             permits
         );
     }

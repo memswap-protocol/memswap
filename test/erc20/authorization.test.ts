@@ -622,10 +622,8 @@ describe("[ERC20] Authorization", async () => {
             data: defaultAbiCoder.encode(["uint128"], [0]),
             fillAmount: intent.amount,
           },
-          {
-            authorization,
-            signature: authorization.signature,
-          },
+          authorization,
+          authorization.signature,
           []
         )
       ).to.be.revertedWith("InvalidSignature");
@@ -655,10 +653,8 @@ describe("[ERC20] Authorization", async () => {
             data: defaultAbiCoder.encode(["uint128"], [0]),
             fillAmount: intent.amount,
           },
-          {
-            authorization,
-            signature: authorization.signature,
-          },
+          authorization,
+          authorization.signature,
           []
         )
       ).to.be.revertedWith("InvalidSignature");
@@ -688,10 +684,8 @@ describe("[ERC20] Authorization", async () => {
             data: defaultAbiCoder.encode(["uint128"], [0]),
             fillAmount: intent.amount,
           },
-          {
-            authorization,
-            signature: authorization.signature,
-          },
+          authorization,
+          authorization.signature,
           []
         )
       )
@@ -762,10 +756,8 @@ describe("[ERC20] Authorization", async () => {
             data: defaultAbiCoder.encode(["uint128"], [0]),
             fillAmount: intent.amount,
           },
-          {
-            authorization,
-            signature: authorization.signature,
-          },
+          authorization,
+          authorization.signature,
           []
         )
       )
