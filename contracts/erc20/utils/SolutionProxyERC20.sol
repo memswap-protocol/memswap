@@ -114,8 +114,9 @@ contract SolutionProxyERC20 is ISolution {
                 IERC20(intent.buyToken).transfer(intent.maker, amountToFill);
             }
 
-            // Take profits in sell token
             uint256 amountLeft;
+
+            // Take profits in sell token
             amountLeft = IERC20(intent.sellToken).balanceOf(address(this));
             if (amountLeft > 0) {
                 IERC20(intent.sellToken).transfer(owner, amountLeft);
@@ -127,13 +128,15 @@ contract SolutionProxyERC20 is ISolution {
                 makeCall(Call(owner, "", amountLeft));
             }
         } else {
+            uint256 amountLeft;
+
             // Push outputs to maker
             bool outputETH = intent.buyToken == address(0);
             if (outputETH) {
                 makeCall(Call(intent.maker, "", amountToExecute));
 
                 // Take profits in native token
-                uint256 amountLeft = address(this).balance;
+                amountLeft = address(this).balance;
                 if (amountLeft > 0) {
                     makeCall(Call(owner, "", amountLeft));
                 }
@@ -141,9 +144,7 @@ contract SolutionProxyERC20 is ISolution {
                 IERC20(intent.buyToken).transfer(intent.maker, amountToExecute);
 
                 // Take profits in buy token
-                uint256 amountLeft = IERC20(intent.buyToken).balanceOf(
-                    address(this)
-                );
+                amountLeft = IERC20(intent.buyToken).balanceOf(address(this));
                 if (amountLeft > 0) {
                     IERC20(intent.buyToken).transfer(owner, amountLeft);
                 }
