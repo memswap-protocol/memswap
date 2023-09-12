@@ -28,70 +28,184 @@ contract MockSolutionProxyERC721 is ISolution {
     receive() external payable {}
 
     function solve(
-        MemswapERC721.Intent[] calldata intents,
+        MemswapERC721.Intent calldata intent,
         MemswapERC721.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
     ) external {
-        MemswapERC721(payable(memswap)).solve(intents, solution, permits);
+        MemswapERC721(payable(memswap)).solve(intent, solution, permits);
     }
 
     function solveWithOnChainAuthorizationCheck(
-        MemswapERC721.Intent[] calldata intents,
+        MemswapERC721.Intent calldata intent,
         MemswapERC721.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
     ) external {
         MemswapERC721(payable(memswap)).solveWithOnChainAuthorizationCheck(
-            intents,
+            intent,
             solution,
             permits
         );
     }
 
     function solveWithSignatureAuthorizationCheck(
-        MemswapERC721.Intent[] calldata intents,
+        MemswapERC721.Intent calldata intent,
         MemswapERC721.Solution calldata solution,
-        MemswapERC721.AuthorizationWithSignature[] calldata auths,
+        MemswapERC721.AuthorizationWithSignature calldata auth,
         PermitExecutor.Permit[] calldata permits
     ) external {
         MemswapERC721(payable(memswap)).solveWithSignatureAuthorizationCheck(
-            intents,
+            intent,
             solution,
-            auths,
+            auth,
             permits
         );
     }
 
     function callback(
-        MemswapERC721.Intent[] memory intents,
-        MemswapERC721.TokenDetails[][] memory,
-        uint128[] memory,
+        MemswapERC721.Intent memory intent,
+        MemswapERC721.TokenDetails[] memory tokenDetailsToFill,
         bytes memory data
     ) external override {
-        if (intents[0].isBuy) {
-            (address token, uint256[] memory tokenIds) = abi.decode(
-                data,
-                (address, uint256[])
-            );
+        uint128 amountToFill = uint128(tokenDetailsToFill.length);
+        if (intent.isBuy) {
+            // Amount to refund to the maker
+            uint128 surplusAmount = abi.decode(data, (uint128));
+
+            uint128 expectedAmount = (intent.expectedAmount * amountToFill) /
+                intent.amount;
+            uint128 startAmount = expectedAmount -
+                (expectedAmount * intent.startAmountBps) /
+                10000;
+            uint128 endAmount = expectedAmount +
+                (expectedAmount * intent.endAmountBps) /
+                10000;
+
+            // Total amount pulled from the maker
+            uint128 maxAmount = startAmount +
+                ((endAmount - startAmount) *
+                    (uint32(block.timestamp) - intent.startTime)) /
+                (intent.endTime - intent.startTime);
+
+            // Net amount pulled from the maker (total amount - surplus amount)
+            uint128 makerBalanceDiff = maxAmount - surplusAmount;
+
+            // Charge fees
+            if (intent.source != address(0)) {
+                uint128 feeAmount;
+
+                // Fee
+                if (intent.feeBps > 0) {
+                    feeAmount += (makerBalanceDiff * intent.feeBps) / 10000;
+                }
+
+                // Surplus fee
+                if (
+                    intent.surplusBps > 0 && makerBalanceDiff < expectedAmount
+                ) {
+                    feeAmount +=
+                        ((expectedAmount - makerBalanceDiff) *
+                            intent.surplusBps) /
+                        10000;
+                }
+
+                if (feeAmount > 0) {
+                    IERC20(intent.sellToken).transfer(intent.source, feeAmount);
+                }
+            }
+
+            // Refund surplus to the maker
+            IERC20(intent.sellToken).transfer(intent.maker, surplusAmount);
+
+            // Send payment to the maker
             unchecked {
-                uint256 tokenIdsLength = tokenIds.length;
-                for (uint256 i; i < tokenIdsLength; i++) {
-                    IMintableERC721(token).mint(tokenIds[i]);
-                    IMintableERC721(token).approve(msg.sender, tokenIds[i]);
+                for (uint256 i; i < amountToFill; i++) {
+                    IMintableERC721(intent.buyToken).mint(
+                        tokenDetailsToFill[i].tokenId
+                    );
+                    IMintableERC721(intent.buyToken).transferFrom(
+                        address(this),
+                        intent.maker,
+                        tokenDetailsToFill[i].tokenId
+                    );
                 }
             }
         } else {
-            (address tokenOut, uint128 amount) = abi.decode(
-                data,
-                (address, uint128)
-            );
-            if (tokenOut == address(0)) {
-                (bool success, ) = msg.sender.call{value: amount}("");
+            // Amount to send on top to the maker
+            uint128 surplusAmount = abi.decode(data, (uint128));
+
+            uint128 expectedAmount = (intent.expectedAmount * amountToFill) /
+                intent.amount;
+            uint128 startAmount = expectedAmount +
+                (expectedAmount * intent.startAmountBps) /
+                10000;
+            uint128 endAmount = expectedAmount -
+                (expectedAmount * intent.endAmountBps) /
+                10000;
+
+            // Total amount pushed to the maker
+            uint128 minAmount = startAmount -
+                ((startAmount - endAmount) *
+                    (uint32(block.timestamp) - intent.startTime)) /
+                (intent.endTime - intent.startTime);
+
+            // Net amount pushed to the maker (total amount + surplus amount)
+            uint128 makerBalanceDiff = minAmount + surplusAmount;
+
+            if (intent.buyToken != address(0)) {
+                IMintableERC20(intent.buyToken).mint(makerBalanceDiff);
+            }
+
+            // Charge fees
+            if (intent.source != address(0)) {
+                uint128 feeAmount;
+
+                // Fee
+                if (intent.feeBps > 0) {
+                    feeAmount += (makerBalanceDiff * intent.feeBps) / 10000;
+                }
+
+                // Surplus fee
+                if (
+                    intent.surplusBps > 0 && makerBalanceDiff > expectedAmount
+                ) {
+                    feeAmount +=
+                        ((makerBalanceDiff - expectedAmount) *
+                            intent.surplusBps) /
+                        10000;
+                }
+
+                if (feeAmount > 0) {
+                    if (intent.buyToken == address(0)) {
+                        (bool success, ) = intent.source.call{value: feeAmount}(
+                            ""
+                        );
+                        if (!success) {
+                            revert();
+                        }
+                    } else {
+                        IERC20(intent.buyToken).transfer(
+                            intent.source,
+                            feeAmount
+                        );
+                    }
+
+                    makerBalanceDiff -= feeAmount;
+                }
+            }
+
+            // Send payment to the maker
+            if (intent.buyToken == address(0)) {
+                (bool success, ) = intent.maker.call{value: makerBalanceDiff}(
+                    ""
+                );
                 if (!success) {
                     revert();
                 }
             } else {
-                IMintableERC20(tokenOut).mint(amount);
-                IMintableERC20(tokenOut).approve(msg.sender, amount);
+                IMintableERC20(intent.buyToken).transfer(
+                    intent.maker,
+                    makerBalanceDiff
+                );
             }
         }
     }

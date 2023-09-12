@@ -173,14 +173,10 @@ describe("[ERC20] Random", async () => {
 
     // Solve
     const solve = solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint128"],
-          [intent.buyToken, fillAmount]
-        ),
-        fillAmounts: [fillAmount],
-        executeAmounts: [amount.sub(surplus)],
+        data: defaultAbiCoder.encode(["uint128"], [surplus]),
+        fillAmount,
       },
       []
     );
@@ -197,7 +193,7 @@ describe("[ERC20] Random", async () => {
           intent.maker,
           solutionProxy.address,
           fillAmount,
-          amount.sub(surplus).sub(fee).sub(surplusFee)
+          amount.sub(surplus)
         );
     }
 
@@ -332,14 +328,10 @@ describe("[ERC20] Random", async () => {
 
     // Solve
     const solve = solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint128"],
-          [intent.buyToken, amount.add(surplus)]
-        ),
-        fillAmounts: [fillAmount],
-        executeAmounts: [amount.add(surplus)],
+        data: defaultAbiCoder.encode(["uint128"], [surplus]),
+        fillAmount,
       },
       []
     );
@@ -355,7 +347,7 @@ describe("[ERC20] Random", async () => {
           intent.sellToken,
           intent.maker,
           solutionProxy.address,
-          amount.add(surplus).sub(fee).sub(surplusFee),
+          amount.add(surplus),
           fillAmount
         );
     }

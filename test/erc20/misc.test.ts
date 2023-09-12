@@ -108,14 +108,10 @@ describe("[ERC20] Misc", async () => {
 
     // Once prevalidated, solving can be done without a maker signature
     await solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint128"],
-          [intent.buyToken, startAmount]
-        ),
-        fillAmounts: [intent.amount],
-        executeAmounts: [intent.expectedAmount],
+        data: defaultAbiCoder.encode(["uint128"], [0]),
+        fillAmount: intent.amount,
       },
       []
     );
@@ -168,14 +164,10 @@ describe("[ERC20] Misc", async () => {
     // Once cancelled, intent cannot be solved
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.buyToken, startAmount]
-          ),
-          fillAmounts: [intent.amount],
-          executeAmounts: [intent.expectedAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillAmount: intent.amount,
         },
         []
       )
@@ -226,14 +218,10 @@ describe("[ERC20] Misc", async () => {
     // value, and not on the nonce value the intent was signed with)
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.buyToken, startAmount]
-          ),
-          fillAmounts: [intent.amount],
-          executeAmounts: [intent.expectedAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillAmount: intent.amount,
         },
         []
       )
@@ -274,14 +262,10 @@ describe("[ERC20] Misc", async () => {
     // If not permit was passed, the solution transaction will revert
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.buyToken, intent.amount]
-          ),
-          fillAmounts: [intent.amount],
-          executeAmounts: [intent.expectedAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillAmount: intent.amount,
         },
         []
       )
@@ -301,14 +285,10 @@ describe("[ERC20] Misc", async () => {
     const permitSignature = await signPermit2(alice, PERMIT2[chainId], permit);
 
     await solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint128"],
-          [intent.buyToken, intent.amount]
-        ),
-        fillAmounts: [intent.amount],
-        executeAmounts: [intent.expectedAmount],
+        data: defaultAbiCoder.encode(["uint128"], [0]),
+        fillAmount: intent.amount,
       },
       [
         {
@@ -357,14 +337,10 @@ describe("[ERC20] Misc", async () => {
     // If not permit was passed, the solution transaction will revert
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.buyToken, intent.amount]
-          ),
-          fillAmounts: [intent.amount],
-          executeAmounts: [intent.expectedAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillAmount: intent.amount,
         },
         []
       )
@@ -388,14 +364,10 @@ describe("[ERC20] Misc", async () => {
     (permit as any).s = permitSignature.s;
 
     await solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint128"],
-          [intent.buyToken, intent.amount]
-        ),
-        fillAmounts: [intent.amount],
-        executeAmounts: [intent.expectedAmount],
+        data: defaultAbiCoder.encode(["uint128"], [0]),
+        fillAmount: intent.amount,
       },
       [
         {
@@ -472,14 +444,10 @@ describe("[ERC20] Misc", async () => {
     // Intent cannot be solved without first revealing the private data
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.buyToken, startAmount]
-          ),
-          fillAmounts: [intent.amount],
-          executeAmounts: [intent.expectedAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillAmount: intent.amount,
         },
         []
       )
@@ -496,166 +464,12 @@ describe("[ERC20] Misc", async () => {
 
     // Once the private data is revealed we can successfully solve
     await solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint128"],
-          [intent.buyToken, startAmount]
-        ),
-        fillAmounts: [intent.amount],
-        executeAmounts: [intent.expectedAmount],
+        data: defaultAbiCoder.encode(["uint128"], [0]),
+        fillAmount: intent.amount,
       },
       []
-    );
-  });
-
-  it("Direct filling with erc20", async () => {
-    const currentTime = await getCurrentTimestamp();
-
-    // Generate intent
-    const intent: Intent = {
-      isBuy: true,
-      buyToken: token1.address,
-      sellToken: token0.address,
-      maker: alice.address,
-      solver: AddressZero,
-      source: AddressZero,
-      feeBps: 0,
-      surplusBps: 0,
-      startTime: currentTime,
-      endTime: currentTime + 60,
-      nonce: 0,
-      isPartiallyFillable: true,
-      isSmartOrder: false,
-      amount: ethers.utils.parseEther("0.5"),
-      expectedAmount: ethers.utils.parseEther("0.3"),
-      startAmountBps: 0,
-      endAmountBps: 0,
-    };
-    intent.signature = await signIntent(alice, memswap.address, intent);
-
-    // Mint and approve sell token
-    await token0.connect(alice).mint(intent.expectedAmount);
-    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
-
-    // Mint and approve buy token
-    await token1.connect(bob).mint(intent.amount);
-    await token1.connect(bob).approve(memswap.address, intent.amount);
-
-    const buyBalancesBefore = {
-      alice: await token1.balanceOf(alice.address),
-      bob: await token1.balanceOf(bob.address),
-    };
-    const sellBalancesBefore = {
-      alice: await token0.balanceOf(alice.address),
-      bob: await token0.balanceOf(bob.address),
-    };
-
-    await memswap.connect(bob).solve(
-      [intent],
-      {
-        data: "0x",
-        fillAmounts: [intent.amount],
-        executeAmounts: [intent.expectedAmount],
-      },
-      []
-    );
-
-    const buyBalancesAfter = {
-      alice: await token1.balanceOf(alice.address),
-      bob: await token1.balanceOf(bob.address),
-    };
-    const sellBalancesAfter = {
-      alice: await token0.balanceOf(alice.address),
-      bob: await token0.balanceOf(bob.address),
-    };
-
-    expect(buyBalancesAfter.alice.sub(buyBalancesBefore.alice)).to.eq(
-      intent.amount
-    );
-    expect(buyBalancesBefore.bob.sub(buyBalancesAfter.bob)).to.eq(
-      intent.amount
-    );
-    expect(sellBalancesBefore.alice.sub(sellBalancesAfter.alice)).to.eq(
-      intent.expectedAmount
-    );
-    expect(sellBalancesAfter.bob.sub(sellBalancesBefore.bob)).to.eq(
-      intent.expectedAmount
-    );
-  });
-
-  it("Direct filling with native", async () => {
-    const currentTime = await getCurrentTimestamp();
-
-    // Generate intent
-    const intent: Intent = {
-      isBuy: true,
-      buyToken: AddressZero,
-      sellToken: token0.address,
-      maker: alice.address,
-      solver: AddressZero,
-      source: AddressZero,
-      feeBps: 0,
-      surplusBps: 0,
-      startTime: currentTime,
-      endTime: currentTime + 60,
-      nonce: 0,
-      isPartiallyFillable: true,
-      isSmartOrder: false,
-      amount: ethers.utils.parseEther("0.5"),
-      expectedAmount: ethers.utils.parseEther("0.3"),
-      startAmountBps: 0,
-      endAmountBps: 0,
-    };
-    intent.signature = await signIntent(alice, memswap.address, intent);
-
-    // Mint and approve sell token
-    await token0.connect(alice).mint(intent.expectedAmount);
-    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
-
-    const buyBalancesBefore = {
-      alice: await ethers.provider.getBalance(alice.address),
-      bob: await ethers.provider.getBalance(bob.address),
-    };
-    const sellBalancesBefore = {
-      alice: await token0.balanceOf(alice.address),
-      bob: await token0.balanceOf(bob.address),
-    };
-
-    await memswap.connect(bob).solve(
-      [intent],
-      {
-        data: "0x",
-        fillAmounts: [intent.amount],
-        executeAmounts: [intent.expectedAmount],
-      },
-      [],
-      {
-        value: intent.amount,
-      }
-    );
-
-    const buyBalancesAfter = {
-      alice: await ethers.provider.getBalance(alice.address),
-      bob: await ethers.provider.getBalance(bob.address),
-    };
-    const sellBalancesAfter = {
-      alice: await token0.balanceOf(alice.address),
-      bob: await token0.balanceOf(bob.address),
-    };
-
-    expect(buyBalancesAfter.alice.sub(buyBalancesBefore.alice)).to.eq(
-      intent.amount
-    );
-    // Use `gte` instead of `eq` to cover gas fees
-    expect(buyBalancesBefore.bob.sub(buyBalancesAfter.bob)).to.be.gte(
-      intent.amount
-    );
-    expect(sellBalancesBefore.alice.sub(sellBalancesAfter.alice)).to.eq(
-      intent.expectedAmount
-    );
-    expect(sellBalancesAfter.bob.sub(sellBalancesBefore.bob)).to.eq(
-      intent.expectedAmount
     );
   });
 });

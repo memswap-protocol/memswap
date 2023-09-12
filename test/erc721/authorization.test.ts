@@ -93,38 +93,26 @@ describe("[ERC721] Authorization", async () => {
     // Without authorization, cannot fill an intent of a different matchmaker
     await expect(
       solutionProxy.connect(carol).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.buyToken, startAmount]
-          ),
-          fillTokenDetails: [
-            tokenIdsToFill.map((tokenId) => ({
-              tokenId,
-              criteriaProof: [],
-            })),
-          ],
-          executeAmounts: [startAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
         },
         []
       )
     ).to.be.revertedWith("Unauthorized");
     await expect(
       solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.buyToken, startAmount]
-          ),
-          fillTokenDetails: [
-            tokenIdsToFill.map((tokenId) => ({
-              tokenId,
-              criteriaProof: [],
-            })),
-          ],
-          executeAmounts: [startAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
         },
         []
       )
@@ -169,19 +157,13 @@ describe("[ERC721] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillTokenDetails: [
-              tokenIdsToFill.map((tokenId) => ({
-                tokenId,
-                criteriaProof: [],
-              })),
-            ],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
           []
         )
@@ -208,19 +190,13 @@ describe("[ERC721] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillTokenDetails: [
-              tokenIdsToFill.map((tokenId) => ({
-                tokenId,
-                criteriaProof: [],
-              })),
-            ],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
           []
         )
@@ -247,19 +223,13 @@ describe("[ERC721] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillTokenDetails: [
-              tokenIdsToFill.map((tokenId) => ({
-                tokenId,
-                criteriaProof: [],
-              })),
-            ],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
           []
         )
@@ -284,19 +254,13 @@ describe("[ERC721] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillTokenDetails: [
-              tokenIdsToFill.map((tokenId) => ({
-                tokenId,
-                criteriaProof: [],
-              })),
-            ],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
           []
         )
@@ -368,19 +332,13 @@ describe("[ERC721] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint256[]"],
-              [intent.buyToken, tokenIdsToFill]
-            ),
-            fillTokenDetails: [
-              tokenIdsToFill.map((tokenId) => ({
-                tokenId,
-                criteriaProof: [],
-              })),
-            ],
-            executeAmounts: [intent.expectedAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
           []
         )
@@ -405,19 +363,13 @@ describe("[ERC721] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint256[]"],
-              [intent.buyToken, tokenIdsToFill]
-            ),
-            fillTokenDetails: [
-              tokenIdsToFill.map((tokenId) => ({
-                tokenId,
-                criteriaProof: [],
-              })),
-            ],
-            executeAmounts: [intent.expectedAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
           []
         )
@@ -494,26 +446,18 @@ describe("[ERC721] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillTokenDetails: [
-              tokenIdsToFill.map((tokenId) => ({
-                tokenId,
-                criteriaProof: [],
-              })),
-            ],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
-          [
-            {
-              authorization,
-              signature: authorization.signature,
-            },
-          ],
+          {
+            authorization,
+            signature: authorization.signature,
+          },
           []
         )
       ).to.be.revertedWith("InvalidSignature");
@@ -538,26 +482,18 @@ describe("[ERC721] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillTokenDetails: [
-              tokenIdsToFill.map((tokenId) => ({
-                tokenId,
-                criteriaProof: [],
-              })),
-            ],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
-          [
-            {
-              authorization,
-              signature: authorization.signature,
-            },
-          ],
+          {
+            authorization,
+            signature: authorization.signature,
+          },
           []
         )
       ).to.be.revertedWith("InvalidSignature");
@@ -582,26 +518,18 @@ describe("[ERC721] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillTokenDetails: [
-              tokenIdsToFill.map((tokenId) => ({
-                tokenId,
-                criteriaProof: [],
-              })),
-            ],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
-          [
-            {
-              authorization,
-              signature: authorization.signature,
-            },
-          ],
+          {
+            authorization,
+            signature: authorization.signature,
+          },
           []
         )
       )
@@ -671,26 +599,18 @@ describe("[ERC721] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint256[]"],
-              [intent.buyToken, tokenIdsToFill]
-            ),
-            fillTokenDetails: [
-              tokenIdsToFill.map((tokenId) => ({
-                tokenId,
-                criteriaProof: [],
-              })),
-            ],
-            executeAmounts: [intent.expectedAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
-          [
-            {
-              authorization,
-              signature: authorization.signature,
-            },
-          ],
+          {
+            authorization,
+            signature: authorization.signature,
+          },
           []
         )
       )

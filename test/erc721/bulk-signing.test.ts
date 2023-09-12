@@ -113,19 +113,13 @@ describe("[ERC721] Bulk-signing", async () => {
     const tokenIdsToFill = [0];
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint256[]"],
-            [intent.buyToken, tokenIdsToFill]
-          ),
-          fillTokenDetails: [
-            tokenIdsToFill.map((tokenId) => ({
-              tokenId,
-              criteriaProof: [],
-            })),
-          ],
-          executeAmounts: [amount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
         },
         []
       )

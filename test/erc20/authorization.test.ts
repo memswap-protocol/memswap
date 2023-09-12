@@ -88,28 +88,20 @@ describe("[ERC20] Authorization", async () => {
     // Without authorization, cannot fill an intent of a different matchmaker
     await expect(
       solutionProxy.connect(carol).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.buyToken, startAmount]
-          ),
-          fillAmounts: [intent.amount],
-          executeAmounts: [startAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillAmount: intent.amount,
         },
         []
       )
     ).to.be.revertedWith("Unauthorized");
     await expect(
       solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.buyToken, startAmount]
-          ),
-          fillAmounts: [intent.amount],
-          executeAmounts: [startAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillAmount: intent.amount,
         },
         []
       )
@@ -155,14 +147,10 @@ describe("[ERC20] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillAmounts: [amountToFill],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: amountToFill,
           },
           []
         )
@@ -190,14 +178,10 @@ describe("[ERC20] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillAmounts: [amountToFill],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: amountToFill,
           },
           []
         )
@@ -224,14 +208,10 @@ describe("[ERC20] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: intent.amount,
           },
           []
         )
@@ -275,28 +255,20 @@ describe("[ERC20] Authorization", async () => {
       // Without authorization, cannot fill an intent of a different matchmaker
       await expect(
         solutionProxy.connect(carol).solve(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: intent.amount,
           },
           []
         )
       ).to.be.revertedWith("Unauthorized");
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: intent.amount,
           },
           []
         )
@@ -342,14 +314,10 @@ describe("[ERC20] Authorization", async () => {
 
         await expect(
           solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-            [intent],
+            intent,
             {
-              data: defaultAbiCoder.encode(
-                ["address", "uint128"],
-                [intent.buyToken, startAmount]
-              ),
-              fillAmounts: [amountToFill],
-              executeAmounts: [startAmount],
+              data: defaultAbiCoder.encode(["uint128"], [0]),
+              fillAmount: amountToFill,
             },
             []
           )
@@ -377,14 +345,10 @@ describe("[ERC20] Authorization", async () => {
 
         await expect(
           solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-            [intent],
+            intent,
             {
-              data: defaultAbiCoder.encode(
-                ["address", "uint128"],
-                [intent.buyToken, startAmount]
-              ),
-              fillAmounts: [amountToFill],
-              executeAmounts: [startAmount],
+              data: defaultAbiCoder.encode(["uint128"], [0]),
+              fillAmount: amountToFill,
             },
             []
           )
@@ -411,14 +375,10 @@ describe("[ERC20] Authorization", async () => {
 
         await expect(
           solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-            [intent],
+            intent,
             {
-              data: defaultAbiCoder.encode(
-                ["address", "uint128"],
-                [intent.buyToken, startAmount]
-              ),
-              fillAmounts: [intent.amount],
-              executeAmounts: [startAmount],
+              data: defaultAbiCoder.encode(["uint128"], [0]),
+              fillAmount: intent.amount,
             },
             []
           )
@@ -443,14 +403,10 @@ describe("[ERC20] Authorization", async () => {
 
         await expect(
           solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-            [intent],
+            intent,
             {
-              data: defaultAbiCoder.encode(
-                ["address", "uint128"],
-                [intent.buyToken, startAmount]
-              ),
-              fillAmounts: [intent.amount],
-              executeAmounts: [startAmount],
+              data: defaultAbiCoder.encode(["uint128"], [0]),
+              fillAmount: intent.amount,
             },
             []
           )
@@ -487,14 +443,10 @@ describe("[ERC20] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: intent.amount,
           },
           []
         )
@@ -562,14 +514,10 @@ describe("[ERC20] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, intent.amount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [intent.expectedAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: intent.amount,
           },
           []
         )
@@ -594,14 +542,10 @@ describe("[ERC20] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, intent.amount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [intent.expectedAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: intent.amount,
           },
           []
         )
@@ -673,21 +617,15 @@ describe("[ERC20] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: intent.amount,
           },
-          [
-            {
-              authorization,
-              signature: authorization.signature,
-            },
-          ],
+          {
+            authorization,
+            signature: authorization.signature,
+          },
           []
         )
       ).to.be.revertedWith("InvalidSignature");
@@ -712,21 +650,15 @@ describe("[ERC20] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: intent.amount,
           },
-          [
-            {
-              authorization,
-              signature: authorization.signature,
-            },
-          ],
+          {
+            authorization,
+            signature: authorization.signature,
+          },
           []
         )
       ).to.be.revertedWith("InvalidSignature");
@@ -751,21 +683,15 @@ describe("[ERC20] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, startAmount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [startAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: intent.amount,
           },
-          [
-            {
-              authorization,
-              signature: authorization.signature,
-            },
-          ],
+          {
+            authorization,
+            signature: authorization.signature,
+          },
           []
         )
       )
@@ -831,21 +757,15 @@ describe("[ERC20] Authorization", async () => {
 
       await expect(
         solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint128"],
-              [intent.buyToken, intent.amount]
-            ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [intent.expectedAmount],
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillAmount: intent.amount,
           },
-          [
-            {
-              authorization,
-              signature: authorization.signature,
-            },
-          ],
+          {
+            authorization,
+            signature: authorization.signature,
+          },
           []
         )
       )

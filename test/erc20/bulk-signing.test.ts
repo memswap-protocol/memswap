@@ -113,14 +113,10 @@ describe("[ERC20] Bulk-signing", async () => {
 
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint128"],
-            [intent.buyToken, amount]
-          ),
-          fillAmounts: [intent.amount],
-          executeAmounts: [amount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillAmount: intent.amount,
         },
         []
       )

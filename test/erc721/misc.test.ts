@@ -100,19 +100,13 @@ describe("[ERC721] Misc", async () => {
 
     // Once prevalidated, solving can be done without a maker signature
     await solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint256[]"],
-          [intent.buyToken, tokenIdsToFill]
-        ),
-        fillTokenDetails: [
-          tokenIdsToFill.map((tokenId) => ({
-            tokenId,
-            criteriaProof: [],
-          })),
-        ],
-        executeAmounts: [intent.expectedAmount],
+        data: defaultAbiCoder.encode(["uint128"], [0]),
+        fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+          tokenId,
+          criteriaProof: [],
+        })),
       },
       []
     );
@@ -164,19 +158,13 @@ describe("[ERC721] Misc", async () => {
     // Once cancelled, intent cannot be solved
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint256[]"],
-            [intent.buyToken, tokenIdsToFill]
-          ),
-          fillTokenDetails: [
-            tokenIdsToFill.map((tokenId) => ({
-              tokenId,
-              criteriaProof: [],
-            })),
-          ],
-          executeAmounts: [intent.expectedAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
         },
         []
       )
@@ -226,19 +214,13 @@ describe("[ERC721] Misc", async () => {
     // value, and not on the nonce value the intent was signed with)
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint256[]"],
-            [intent.buyToken, tokenIdsToFill]
-          ),
-          fillTokenDetails: [
-            tokenIdsToFill.map((tokenId) => ({
-              tokenId,
-              criteriaProof: [],
-            })),
-          ],
-          executeAmounts: [intent.expectedAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
         },
         []
       )
@@ -283,19 +265,13 @@ describe("[ERC721] Misc", async () => {
     // If not permit was passed, the solution transaction will revert
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint256[]"],
-            [intent.buyToken, tokenIdsToFill]
-          ),
-          fillTokenDetails: [
-            tokenIdsToFill.map((tokenId) => ({
-              tokenId,
-              criteriaProof: [],
-            })),
-          ],
-          executeAmounts: [intent.expectedAmount],
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
         },
         []
       )
@@ -315,19 +291,13 @@ describe("[ERC721] Misc", async () => {
     const permitSignature = await signPermit2(alice, PERMIT2[chainId], permit);
 
     await solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint256[]"],
-          [intent.buyToken, tokenIdsToFill]
-        ),
-        fillTokenDetails: [
-          tokenIdsToFill.map((tokenId) => ({
-            tokenId,
-            criteriaProof: [],
-          })),
-        ],
-        executeAmounts: [intent.expectedAmount],
+        data: defaultAbiCoder.encode(["uint128"], [0]),
+        fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+          tokenId,
+          criteriaProof: [],
+        })),
       },
       [
         {

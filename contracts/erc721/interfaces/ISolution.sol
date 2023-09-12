@@ -5,9 +5,8 @@ import {MemswapERC721} from "../MemswapERC721.sol";
 
 interface ISolution {
     function callback(
-        MemswapERC721.Intent[] memory intents,
-        MemswapERC721.TokenDetails[][] memory tokenDetailsToFill,
-        uint128[] memory amountsToExecute,
+        MemswapERC721.Intent memory intent,
+        MemswapERC721.TokenDetails[] memory tokenDetailsToFill,
         bytes memory data
     ) external;
 }

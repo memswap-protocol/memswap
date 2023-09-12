@@ -78,16 +78,13 @@ contract MemswapERC20 is
 
     struct Solution {
         // When isBuy = true:
-        // fillAmounts = buy amounts to fill
-        // executeAmounts = sell amounts to pull from user
+        // fillAmount = buy amount to fill
 
         // When isBuy = false:
-        // fillAmounts = sell amounts to fill
-        // executeAmounts = buy amounts to push to user
+        // fillAmount = sell amount to fill
 
         bytes data;
-        uint128[] fillAmounts;
-        uint128[] executeAmounts;
+        uint128 fillAmount;
     }
 
     // --- Events ---
@@ -330,136 +327,96 @@ contract MemswapERC20 is
     }
 
     /**
-     * @notice Solve intents
+     * @notice Solve intent
      *
-     * @param intents Intents to solve
+     * @param intent Intent to solve
      * @param solution Solution
      * @param permits Permits to execute prior to the solution
      */
     function solve(
-        Intent[] memory intents,
+        Intent memory intent,
         Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
     ) external payable nonReentrant executePermits(permits) {
-        uint128[] memory amountsToCheck;
+        // Make any private data available
+        _includePrivateData(intent);
 
-        // Check
-        unchecked {
-            uint256 intentsLength = intents.length;
-            amountsToCheck = new uint128[](intentsLength);
-            for (uint256 i; i < intentsLength; i++) {
-                Intent memory intent = intents[i];
-                _includePrivateData(intent);
-
-                // The intent must be open or tied to the current solver
-                if (
-                    intent.solver != address(0) && intent.solver != msg.sender
-                ) {
-                    revert Unauthorized();
-                }
-
-                amountsToCheck[i] = intent.isBuy ? type(uint128).max : 0;
-            }
+        // Check authorization
+        if (intent.solver != address(0) && intent.solver != msg.sender) {
+            revert Unauthorized();
         }
 
         // Solve
-        _solve(intents, solution, amountsToCheck);
+        _solve(intent, solution, intent.isBuy ? type(uint128).max : 0);
     }
 
     /**
-     * @notice Solve intents with authorization (compared to the regular `solve`,
-     *         this method allows solving intents of a solver as long as there is
-     *         a valid authorization in-place for the current solver). The checks
-     *         for authorization will be done via a storage slot check.
+     * @notice Solve intent with authorization. Compared to the regular `solve`,
+     *         this method allows solving intents of a different solver, as long
+     *         as there's a valid authorization in-place for the current caller.
+     *         The authorization will be checked via a storage slot.
      *
-     * @param intents Intents to solve
+     * @param intent Intent to solve
      * @param solution Solution
      * @param permits Permits to execute prior to the solution
      */
     function solveWithOnChainAuthorizationCheck(
-        Intent[] memory intents,
+        Intent memory intent,
         Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
     ) external payable nonReentrant executePermits(permits) {
-        uint128[] memory amountsToCheck;
+        // Make any private data available
+        _includePrivateData(intent);
 
-        // Check
-        unchecked {
-            uint256 intentsLength = intents.length;
-            amountsToCheck = new uint128[](intentsLength);
-            for (uint256 i; i < intentsLength; i++) {
-                Intent memory intent = intents[i];
-                _includePrivateData(intent);
-
-                bytes32 intentHash = getIntentHash(intent);
-                bytes32 authId = keccak256(
-                    abi.encodePacked(intentHash, msg.sender)
-                );
-
-                Authorization memory auth = authorization[authId];
-                _checkAuthorization(auth, solution.fillAmounts[i]);
-
-                amountsToCheck[i] = auth.executeAmountToCheck;
-            }
-        }
+        // Check authorization
+        bytes32 intentHash = getIntentHash(intent);
+        bytes32 authId = keccak256(abi.encodePacked(intentHash, msg.sender));
+        Authorization memory auth = authorization[authId];
+        _checkAuthorization(auth, solution.fillAmount);
 
         // Solve
-        _solve(intents, solution, amountsToCheck);
+        _solve(intent, solution, auth.executeAmountToCheck);
     }
 
     /**
-     * @notice Solve intents with authorization (compared to the regular `solve`,
-     *         this method allows solving intents of a solver as long as there is
-     *         a valid authorization in-place for the current solver). The checks
-     *         for authorization will be done via a signature.
+     * @notice Solve intent with authorization. Compared to the regular `solve`,
+     *         this method allows solving intents of a different solver, as long
+     *         as there's a valid authorization in-place for the current caller.
+     *         The authorization will be checked via a signature.
      *
-     * @param intents Intents to solve
+     * @param intent Intent to solve
      * @param solution Solution for the intent
-     * @param auths Authorizations
+     * @param auth Authorization
      * @param permits Permits to execute prior to the solution
      */
     function solveWithSignatureAuthorizationCheck(
-        Intent[] memory intents,
+        Intent memory intent,
         Solution calldata solution,
-        AuthorizationWithSignature[] calldata auths,
+        AuthorizationWithSignature calldata auth,
         PermitExecutor.Permit[] calldata permits
     ) external payable nonReentrant executePermits(permits) {
-        uint128[] memory amountsToCheck;
+        // Make any private data available
+        _includePrivateData(intent);
 
-        // Check
-        unchecked {
-            uint256 intentsLength = intents.length;
-            amountsToCheck = new uint128[](intentsLength);
-            for (uint256 i; i < intentsLength; i++) {
-                Intent memory intent = intents[i];
-                _includePrivateData(intent);
-
-                AuthorizationWithSignature calldata authWithSig = auths[i];
-                Authorization calldata auth = authWithSig.authorization;
-
-                bytes32 intentHash = getIntentHash(intent);
-                bytes32 authorizationHash = getAuthorizationHash(
-                    intentHash,
-                    msg.sender,
-                    auth
-                );
-                bytes32 digest = _getEIP712Hash(authorizationHash);
-
-                _assertValidSignature(
-                    intent.solver,
-                    digest,
-                    digest,
-                    authWithSig.signature.length,
-                    authWithSig.signature
-                );
-                _checkAuthorization(auth, solution.fillAmounts[i]);
-
-                amountsToCheck[i] = auth.executeAmountToCheck;
-            }
-        }
+        // Check authorization
+        bytes32 intentHash = getIntentHash(intent);
+        bytes32 authorizationHash = getAuthorizationHash(
+            intentHash,
+            msg.sender,
+            auth.authorization
+        );
+        bytes32 digest = _getEIP712Hash(authorizationHash);
+        _assertValidSignature(
+            intent.solver,
+            digest,
+            digest,
+            auth.signature.length,
+            auth.signature
+        );
+        _checkAuthorization(auth.authorization, solution.fillAmount);
 
         // Solve
-        _solve(intents, solution, amountsToCheck);
+        _solve(intent, solution, auth.authorization.executeAmountToCheck);
     }
 
     // View methods
@@ -531,346 +488,337 @@ contract MemswapERC20 is
     // Internal methods
 
     function _preProcess(
-        Intent[] memory intents,
-        uint128[] memory amountsToFill,
-        uint128[] memory amountsToExecute,
-        uint128[] memory amountsToCheck
-    ) internal returns (uint128[] memory actualAmountsToFill) {
-        actualAmountsToFill = new uint128[](intents.length);
+        Intent memory intent,
+        uint128 amountToFill
+    ) internal returns (uint128 actualAmountToFill) {
+        bytes32 intentHash = getIntentHash(intent);
 
-        uint256 intentsLength = intents.length;
-        for (uint256 i; i < intentsLength; ) {
-            Intent memory intent = intents[i];
-            bytes32 intentHash = getIntentHash(intent);
+        // Verify start and end times
 
-            // Verify start and end times
+        if (intent.startTime > block.timestamp) {
+            revert IntentIsNotStarted();
+        }
 
-            if (intent.startTime > block.timestamp) {
-                revert IntentIsNotStarted();
-            }
+        if (intent.endTime < block.timestamp) {
+            revert IntentIsExpired();
+        }
 
-            if (intent.endTime < block.timestamp) {
-                revert IntentIsExpired();
-            }
+        if (intent.startTime >= intent.endTime) {
+            revert InvalidStartAndEndTimes();
+        }
 
-            if (intent.startTime >= intent.endTime) {
-                revert InvalidStartAndEndTimes();
-            }
+        // Verify cancellation status and signature
 
-            IntentStatus memory status = intentStatus[intentHash];
+        IntentStatus memory status = intentStatus[intentHash];
 
-            // Verify cancellation status
-            if (status.isCancelled) {
-                revert IntentIsCancelled();
-            }
+        if (status.isCancelled) {
+            revert IntentIsCancelled();
+        }
 
-            // Verify signature
-            if (!status.isPrevalidated) {
-                _prevalidateIntent(
-                    intentHash,
-                    intent.maker,
-                    intent.isSmartOrder,
-                    intent.signature
-                );
-            }
+        if (!status.isPrevalidated) {
+            _prevalidateIntent(
+                intentHash,
+                intent.maker,
+                intent.isSmartOrder,
+                intent.signature
+            );
+        }
 
-            // Ensure there's still some amount left to be filled
-            uint128 amountAvailable = intent.amount - status.amountFilled;
-            if (amountAvailable == 0) {
-                revert IntentIsFilled();
-            }
+        // Ensure there's still some amount left to be filled
+        uint128 amountAvailable = intent.amount - status.amountFilled;
+        if (amountAvailable == 0) {
+            revert IntentIsFilled();
+        }
 
-            // Ensure non-partially-fillable intents are fully filled
-            if (
-                !intent.isPartiallyFillable &&
-                amountsToFill[i] < amountAvailable
-            ) {
-                revert IntentIsNotPartiallyFillable();
-            }
+        // Ensure non-partially-fillable intents are fully filled
+        if (!intent.isPartiallyFillable && amountToFill < amountAvailable) {
+            revert IntentIsNotPartiallyFillable();
+        }
 
-            // Compute the actual amount to fill
-            uint128 actualAmountToFill = amountsToFill[i] > amountAvailable
-                ? amountAvailable
-                : amountsToFill[i];
-            if (actualAmountToFill == 0) {
-                revert InvalidFillAmount();
-            }
+        // Compute the actual amount to fill
+        actualAmountToFill = amountToFill > amountAvailable
+            ? amountAvailable
+            : amountToFill;
+        if (actualAmountToFill == 0) {
+            revert InvalidFillAmount();
+        }
 
-            // Update the storage
-            intentStatus[intentHash].amountFilled += actualAmountToFill;
+        // Update the storage
+        intentStatus[intentHash].amountFilled += actualAmountToFill;
 
-            actualAmountsToFill[i] = actualAmountToFill;
+        if (intent.isBuy) {
+            // When isBuy = true:
+            // amount = buy amount
+            // expectedAmount = sell expected amount
+            // startAmountBps = sell start amount bps
+            // endAmountBps = sell end amount bps
 
-            if (intent.isBuy) {
-                // When isBuy = true:
-                // amount = buy amount
-                // expectedAmount = sell expected amount
-                // startAmountBps = sell start amount bps
-                // endAmountBps = sell end amount bps
+            uint128 expectedAmount = (intent.expectedAmount *
+                actualAmountToFill) / intent.amount;
+            uint128 startAmount = expectedAmount -
+                (expectedAmount * intent.startAmountBps) /
+                10000;
+            uint128 endAmount = expectedAmount +
+                (expectedAmount * intent.endAmountBps) /
+                10000;
 
-                uint128 expectedAmount = (intent.expectedAmount *
-                    actualAmountToFill) / intent.amount;
-                uint128 startAmount = expectedAmount -
-                    (expectedAmount * intent.startAmountBps) /
-                    10000;
-                uint128 endAmount = expectedAmount +
-                    (expectedAmount * intent.endAmountBps) /
-                    10000;
+            //                                                      (now() - startTime)
+            // maxAmount = startAmount + (endAmount - startAmount) ---------------------
+            //                                                     (endTime - startTime)
 
-                //                                                           (now() - startTime)
-                // requiredAmount = startAmount + (endAmount - startAmount) ---------------------
-                //                                                          (endTime - startTime)
+            uint128 maxAmount = startAmount +
+                ((endAmount - startAmount) *
+                    (uint32(block.timestamp) - intent.startTime)) /
+                (intent.endTime - intent.startTime);
 
-                uint128 requiredAmount = startAmount +
-                    ((endAmount - startAmount) *
-                        (uint32(block.timestamp) - intent.startTime)) /
-                    (intent.endTime - intent.startTime);
+            // Transfer inputs to solver
+            _transferNativeOrERC20(
+                intent.maker,
+                msg.sender,
+                intent.sellToken,
+                maxAmount
+            );
+        } else {
+            // When isBuy = false:
+            // amount = sell amount
+            // expectedAmount = buy expected amount
+            // startAmountBps = buy start amount bps
+            // endAmountBps = buy end amount bps
 
-                uint128 executeAmount = amountsToExecute[i];
-
-                // The amount to execute should be lower than the required amount
-                if (executeAmount > requiredAmount) {
-                    revert InvalidSolution();
-                }
-
-                // The amount to execute should be lower than the check amount
-                if (executeAmount > amountsToCheck[i]) {
-                    revert AmountCheckFailed();
-                }
-
-                if (intent.source != address(0)) {
-                    uint128 amount;
-
-                    // Charge fee
-                    if (intent.feeBps > 0) {
-                        amount += (executeAmount * intent.feeBps) / 10000;
-                    }
-
-                    // Charge surplus fee
-                    if (
-                        intent.surplusBps > 0 && executeAmount < expectedAmount
-                    ) {
-                        amount +=
-                            ((expectedAmount - executeAmount) *
-                                intent.surplusBps) /
-                            10000;
-                    }
-
-                    // Transfer fees
-                    if (amount > 0) {
-                        _transferNativeOrERC20(
-                            intent.maker,
-                            intent.source,
-                            intent.sellToken,
-                            amount
-                        );
-
-                        executeAmount -= amount;
-                    }
-                }
-
-                // Transfer inputs to solver
-                if (executeAmount > 0) {
-                    _transferNativeOrERC20(
-                        intent.maker,
-                        msg.sender,
-                        intent.sellToken,
-                        executeAmount
-                    );
-                }
-
-                emit IntentSolved(
-                    intentHash,
-                    intent.isBuy,
-                    intent.buyToken,
-                    intent.sellToken,
-                    intent.maker,
-                    msg.sender,
-                    actualAmountToFill,
-                    executeAmount
-                );
-            } else {
-                // When isBuy = false:
-                // amount = sell amount
-                // expectedAmount = buy expected amount
-                // startAmountBps = buy start amount bps
-                // endAmountBps = buy end amount bps
-
-                // Transfer inputs to solver
-                _transferNativeOrERC20(
-                    intent.maker,
-                    msg.sender,
-                    intent.sellToken,
-                    actualAmountToFill
-                );
-            }
-
-            unchecked {
-                ++i;
-            }
+            // Transfer inputs to solver
+            _transferNativeOrERC20(
+                intent.maker,
+                msg.sender,
+                intent.sellToken,
+                actualAmountToFill
+            );
         }
     }
 
     function _postProcess(
-        Intent[] memory intents,
-        uint128[] memory amountsToFill,
-        uint128[] memory amountsToExecute,
-        uint128[] memory amountsToCheck
+        Intent memory intent,
+        uint128 amountToFill,
+        uint128 amountToCheck,
+        uint128 makerBuyBalanceDiff,
+        uint128 makerSellBalanceDiff,
+        uint128 sourceBalanceDiff
     ) internal {
-        uint256 intentsLength = intents.length;
-        for (uint256 i; i < intentsLength; ) {
-            Intent memory intent = intents[i];
-            bytes32 intentHash = getIntentHash(intent);
+        bytes32 intentHash = getIntentHash(intent);
 
-            if (intent.isBuy) {
-                // When isBuy = true:
-                // amount = buy amount
-                // expectedAmount = sell expected amount
-                // startAmountBps = sell start amount bps
-                // endAmountBps = sell end amount bps
+        if (intent.isBuy) {
+            // When isBuy = true:
+            // amount = buy amount
+            // expectedAmount = sell expected amount
+            // startAmountBps = sell start amount bps
+            // endAmountBps = sell end amount bps
 
-                // Transfer outputs to maker
-                _transferNativeOrERC20(
-                    msg.sender,
-                    intent.maker,
-                    intent.buyToken,
-                    amountsToFill[i]
-                );
-            } else {
-                // When isBuy = false:
-                // amount = sell amount
-                // expectedAmount = buy expected amount
-                // startAmountBps = buy start amount bps
-                // endAmountBps = buy end amount bps
+            uint128 expectedAmount = (intent.expectedAmount * amountToFill) /
+                intent.amount;
+            uint128 startAmount = expectedAmount -
+                (expectedAmount * intent.startAmountBps) /
+                10000;
+            uint128 endAmount = expectedAmount +
+                (expectedAmount * intent.endAmountBps) /
+                10000;
 
-                uint128 expectedAmount = (intent.expectedAmount *
-                    amountsToFill[i]) / intent.amount;
-                uint128 startAmount = expectedAmount +
-                    (expectedAmount * intent.startAmountBps) /
-                    10000;
-                uint128 endAmount = expectedAmount -
-                    (expectedAmount * intent.endAmountBps) /
-                    10000;
+            //                                                      (now() - startTime)
+            // maxAmount = startAmount + (endAmount - startAmount) ---------------------
+            //                                                     (endTime - startTime)
 
-                //                                                           (now() - startTime)
-                // requiredAmount = startAmount - (startAmount - endAmount) ---------------------
-                //                                                          (endTime - startTime)
+            uint128 maxAmount = startAmount +
+                ((endAmount - startAmount) *
+                    (uint32(block.timestamp) - intent.startTime)) /
+                (intent.endTime - intent.startTime);
 
-                uint128 requiredAmount = startAmount -
-                    ((startAmount - endAmount) *
-                        (uint32(block.timestamp) - intent.startTime)) /
-                    (intent.endTime - intent.startTime);
+            uint128 executeAmount = makerSellBalanceDiff;
 
-                uint128 executeAmount = amountsToExecute[i];
-
-                // The amount to execute should be greater than the required amount
-                if (executeAmount < requiredAmount) {
-                    revert InvalidSolution();
-                }
-
-                // The amount to execute should be greater than the check amount
-                if (executeAmount < amountsToCheck[i]) {
-                    revert AmountCheckFailed();
-                }
-
-                if (intent.source != address(0)) {
-                    uint128 amount;
-
-                    // Charge fee
-                    if (intent.feeBps > 0) {
-                        amount += (executeAmount * intent.feeBps) / 10000;
-                    }
-
-                    // Charge surplus fee
-                    if (
-                        intent.surplusBps > 0 && executeAmount > expectedAmount
-                    ) {
-                        amount +=
-                            ((executeAmount - expectedAmount) *
-                                intent.surplusBps) /
-                            10000;
-                    }
-
-                    // Transfer fees
-                    if (amount > 0) {
-                        _transferNativeOrERC20(
-                            msg.sender,
-                            intent.source,
-                            intent.buyToken,
-                            amount
-                        );
-
-                        executeAmount -= amount;
-                    }
-                }
-
-                // Transfer outputs to maker
-                if (executeAmount > 0) {
-                    _transferNativeOrERC20(
-                        msg.sender,
-                        intent.maker,
-                        intent.buyToken,
-                        executeAmount
-                    );
-                }
-
-                emit IntentSolved(
-                    intentHash,
-                    intent.isBuy,
-                    intent.buyToken,
-                    intent.sellToken,
-                    intent.maker,
-                    msg.sender,
-                    executeAmount,
-                    amountsToFill[i]
-                );
+            // The amount to execute should be lower than the maximum allowed amount
+            if (executeAmount > maxAmount) {
+                revert InvalidSolution();
             }
 
-            unchecked {
-                ++i;
+            // The amount to execute should be lower than the check amount
+            if (executeAmount > amountToCheck) {
+                revert AmountCheckFailed();
             }
+
+            // Compute total fees
+            uint128 sourceFees;
+            if (intent.source != address(0)) {
+                // Fee
+                if (intent.feeBps > 0) {
+                    sourceFees += (executeAmount * intent.feeBps) / 10000;
+                }
+
+                // Surplus fee
+                if (intent.surplusBps > 0 && executeAmount < expectedAmount) {
+                    sourceFees +=
+                        ((expectedAmount - executeAmount) * intent.surplusBps) /
+                        10000;
+                }
+            }
+
+            // Ensure the correct amount of fees were paid
+            if (sourceBalanceDiff < sourceFees) {
+                revert InvalidSolution();
+            }
+
+            // Ensure the maker got the correct amount of tokens
+            if (makerBuyBalanceDiff < amountToFill) {
+                revert InvalidSolution();
+            }
+
+            emit IntentSolved(
+                intentHash,
+                intent.isBuy,
+                intent.buyToken,
+                intent.sellToken,
+                intent.maker,
+                msg.sender,
+                amountToFill,
+                executeAmount
+            );
+        } else {
+            // When isBuy = false:
+            // amount = sell amount
+            // expectedAmount = buy expected amount
+            // startAmountBps = buy start amount bps
+            // endAmountBps = buy end amount bps
+
+            uint128 expectedAmount = (intent.expectedAmount * amountToFill) /
+                intent.amount;
+            uint128 startAmount = expectedAmount +
+                (expectedAmount * intent.startAmountBps) /
+                10000;
+            uint128 endAmount = expectedAmount -
+                (expectedAmount * intent.endAmountBps) /
+                10000;
+
+            //                                                      (now() - startTime)
+            // minAmount = startAmount - (startAmount - endAmount) ---------------------
+            //                                                     (endTime - startTime)
+
+            uint128 minAmount = startAmount -
+                ((startAmount - endAmount) *
+                    (uint32(block.timestamp) - intent.startTime)) /
+                (intent.endTime - intent.startTime);
+
+            uint128 executeAmount = makerBuyBalanceDiff + sourceBalanceDiff;
+
+            // The amount to execute should be greater than the minimum amount
+            if (executeAmount < minAmount) {
+                revert InvalidSolution();
+            }
+
+            // The amount to execute should be greater than the check amount
+            if (executeAmount < amountToCheck) {
+                revert AmountCheckFailed();
+            }
+
+            // Compute total fees
+            uint128 sourceFees;
+            if (intent.source != address(0)) {
+                // Fee
+                if (intent.feeBps > 0) {
+                    sourceFees += (executeAmount * intent.feeBps) / 10000;
+                }
+
+                // Surplus fee
+                if (intent.surplusBps > 0 && executeAmount > expectedAmount) {
+                    sourceFees +=
+                        ((executeAmount - expectedAmount) * intent.surplusBps) /
+                        10000;
+                }
+            }
+
+            // Ensure the correct amount of fees were paid
+            if (sourceBalanceDiff < sourceFees) {
+                revert InvalidSolution();
+            }
+
+            // Ensure the maker spent the correct amount of tokens
+            if (makerSellBalanceDiff < amountToFill) {
+                revert InvalidSolution();
+            }
+
+            emit IntentSolved(
+                intentHash,
+                intent.isBuy,
+                intent.buyToken,
+                intent.sellToken,
+                intent.maker,
+                msg.sender,
+                executeAmount,
+                amountToFill
+            );
         }
     }
 
     /**
-     * @dev Solve intents
+     * @dev Solve intent
      *
-     * @param intents Intents to solve
-     * @param amountsToCheck The amounts to check the solution against
+     * @param intent Intent to solve
      * @param solution Solution for the intent
+     * @param amountToCheck The amount to check the solution against
      */
     function _solve(
-        Intent[] memory intents,
+        Intent memory intent,
         Solution calldata solution,
-        uint128[] memory amountsToCheck
+        uint128 amountToCheck
     ) internal {
-        uint128[] memory amountsToFill = solution.fillAmounts;
-        uint128[] memory amountsToExecute = solution.executeAmounts;
+        // Determine the token for which the amount is variable
+        // - isBuy = true -> sellToken (exact output, variable input)
+        // - isBuy = false -> buyToken (exact input, variable output)
+        address relevantToken = intent.isBuy
+            ? intent.sellToken
+            : intent.buyToken;
 
-        // Pre-process
-        uint128[] memory actualAmountsToFill = _preProcess(
-            intents,
-            amountsToFill,
-            amountsToExecute,
-            amountsToCheck
+        // Fetch the balances before the solution execution
+        uint128 makerBuyBalanceBefore = _getBalanceNativeOrERC20(
+            intent.buyToken,
+            intent.maker
+        );
+        uint128 makerSellBalanceBefore = _getBalanceNativeOrERC20(
+            intent.sellToken,
+            intent.maker
+        );
+        uint128 sourceBalanceBefore = _getBalanceNativeOrERC20(
+            relevantToken,
+            intent.source
         );
 
+        // Pre-process
+        uint128 actualAmountToFill = _preProcess(intent, solution.fillAmount);
+
         // Solve
-        if (solution.data.length > 0) {
-            ISolution(msg.sender).callback(
-                intents,
-                actualAmountsToFill,
-                amountsToExecute,
-                solution.data
-            );
-        }
+        ISolution(msg.sender).callback(
+            intent,
+            actualAmountToFill,
+            solution.data
+        );
+
+        // Fetch the balances after the solution execution
+        uint128 makerBuyBalanceAfter = _getBalanceNativeOrERC20(
+            intent.buyToken,
+            intent.maker
+        );
+        uint128 makerSellBalanceAfter = _getBalanceNativeOrERC20(
+            intent.sellToken,
+            intent.maker
+        );
+        uint128 sourceBalanceAfter = _getBalanceNativeOrERC20(
+            relevantToken,
+            intent.source
+        );
 
         // Post-process
         _postProcess(
-            intents,
-            actualAmountsToFill,
-            amountsToExecute,
-            amountsToCheck
+            intent,
+            actualAmountToFill,
+            amountToCheck,
+            makerBuyBalanceAfter - makerBuyBalanceBefore,
+            makerSellBalanceBefore - makerSellBalanceAfter,
+            sourceBalanceAfter - sourceBalanceBefore
         );
     }
 
@@ -945,7 +893,7 @@ contract MemswapERC20 is
                     or(
                         and(
                             mload(add(signature, 0x20)),
-                            not(shl(160, 0xFFFFFFFFFFFFFFFFFFFFFFFF))
+                            not(shl(160, 0xffffffffffffffffffffffff))
                         ),
                         revealedSignaturePrefix
                     )
@@ -955,7 +903,26 @@ contract MemswapERC20 is
     }
 
     /**
-     * @dev Helper method for transferring native and ERC20 tokens
+     * @dev Helper method to get the balance of native or ERC20 tokens
+     *
+     * @param token Token to get the balance for (native tokens are represented by the zero address)
+     * @param owner Wallet to get the balance of
+     *
+     * @return balance The amount of `token` owned by `owner`
+     */
+    function _getBalanceNativeOrERC20(
+        address token,
+        address owner
+    ) internal view returns (uint128 balance) {
+        if (token == address(0)) {
+            balance = uint128(owner.balance);
+        } else {
+            balance = uint128(IERC20(token).balanceOf(owner));
+        }
+    }
+
+    /**
+     * @dev Helper method for transferring native or ERC20 tokens
      *
      * @param from Transfer from this address
      * @param to Transfer to this address
@@ -969,7 +936,7 @@ contract MemswapERC20 is
         uint256 amount
     ) internal {
         bool success;
-        if (address(token) == address(0)) {
+        if (token == address(0)) {
             (success, ) = to.call{value: amount}("");
         } else {
             // First, attempt to transfer directly

@@ -5,9 +5,8 @@ import {MemswapERC20} from "../MemswapERC20.sol";
 
 interface ISolution {
     function callback(
-        MemswapERC20.Intent[] memory intents,
-        uint128[] memory amountsToFill,
-        uint128[] memory amountsToExecute,
+        MemswapERC20.Intent memory intent,
+        uint128 amountToFill,
         bytes memory data
     ) external;
 }

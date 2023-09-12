@@ -52,125 +52,99 @@ contract SolutionProxyERC20 is ISolution {
     // --- Public methods ---
 
     function solve(
-        MemswapERC20.Intent[] calldata intents,
+        MemswapERC20.Intent calldata intent,
         MemswapERC20.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
     ) external restrictCaller(owner) {
-        MemswapERC20(payable(memswap)).solve(intents, solution, permits);
+        MemswapERC20(payable(memswap)).solve(intent, solution, permits);
     }
 
     function solveWithOnChainAuthorizationCheck(
-        MemswapERC20.Intent[] calldata intents,
+        MemswapERC20.Intent calldata intent,
         MemswapERC20.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
     ) external restrictCaller(owner) {
         MemswapERC20(payable(memswap)).solveWithOnChainAuthorizationCheck(
-            intents,
+            intent,
             solution,
             permits
         );
     }
 
     function solveWithSignatureAuthorizationCheck(
-        MemswapERC20.Intent[] calldata intents,
+        MemswapERC20.Intent calldata intent,
         MemswapERC20.Solution calldata solution,
-        MemswapERC20.AuthorizationWithSignature[] calldata auths,
+        MemswapERC20.AuthorizationWithSignature calldata auth,
         PermitExecutor.Permit[] calldata permits
     ) external restrictCaller(owner) {
         MemswapERC20(payable(memswap)).solveWithSignatureAuthorizationCheck(
-            intents,
+            intent,
             solution,
-            auths,
+            auth,
             permits
         );
     }
 
     function callback(
-        MemswapERC20.Intent[] memory intents,
-        uint128[] memory amountsToFill,
-        uint128[] memory amountsToExecute,
+        MemswapERC20.Intent memory intent,
+        uint128 amountToFill,
         bytes memory data
     ) external override restrictCaller(memswap) {
-        // Assumes a single intent is filled at once
-        if (intents.length != 1) {
-            revert NotSupported();
-        }
-
-        MemswapERC20.Intent memory intent = intents[0];
-        uint128 amountToFill = amountsToFill[0];
-        uint128 amountToExecute = amountsToExecute[0];
-
-        if (intent.isBuy) {
-            Call[] memory calls = abi.decode(data, (Call[]));
-
-            // Make calls
-
-            uint256 length = calls.length;
-            for (uint256 i; i < length; ) {
-                makeCall(calls[i]);
-
-                unchecked {
-                    ++i;
-                }
-            }
-
-            // Push outputs
-
-            bool outputETH = intent.buyToken == address(0);
-            if (outputETH) {
-                makeCall(Call(memswap, "", amountToFill));
-            } else {
-                IERC20(intent.buyToken).approve(memswap, amountToFill);
-            }
-
-            // Take profits
-
-            uint256 amountLeft;
-
-            amountLeft = IERC20(intent.sellToken).balanceOf(address(this));
-            if (amountLeft > 0) {
-                IERC20(intent.sellToken).transfer(owner, amountLeft);
-            }
-
-            amountLeft = address(this).balance;
-            if (amountLeft > 0) {
-                makeCall(Call(owner, "", amountLeft));
-            }
-        } else {
-            Call[] memory calls = abi.decode(data, (Call[]));
-
-            // Make calls
-
-            uint256 length = calls.length;
-            for (uint256 i; i < length; ) {
-                makeCall(calls[i]);
-
-                unchecked {
-                    ++i;
-                }
-            }
-
-            // Push outputs and take profits
-
-            bool outputETH = intent.buyToken == address(0);
-            if (outputETH) {
-                makeCall(Call(memswap, "", amountToExecute));
-
-                uint256 amountLeft = address(this).balance;
-                if (amountLeft > 0) {
-                    makeCall(Call(owner, "", amountLeft));
-                }
-            } else {
-                IERC20(intent.buyToken).approve(memswap, amountToExecute);
-
-                uint256 amountLeft = IERC20(intent.buyToken).balanceOf(
-                    address(this)
-                ) - amountToExecute;
-                if (amountLeft > 0) {
-                    IERC20(intent.buyToken).transfer(owner, amountLeft);
-                }
-            }
-        }
+        // if (intent.isBuy) {
+        //     Call[] memory calls = abi.decode(data, (Call[]));
+        //     // Make calls
+        //     uint256 length = calls.length;
+        //     for (uint256 i; i < length; ) {
+        //         makeCall(calls[i]);
+        //         unchecked {
+        //             ++i;
+        //         }
+        //     }
+        //     // Push outputs
+        //     bool outputETH = intent.buyToken == address(0);
+        //     if (outputETH) {
+        //         makeCall(Call(memswap, "", amountToFill));
+        //     } else {
+        //         IERC20(intent.buyToken).approve(memswap, amountToFill);
+        //     }
+        //     // Take profits
+        //     uint256 amountLeft;
+        //     amountLeft = IERC20(intent.sellToken).balanceOf(address(this));
+        //     if (amountLeft > 0) {
+        //         IERC20(intent.sellToken).transfer(owner, amountLeft);
+        //     }
+        //     amountLeft = address(this).balance;
+        //     if (amountLeft > 0) {
+        //         makeCall(Call(owner, "", amountLeft));
+        //     }
+        // } else {
+        //     Call[] memory calls = abi.decode(data, (Call[]));
+        //     // Make calls
+        //     uint256 length = calls.length;
+        //     for (uint256 i; i < length; ) {
+        //         makeCall(calls[i]);
+        //         unchecked {
+        //             ++i;
+        //         }
+        //     }
+        //     // Push outputs and take profits
+        //     bool outputETH = intent.buyToken == address(0);
+        //     if (outputETH) {
+        //         makeCall(Call(memswap, "", amountToExecute));
+        //         uint256 amountLeft = address(this).balance;
+        //         if (amountLeft > 0) {
+        //             makeCall(Call(owner, "", amountLeft));
+        //         }
+        //     } else {
+        //         IERC20(intent.buyToken).approve(memswap, amountToExecute);
+        //         uint256 amountLeft = IERC20(intent.buyToken).balanceOf(
+        //             address(this)
+        //         ) - amountToExecute;
+        //         if (amountLeft > 0) {
+        //             IERC20(intent.buyToken).transfer(owner, amountLeft);
+        //         }
+        //     }
+        // }
     }
 
     // --- Internal methods ---

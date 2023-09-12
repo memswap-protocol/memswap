@@ -176,19 +176,13 @@ describe("[ERC721] Random", async () => {
     // Solve
     const tokenIdsToFill = [...Array(Number(fillAmount)).keys()];
     const solve = solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint256[]"],
-          [intent.buyToken, tokenIdsToFill]
-        ),
-        fillTokenDetails: [
-          tokenIdsToFill.map((tokenId) => ({
-            tokenId,
-            criteriaProof: [],
-          })),
-        ],
-        executeAmounts: [amount.sub(surplus)],
+        data: defaultAbiCoder.encode(["uint128"], [surplus]),
+        fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+          tokenId,
+          criteriaProof: [],
+        })),
       },
       []
     );
@@ -204,7 +198,7 @@ describe("[ERC721] Random", async () => {
           intent.sellToken,
           intent.maker,
           solutionProxy.address,
-          amount.sub(surplus).sub(fee).sub(surplusFee),
+          amount.sub(surplus),
           tokenIdsToFill
         );
     }
@@ -327,19 +321,13 @@ describe("[ERC721] Random", async () => {
 
     // Solve
     const solve = solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint128"],
-          [intent.buyToken, amount.add(surplus)]
-        ),
-        fillTokenDetails: [
-          tokenIdsToFill.map((tokenId) => ({
-            tokenId,
-            criteriaProof: [],
-          })),
-        ],
-        executeAmounts: [amount.add(surplus)],
+        data: defaultAbiCoder.encode(["uint128"], [surplus]),
+        fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+          tokenId,
+          criteriaProof: [],
+        })),
       },
       []
     );
@@ -355,7 +343,7 @@ describe("[ERC721] Random", async () => {
           intent.sellToken,
           intent.maker,
           solutionProxy.address,
-          amount.add(surplus).sub(fee).sub(surplusFee),
+          amount.add(surplus),
           tokenIdsToFill
         );
     }

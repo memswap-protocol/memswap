@@ -19,8 +19,6 @@ import {
 } from "../utils";
 
 describe("[ERC721] Criteria", async () => {
-  let chainId: number;
-
   let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
@@ -32,8 +30,6 @@ describe("[ERC721] Criteria", async () => {
   let token1: Contract;
 
   beforeEach(async () => {
-    chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
-
     [deployer, alice, bob] = await ethers.getSigners();
 
     memswap = await ethers
@@ -91,21 +87,15 @@ describe("[ERC721] Criteria", async () => {
     // When the intent has no criteria, a single token id can be used for filling
     await expect(
       solutionProxy.connect(bob).solve(
-        [intent],
+        intent,
         {
-          data: defaultAbiCoder.encode(
-            ["address", "uint256[]"],
-            [intent.buyToken, [888]]
-          ),
+          data: defaultAbiCoder.encode(["uint128"], [0]),
           fillTokenDetails: [
-            [
-              {
-                tokenId: 888,
-                criteriaProof: [],
-              },
-            ],
+            {
+              tokenId: 888,
+              criteriaProof: [],
+            },
           ],
-          executeAmounts: [bn(intent.expectedAmount).div(2)],
         },
         []
       )
@@ -113,21 +103,15 @@ describe("[ERC721] Criteria", async () => {
 
     // Succeeds when the fill token id matches `tokenIdOrCriteria`
     await solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint256[]"],
-          [intent.buyToken, [intent.tokenIdOrCriteria]]
-        ),
+        data: defaultAbiCoder.encode(["uint128"], [0]),
         fillTokenDetails: [
-          [
-            {
-              tokenId: intent.tokenIdOrCriteria,
-              criteriaProof: [],
-            },
-          ],
+          {
+            tokenId: intent.tokenIdOrCriteria,
+            criteriaProof: [],
+          },
         ],
-        executeAmounts: [bn(intent.expectedAmount).div(2)],
       },
       []
     );
@@ -167,21 +151,15 @@ describe("[ERC721] Criteria", async () => {
     // When the criteria is `0`, any token id can be used for filling
     const randomTokenId = getRandomInteger(1, 100000);
     await solutionProxy.connect(bob).solve(
-      [intent],
+      intent,
       {
-        data: defaultAbiCoder.encode(
-          ["address", "uint256[]"],
-          [intent.buyToken, [randomTokenId]]
-        ),
+        data: defaultAbiCoder.encode(["uint128"], [0]),
         fillTokenDetails: [
-          [
-            {
-              tokenId: randomTokenId,
-              criteriaProof: [],
-            },
-          ],
+          {
+            tokenId: randomTokenId,
+            criteriaProof: [],
+          },
         ],
-        executeAmounts: [bn(intent.expectedAmount).div(4)],
       },
       []
     );
@@ -237,42 +215,30 @@ describe("[ERC721] Criteria", async () => {
         : getRandomInteger(1, 100000);
       if (criteriaTokenIds.includes(randomTokenId)) {
         await solutionProxy.connect(bob).solve(
-          [intent],
+          intent,
           {
-            data: defaultAbiCoder.encode(
-              ["address", "uint256[]"],
-              [intent.buyToken, [randomTokenId]]
-            ),
+            data: defaultAbiCoder.encode(["uint128"], [0]),
             fillTokenDetails: [
-              [
-                {
-                  tokenId: randomTokenId,
-                  criteriaProof: generateMerkleProof(tree, randomTokenId),
-                },
-              ],
+              {
+                tokenId: randomTokenId,
+                criteriaProof: generateMerkleProof(tree, randomTokenId),
+              },
             ],
-            executeAmounts: [intent.expectedAmount],
           },
           []
         );
       } else {
         await expect(
           solutionProxy.connect(bob).solve(
-            [intent],
+            intent,
             {
-              data: defaultAbiCoder.encode(
-                ["address", "uint256[]"],
-                [intent.buyToken, [randomTokenId]]
-              ),
+              data: defaultAbiCoder.encode(["uint128"], [0]),
               fillTokenDetails: [
-                [
-                  {
-                    tokenId: randomTokenId,
-                    criteriaProof: generateMerkleProof(tree, randomTokenId),
-                  },
-                ],
+                {
+                  tokenId: randomTokenId,
+                  criteriaProof: generateMerkleProof(tree, randomTokenId),
+                },
               ],
-              executeAmounts: [intent.expectedAmount],
             },
             []
           )
