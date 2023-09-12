@@ -27,11 +27,21 @@ const main = async () => {
   const [deployer] = await ethers.getSigners();
   const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
 
-  // await deployContract(deployer, "MemswapERC20");
+  // Common
   // await deployContract(deployer, "MEMETH");
-  await deployContract(deployer, "SolutionProxyERC20", [
+
+  // MemswapERC20
+  // await deployContract(deployer, "MemswapERC20");
+  // await deployContract(deployer, "SolutionProxyERC20", [
+  //   SOLVER[chainId],
+  //   MEMSWAP_ERC20[chainId],
+  // ]);
+
+  // MemswapERC721
+  // await deployContract(deployer, "MemswapERC721");
+  await deployContract(deployer, "SolutionProxyERC721", [
     SOLVER[chainId],
-    MEMSWAP_ERC20[chainId],
+    MEMSWAP_ERC721[chainId],
   ]);
 };
 

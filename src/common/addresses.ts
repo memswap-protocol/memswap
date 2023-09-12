@@ -7,7 +7,7 @@ export const MEMSWAP_ERC20: ChainIdToAddress = {
 };
 export const MEMSWAP_ERC721: ChainIdToAddress = {
   1: "",
-  5: "0xcc22e868f4e7fb16cdcbfc70dbdd2716c92f8862",
+  5: "0x9490af0a88c9ae07d425f59c462a9740c55ef579",
 };
 export const MEMETH: ChainIdToAddress = {
   1: "0x2712515766af2e2680f20e8372c7ea6010eaca66",
@@ -25,7 +25,7 @@ export const SOLUTION_PROXY_ERC20: ChainIdToAddress = {
 };
 export const SOLUTION_PROXY_ERC721: ChainIdToAddress = {
   1: "",
-  5: "0x906d6eb9cf8f64e100e44f8f491b833a8d40b530",
+  5: "0x8a7885e5188c0ceeb306e976e49272a1fff0131d",
 };
 
 // Matchmaker

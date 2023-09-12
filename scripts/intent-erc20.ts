@@ -9,9 +9,8 @@ import axios from "axios";
 import {
   MATCHMAKER,
   MEMSWAP_ERC20,
-  MEMSWAP_ERC721,
-  USDC,
   MEMETH,
+  USDC,
   WETH9,
 } from "../src/common/addresses";
 import {
@@ -19,7 +18,7 @@ import {
   getEIP712TypesForIntent,
   now,
 } from "../src/common/utils";
-import { IntentERC20, IntentERC721, Protocol } from "../src/common/types";
+import { IntentERC20, Protocol } from "../src/common/types";
 
 // Required env variables:
 // - JSON_URL: url for the http provider
