@@ -11,7 +11,7 @@ import {
   MEMSWAP_ERC20,
   MEMSWAP_ERC721,
   USDC,
-  WETH2,
+  MEMETH,
   WETH9,
 } from "../src/common/addresses";
 import {
@@ -31,22 +31,22 @@ const main = async () => {
 
   const chainId = await provider.getNetwork().then((n) => n.chainId);
   const CURRENCIES = {
-    ETH_IN: WETH2[chainId],
+    ETH_IN: MEMETH[chainId],
     ETH_OUT: AddressZero,
     WETH: WETH9[chainId],
     USDC: USDC[chainId],
   };
 
-  const buyToken = "0x77566d540d1e207dff8da205ed78750f9a1e7c55";
+  const buyToken = CURRENCIES.USDC;
   const sellToken = CURRENCIES.ETH_IN;
 
   // Create intent
-  const intent: IntentERC721 = {
-    isBuy: true,
+  const intent: IntentERC20 = {
+    isBuy: false,
     buyToken,
     sellToken,
     maker: maker.address,
-    matchmaker: AddressZero,
+    solver: AddressZero,
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,
@@ -56,24 +56,22 @@ const main = async () => {
       .then((b) => b!.timestamp + 3600 * 24),
     nonce: "0",
     isPartiallyFillable: false,
-    hasCriteria: true,
-    tokenIdOrCriteria: "0",
-    amount: "1",
-    endAmount: parseUnits("0.015", 18).toString(),
-    startAmountBps: 1000,
-    expectedAmountBps: 500,
-    hasDynamicSignature: false,
+    isSmartOrder: false,
+    amount: parseUnits("0.001", 18).toString(),
+    expectedAmount: parseUnits("10000", 6).toString(),
+    startAmountBps: 0,
+    endAmountBps: 0,
     // Mock value to pass type checks
     signature: "0x",
   };
   intent.signature = await maker._signTypedData(
-    getEIP712Domain(chainId, Protocol.ERC721),
-    getEIP712TypesForIntent(Protocol.ERC721),
+    getEIP712Domain(chainId, Protocol.ERC20),
+    getEIP712TypesForIntent(Protocol.ERC20),
     intent
   );
 
-  const memswapWeth = new Contract(
-    WETH2[chainId],
+  const memeth = new Contract(
+    MEMETH[chainId],
     new Interface([
       "function balanceOf(address owner) view returns (uint256)",
       "function approve(address spender, uint256 amount)",
@@ -82,17 +80,17 @@ const main = async () => {
     provider
   );
 
-  const amountToApprove = !intent.isBuy ? intent.amount : intent.endAmount;
+  const amountToApprove = !intent.isBuy ? intent.amount : intent.expectedAmount;
 
   // Generate approval transaction
   const approveMethod =
-    sellToken === WETH2[chainId] &&
-    (await memswapWeth.balanceOf(maker.address)).lt(amountToApprove)
+    sellToken === MEMETH[chainId] &&
+    (await memeth.balanceOf(maker.address)).lt(amountToApprove)
       ? "depositAndApprove"
       : "approve";
   const data =
-    memswapWeth.interface.encodeFunctionData(approveMethod, [
-      MEMSWAP_ERC721[chainId],
+    memeth.interface.encodeFunctionData(approveMethod, [
+      MEMSWAP_ERC20[chainId],
       amountToApprove,
     ]) +
     defaultAbiCoder
@@ -111,12 +109,10 @@ const main = async () => {
           "uint256",
           "bool",
           "bool",
-          "uint256",
           "uint128",
           "uint128",
           "uint16",
           "uint16",
-          "bool",
           "bytes",
         ],
         [
@@ -124,7 +120,7 @@ const main = async () => {
           intent.buyToken,
           intent.sellToken,
           intent.maker,
-          intent.matchmaker,
+          intent.solver,
           intent.source,
           intent.feeBps,
           intent.surplusBps,
@@ -132,13 +128,11 @@ const main = async () => {
           intent.endTime,
           intent.nonce,
           intent.isPartiallyFillable,
-          intent.hasCriteria,
-          intent.tokenIdOrCriteria,
+          intent.isSmartOrder,
           intent.amount,
-          intent.endAmount,
+          intent.expectedAmount,
           intent.startAmountBps,
-          intent.expectedAmountBps,
-          intent.hasDynamicSignature,
+          intent.endAmountBps,
           intent.signature,
         ]
       )

@@ -18,7 +18,7 @@ export const isTxIncluded = async (txHash: string, provider: Provider) =>
   provider.getTransactionReceipt(txHash).then((tx) => tx && tx.status === 1);
 
 export const isERC721Intent = (intent: IntentERC20 | IntentERC721) =>
-  "hasCriteria" in intent;
+  "isCriteriaOrder" in intent;
 
 export const isIntentFilled = async (
   intent: IntentERC20 | IntentERC721,
@@ -118,7 +118,7 @@ export const getEIP712TypesForIntent = (protocol: Protocol) => ({
       type: "address",
     },
     {
-      name: "matchmaker",
+      name: "solver",
       type: "address",
     },
     {
@@ -149,10 +149,14 @@ export const getEIP712TypesForIntent = (protocol: Protocol) => ({
       name: "isPartiallyFillable",
       type: "bool",
     },
+    {
+      name: "isSmartOrder",
+      type: "bool",
+    },
     ...(protocol === Protocol.ERC721
       ? [
           {
-            name: "hasCriteria",
+            name: "isCriteriaOrder",
             type: "bool",
           },
           {
@@ -166,7 +170,7 @@ export const getEIP712TypesForIntent = (protocol: Protocol) => ({
       type: "uint128",
     },
     {
-      name: "endAmount",
+      name: "expectedAmount",
       type: "uint128",
     },
     {
@@ -174,12 +178,8 @@ export const getEIP712TypesForIntent = (protocol: Protocol) => ({
       type: "uint16",
     },
     {
-      name: "expectedAmountBps",
+      name: "endAmountBps",
       type: "uint16",
-    },
-    {
-      name: "hasDynamicSignature",
-      type: "bool",
     },
   ],
 });

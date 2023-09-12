@@ -4,7 +4,7 @@ import { verifyTypedData } from "@ethersproject/wallet";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
-import { MEMSWAP_ERC20, MEMSWAP_ERC721, WETH2 } from "../../common/addresses";
+import { MEMSWAP_ERC20, MEMSWAP_ERC721, MEMETH } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { IntentERC20, IntentERC721, Protocol } from "../../common/types";
 import {
@@ -61,11 +61,11 @@ const worker = new Worker(
         "uint32",
         "uint256",
         "bool",
-        "uint128",
-        "uint128",
-        "uint16",
-        "uint16",
         "bool",
+        "uint128",
+        "uint128",
+        "uint16",
+        "uint16",
         "bytes",
       ];
       const intentTypesERC721 = [
@@ -82,12 +82,12 @@ const worker = new Worker(
         "uint256",
         "bool",
         "bool",
+        "bool",
         "uint256",
         "uint128",
         "uint128",
         "uint16",
         "uint16",
-        "bool",
         "bytes",
       ];
 
@@ -115,7 +115,7 @@ const worker = new Worker(
         }
       } else if (
         tx.data.startsWith("0x28026ace") &&
-        tx.to?.toLowerCase() === WETH2[config.chainId]
+        tx.to?.toLowerCase() === MEMETH[config.chainId]
       ) {
         const iface = new Interface([
           "function depositAndApprove(address spender, uint256 amount)",
@@ -134,6 +134,7 @@ const worker = new Worker(
           approvalTxOrTxHash = txHash;
         }
       } else if (
+        // TODO: Fix 4byte value
         tx.data.startsWith("0x4adb41f5") &&
         tx.to?.toLowerCase() === MEMSWAP_ERC20[config.chainId]
       ) {
@@ -144,7 +145,7 @@ const worker = new Worker(
               address buyToken,
               address sellToken,
               address maker,
-              address matchmaker,
+              address solver,
               address source,
               uint32 feeBps,
               uint32 surplusBps,
@@ -152,11 +153,11 @@ const worker = new Worker(
               uint32 endTime,
               uint256 nonce,
               bool isPartiallyFillable,
+              bool isSmartOrder,
               uint128 amount,
-              uint128 endAmount,
+              uint128 expectedAmount,
               uint16 startAmountBps,
-              uint16 expectedAmountBps,
-              bool hasDynamicSignature,
+              uint16 endAmountBps,
               bytes signature
             )[] intents
           )`,
@@ -169,6 +170,7 @@ const worker = new Worker(
           result.intents[0]
         );
       } else if (
+        // TODO: Fix 4byte value
         tx.data.startsWith("0x4adb41f5") &&
         tx.to?.toLowerCase() === MEMSWAP_ERC721[config.chainId]
       ) {
@@ -179,7 +181,7 @@ const worker = new Worker(
                 address buyToken,
                 address sellToken,
                 address maker,
-                address matchmaker,
+                address solver,
                 address source,
                 uint32 feeBps,
                 uint32 surplusBps,
@@ -187,13 +189,13 @@ const worker = new Worker(
                 uint32 endTime,
                 uint256 nonce,
                 bool isPartiallyFillable,
-                bool hasCriteria,
+                bool isSmartOrder,
+                bool isCriteriaOrder,
                 uint256 tokenIdOrCriteria,
                 uint128 amount,
-                uint128 endAmount,
+                uint128 expectedAmount,
                 uint16 startAmountBps,
-                uint16 expectedAmountBps,
-                bool hasDynamicSignature,
+                uint16 endAmountBps,
                 bytes signature
               )[] intents
             )`,
@@ -223,7 +225,7 @@ const worker = new Worker(
             buyToken: result[1].toLowerCase(),
             sellToken: result[2].toLowerCase(),
             maker: result[3].toLowerCase(),
-            matchmaker: result[4].toLowerCase(),
+            solver: result[4].toLowerCase(),
             source: result[5].toLowerCase(),
             feeBps: result[6],
             surplusBps: result[7],
@@ -231,11 +233,11 @@ const worker = new Worker(
             endTime: result[9],
             nonce: result[10].toString(),
             isPartiallyFillable: result[11],
-            amount: result[12].toString(),
-            endAmount: result[13].toString(),
-            startAmountBps: result[14],
-            expectedAmountBps: result[15],
-            hasDynamicSignature: result[16],
+            isSmartOrder: result[12],
+            amount: result[13].toString(),
+            expectedAmount: result[14].toString(),
+            startAmountBps: result[15],
+            endAmountBps: result[16],
             signature: result[17].toLowerCase(),
           } as IntentERC20;
         } catch {
@@ -254,7 +256,7 @@ const worker = new Worker(
             buyToken: result[1].toLowerCase(),
             sellToken: result[2].toLowerCase(),
             maker: result[3].toLowerCase(),
-            matchmaker: result[4].toLowerCase(),
+            solver: result[4].toLowerCase(),
             source: result[5].toLowerCase(),
             feeBps: result[6],
             surplusBps: result[7],
@@ -262,13 +264,13 @@ const worker = new Worker(
             endTime: result[9],
             nonce: result[10].toString(),
             isPartiallyFillable: result[11],
-            hasCriteria: result[12],
-            tokenIdOrCriteria: result[13].toString(),
-            amount: result[14].toString(),
-            endAmount: result[15].toString(),
-            startAmountBps: result[16],
-            expectedAmountBps: result[17],
-            hasDynamicSignature: result[18],
+            isSmartOrder: result[12],
+            isCriteriaOrder: result[13],
+            tokenIdOrCriteria: result[14].toString(),
+            amount: result[15].toString(),
+            expectedAmount: result[16].toString(),
+            startAmountBps: result[17],
+            endAmountBps: result[18],
             signature: result[19].toLowerCase(),
           } as IntentERC721;
         } catch {

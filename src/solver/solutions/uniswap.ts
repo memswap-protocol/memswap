@@ -14,7 +14,7 @@ import {
 } from "@uniswap/sdk-core";
 import { AlphaRouter, SwapType } from "@uniswap/smart-order-router";
 
-import { PERMIT2, WETH2, WETH9 } from "../../common/addresses";
+import { PERMIT2, MEMETH, WETH9 } from "../../common/addresses";
 import { IntentERC20 } from "../../common/types";
 import { now } from "../../common/utils";
 import { config } from "../config";
@@ -41,7 +41,7 @@ export const getToken = async (
     );
   }
 
-  return [WETH2[config.chainId], AddressZero].includes(address)
+  return [MEMETH[config.chainId], AddressZero].includes(address)
     ? Ether.onChain(config.chainId)
     : new Token(config.chainId, address, await contract.decimals());
 };
@@ -60,7 +60,7 @@ export const solve = async (
   const fromToken = await getToken(intent.sellToken, provider);
   const toToken = await getToken(intent.buyToken, provider);
 
-  const inETH = intent.sellToken === WETH2[config.chainId];
+  const inETH = intent.sellToken === MEMETH[config.chainId];
   if (intent.isBuy) {
     // Buy fixed amount of `buyToken` for variable amount of `sellToken`
 
@@ -74,7 +74,7 @@ export const solve = async (
           slippageTolerance: new Percent(1, 100),
         }
       ),
-      [WETH2[config.chainId], WETH9[config.chainId], AddressZero].includes(
+      [MEMETH[config.chainId], WETH9[config.chainId], AddressZero].includes(
         intent.sellToken
       )
         ? "1"
@@ -152,7 +152,7 @@ export const solve = async (
           slippageTolerance: new Percent(1, 100),
         }
       ),
-      [WETH2[config.chainId], WETH9[config.chainId], AddressZero].includes(
+      [MEMETH[config.chainId], WETH9[config.chainId], AddressZero].includes(
         intent.buyToken
       )
         ? "1"

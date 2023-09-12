@@ -12,7 +12,7 @@ import { randomUUID } from "crypto";
 import {
   SOLUTION_PROXY_ERC20,
   MATCHMAKER,
-  WETH2,
+  MEMETH,
   WETH9,
 } from "../../common/addresses";
 import { logger } from "../../common/logger";
@@ -103,7 +103,7 @@ const worker = new Worker(
         // Check and generate solution
 
         if (
-          (intent.sellToken === WETH2[config.chainId] &&
+          (intent.sellToken === MEMETH[config.chainId] &&
             intent.buyToken === WETH9[config.chainId]) ||
           (intent.sellToken === WETH9[config.chainId] &&
             intent.buyToken === AddressZero)
@@ -149,14 +149,14 @@ const worker = new Worker(
 
         if (
           ![solver.address, AddressZero, MATCHMAKER[config.chainId]].includes(
-            intent.matchmaker
+            intent.solver
           )
         ) {
           logger.info(
             COMPONENT,
             JSON.stringify({
-              msg: "Unsupported matchmaker",
-              matchmaker: intent.matchmaker,
+              msg: "Unsupported solver",
+              solver: intent.solver,
               intentHash,
               approvalTxOrTxHash,
             })
@@ -182,9 +182,12 @@ const worker = new Worker(
         if (!intent.isBuy) {
           // Sell
 
-          const endAmount = intent.endAmount;
-          const startAmount = bn(endAmount).add(
-            bn(endAmount).mul(intent.startAmountBps).div(10000)
+          const expectedAmount = bn(intent.expectedAmount);
+          const startAmount = expectedAmount.add(
+            expectedAmount.mul(intent.startAmountBps).div(10000)
+          );
+          const endAmount = expectedAmount.sub(
+            expectedAmount.mul(intent.startAmountBps).div(10000)
           );
 
           let minAmountOut = startAmount.sub(
@@ -310,19 +313,18 @@ const worker = new Worker(
 
           solution = {
             data: defaultAbiCoder.encode(
-              ["(address to, bytes data, uint256 value)[]"],
-              [solutionDetails.calls]
+              ["uint128", "(address to, bytes data, uint256 value)[]"],
+              [minAmountOut, solutionDetails.calls]
             ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [minAmountOut.toString()],
+            fillAmount: intent.amount,
           };
         } else {
-          const endAmount = intent.endAmount;
-          const startAmount = bn(endAmount).sub(
-            bn(endAmount).mul(intent.startAmountBps).div(10000)
+          const expectedAmount = bn(intent.expectedAmount);
+          const startAmount = expectedAmount.sub(
+            expectedAmount.mul(intent.startAmountBps).div(10000)
           );
-          const expectedAmount = bn(endAmount).sub(
-            bn(endAmount).mul(intent.expectedAmountBps).div(10000)
+          const endAmount = expectedAmount.add(
+            expectedAmount.mul(intent.startAmountBps).div(10000)
           );
 
           let maxAmountIn = startAmount.add(
@@ -460,11 +462,10 @@ const worker = new Worker(
 
           solution = {
             data: defaultAbiCoder.encode(
-              ["(address to, bytes data, uint256 value)[]"],
-              [solutionDetails.calls]
+              ["uint128", "(address to, bytes data, uint256 value)[]"],
+              [maxAmountIn, solutionDetails.calls]
             ),
-            fillAmounts: [intent.amount],
-            executeAmounts: [maxAmountIn.toString()],
+            fillAmount: intent.amount,
           };
         }
       }
@@ -518,10 +519,10 @@ const worker = new Worker(
         authorization?: Authorization
       ) => {
         let method: string;
-        if (intent.matchmaker === MATCHMAKER[config.chainId] && authorization) {
+        if (intent.solver === MATCHMAKER[config.chainId] && authorization) {
           // For relaying
           method = "solveWithSignatureAuthorizationCheck";
-        } else if (intent.matchmaker === MATCHMAKER[config.chainId]) {
+        } else if (intent.solver === MATCHMAKER[config.chainId]) {
           // For matchmaker submission
           method = "solveWithOnChainAuthorizationCheck";
         } else {
@@ -542,36 +543,33 @@ const worker = new Worker(
                     address buyToken,
                     address sellToken,
                     address maker,
-                    address matchmaker,
+                    address solver,
                     address source,
                     uint16 feeBps,
                     uint16 surplusBps,
                     uint32 startTime,
                     uint32 endTime,
                     bool isPartiallyFillable,
+                    bool isSmartOrder,
                     uint128 amount,
-                    uint128 endAmount,
+                    uint128 expectedAmount,
                     uint16 startAmountBps,
-                    uint16 expectedAmountBps,
-                    bool hasDynamicSignature,
+                    uint16 endAmountBps,
                     bytes signature
-                  )[] intents,
+                  ) intent,
                   (
                     bytes data,
-                    uint128[] fillAmounts,
-                    uint128[] executeAmounts
+                    uint128 fillAmount
                   ) solution,
                   ${
                     authorization
                       ? `
                         (
-                          (
-                            uint128 fillAmountToCheck,
-                            uint128 executeAmountToCheck,
-                            uint32 blockDeadline
-                          ) authorization,
-                          bytes signature
-                        )[] auths,
+                          uint128 fillAmountToCheck,
+                          uint128 executeAmountToCheck,
+                          uint32 blockDeadline
+                        ) auth,
+                        bytes authSignature,
                       `
                       : ""
                   }
@@ -587,12 +585,13 @@ const worker = new Worker(
               method,
               method === "solveWithSignatureAuthorizationCheck"
                 ? [
-                    [intent],
+                    intent,
                     solution,
-                    [{ authorization, signature: authorization!.signature }],
+                    authorization,
+                    authorization!.signature,
                     [],
                   ]
-                : [[intent], solution, []]
+                : [intent, solution, []]
             ),
             type: 2,
             nonce: await provider.getTransactionCount(solver.address),
@@ -623,7 +622,7 @@ const worker = new Worker(
 
       const perfTime5 = performance.now();
 
-      if (intent.matchmaker !== MATCHMAKER[config.chainId]) {
+      if (intent.solver !== MATCHMAKER[config.chainId]) {
         // Solve directly
 
         if (useRelay) {

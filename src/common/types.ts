@@ -8,7 +8,7 @@ export type IntentERC20 = {
   buyToken: string;
   sellToken: string;
   maker: string;
-  matchmaker: string;
+  solver: string;
   source: string;
   feeBps: number;
   surplusBps: number;
@@ -16,23 +16,23 @@ export type IntentERC20 = {
   endTime: number;
   nonce: string;
   isPartiallyFillable: boolean;
+  isSmartOrder: boolean;
   amount: string;
-  endAmount: string;
+  expectedAmount: string;
   startAmountBps: number;
-  expectedAmountBps: number;
-  hasDynamicSignature: boolean;
+  endAmountBps: number;
   signature: string;
 };
 
 export type IntentERC721 = IntentERC20 & {
-  hasCriteria: boolean;
+  isCriteriaOrder: boolean;
   tokenIdOrCriteria: string;
 };
 
 export type SolutionERC20 = {
+  // On-chain data
   data: string;
-  fillAmounts: string[];
-  executeAmounts: string[];
+  fillAmount: string;
 };
 
 export type TokenDetails = {
@@ -41,12 +41,12 @@ export type TokenDetails = {
 };
 
 export type SolutionERC721 = {
-  // ERC721 solutions are not self-contained like ERC20
-  // (might depend on multiple pre-transactions)
-  txs: TxData[];
+  // On-chain data
   data: string;
-  fillTokenDetails: TokenDetails[][];
-  executeAmounts: string[];
+  fillTokenDetails: TokenDetails[];
+  // Off-chain data
+  // ERC721 solutions are not self-contained like ERC20 (might depend on multiple pre-transactions)
+  txs: TxData[];
 };
 
 export type Authorization = {

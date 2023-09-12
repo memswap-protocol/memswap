@@ -12,7 +12,7 @@ import { randomUUID } from "crypto";
 import {
   SOLUTION_PROXY_ERC721,
   MATCHMAKER,
-  WETH2,
+  MEMETH,
 } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import {
@@ -119,7 +119,7 @@ const worker = new Worker(
           return;
         }
 
-        if (intent.sellToken !== WETH2[config.chainId]) {
+        if (intent.sellToken !== MEMETH[config.chainId]) {
           logger.info(
             COMPONENT,
             JSON.stringify({
@@ -132,7 +132,7 @@ const worker = new Worker(
           return;
         }
 
-        if (!(intent.hasCriteria && intent.tokenIdOrCriteria === "0")) {
+        if (!(intent.isCriteriaOrder && intent.tokenIdOrCriteria === "0")) {
           logger.info(
             COMPONENT,
             JSON.stringify({
@@ -173,12 +173,12 @@ const worker = new Worker(
           return;
         }
 
-        if (![solver.address, AddressZero].includes(intent.matchmaker)) {
+        if (![solver.address, AddressZero].includes(intent.solver)) {
           logger.info(
             COMPONENT,
             JSON.stringify({
-              msg: "Unsupported matchmaker",
-              matchmaker: intent.matchmaker,
+              msg: "Unsupported solver",
+              solver: intent.solver,
               intentHash,
               approvalTxOrTxHash,
             })
@@ -201,12 +201,12 @@ const worker = new Worker(
           .getBlock("pending")
           .then((b) => b!.baseFeePerGas!);
 
-        const endAmount = intent.endAmount;
-        const startAmount = bn(endAmount).sub(
-          bn(endAmount).mul(intent.startAmountBps).div(10000)
+        const expectedAmount = bn(intent.expectedAmount);
+        const startAmount = expectedAmount.sub(
+          expectedAmount.mul(intent.startAmountBps).div(10000)
         );
-        const expectedAmount = bn(endAmount).sub(
-          bn(endAmount).mul(intent.expectedAmountBps).div(10000)
+        const endAmount = expectedAmount.add(
+          expectedAmount.mul(intent.endAmountBps).div(10000)
         );
 
         let maxAmountIn = startAmount.add(
@@ -322,16 +322,13 @@ const worker = new Worker(
         solution = {
           txs: solutionDetails.txs,
           data: defaultAbiCoder.encode(
-            ["(address to, bytes data, uint256 value)[]"],
-            [solutionDetails.calls]
+            ["uint128", "(address to, bytes data, uint256 value)[]"],
+            [maxAmountIn, solutionDetails.calls]
           ),
-          fillTokenDetails: [
-            solutionDetails.tokenIds.map((tokenId) => ({
-              tokenId,
-              criteriaProof: [],
-            })),
-          ],
-          executeAmounts: [maxAmountIn.toString()],
+          fillTokenDetails: solutionDetails.tokenIds.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
         };
       }
 
@@ -387,10 +384,10 @@ const worker = new Worker(
         authorization?: Authorization
       ) => {
         let method: string;
-        if (intent.matchmaker === MATCHMAKER[config.chainId] && authorization) {
+        if (intent.solver === MATCHMAKER[config.chainId] && authorization) {
           // For relaying
           method = "solveWithSignatureAuthorizationCheck";
-        } else if (intent.matchmaker === MATCHMAKER[config.chainId]) {
+        } else if (intent.solver === MATCHMAKER[config.chainId]) {
           // For matchmaker submission
           method = "solveWithOnChainAuthorizationCheck";
         } else {
@@ -413,41 +410,38 @@ const worker = new Worker(
                     address buyToken,
                     address sellToken,
                     address maker,
-                    address matchmaker,
+                    address solver,
                     address source,
                     uint16 feeBps,
                     uint16 surplusBps,
                     uint32 startTime,
                     uint32 endTime,
                     bool isPartiallyFillable,
-                    bool hasCriteria,
+                    bool isSmartOrder,
+                    bool isCriteriaOrder,
                     uint256 tokenIdOrCriteria,
                     uint128 amount,
-                    uint128 endAmount,
+                    uint128 expectedAmount,
                     uint16 startAmountBps,
-                    uint16 expectedAmountBps,
-                    bool hasDynamicSignature,
+                    uint16 endAmountBps,
                     bytes signature
-                  )[] intents,
+                  ) intent,
                   (
                     bytes data,
                     (
                       uint256 tokenId,
                       bytes32[] criteriaProof
-                    )[][] fillTokenDetails,
-                    uint128[] executeAmounts
+                    )[] fillTokenDetails
                   ) solution,
                   ${
                     authorization
                       ? `
                         (
-                          (
-                            uint128 fillAmountToCheck,
-                            uint128 executeAmountToCheck,
-                            uint32 blockDeadline
-                          ) authorization,
-                          bytes signature
-                        )[] auths,
+                          uint128 fillAmountToCheck,
+                          uint128 executeAmountToCheck,
+                          uint32 blockDeadline
+                        ) auth,
+                        bytes authSignature,
                       `
                       : ""
                   }
@@ -463,12 +457,13 @@ const worker = new Worker(
               method,
               method === "solveWithSignatureAuthorizationCheck"
                 ? [
-                    [intent],
+                    intent,
                     solution,
-                    [{ authorization, signature: authorization!.signature }],
+                    authorization,
+                    authorization?.signature!,
                     [],
                   ]
-                : [[intent], solution, []]
+                : [intent, solution, []]
             ),
           },
         ];
@@ -504,7 +499,7 @@ const worker = new Worker(
 
       const perfTime5 = performance.now();
 
-      if (intent.matchmaker !== MATCHMAKER[config.chainId]) {
+      if (intent.solver !== MATCHMAKER[config.chainId]) {
         // Solve directly
 
         // If the approval transaction is still pending, include it in the bundle

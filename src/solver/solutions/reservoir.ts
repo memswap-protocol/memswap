@@ -4,7 +4,7 @@ import { AddressZero } from "@ethersproject/constants";
 import { Wallet } from "@ethersproject/wallet";
 import axios from "axios";
 
-import { MEMSWAP_ERC721, SOLUTION_PROXY_ERC721 } from "../../common/addresses";
+import { SOLUTION_PROXY_ERC721 } from "../../common/addresses";
 import { IntentERC721 } from "../../common/types";
 import { bn } from "../../common/utils";
 import { config } from "../config";

@@ -2,7 +2,7 @@ import { Interface } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import axios from "axios";
 
-import { WETH2 } from "../../common/addresses";
+import { MEMETH } from "../../common/addresses";
 import { config } from "../config";
 
 const ZEROEX_ETH = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
@@ -13,7 +13,7 @@ export const solve = async (
   tokenOut: string,
   amountIn: string
 ) => {
-  const inETH = tokenIn === WETH2[config.chainId];
+  const inETH = tokenIn === MEMETH[config.chainId];
 
   const { data: swapData } = await axios.get(
     config.chainId === 1
