@@ -599,7 +599,7 @@ contract MemswapERC721 is
                 maxAmount
             );
 
-            // Ensure the maker doesn't own any of the tokens that are filled with
+            // Ensure the maker doesn't own any of the tokens that are being filled with
             unchecked {
                 for (uint256 i; i < actualAmountToFill; i++) {
                     TokenDetails memory details = tokenDetailsToFill[i];
@@ -725,7 +725,7 @@ contract MemswapERC721 is
                 revert InvalidSolution();
             }
 
-            // Ensure the maker owns all tokens that are filled with
+            // Ensure the maker owns all tokens that are being filled with
             uint256[] memory filledTokenIds = new uint256[](amountToFill);
             unchecked {
                 for (uint256 i; i < amountToFill; i++) {
