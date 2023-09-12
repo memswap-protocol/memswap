@@ -1,18 +1,21 @@
 import { Interface } from "@ethersproject/abi";
+import { Provider } from "@ethersproject/abstract-provider";
 import { BigNumber } from "@ethersproject/bignumber";
 import { AddressZero } from "@ethersproject/constants";
+import { Contract } from "@ethersproject/contracts";
 import { Wallet } from "@ethersproject/wallet";
 import axios from "axios";
 
 import { SOLUTION_PROXY_ERC721 } from "../../common/addresses";
-import { IntentERC721 } from "../../common/types";
+import { IntentERC721, TxData } from "../../common/types";
 import { bn } from "../../common/utils";
 import { config } from "../config";
 import { SolutionDetailsERC721 } from "../types";
 
 export const solve = async (
   intent: IntentERC721,
-  fillAmount: string
+  fillAmount: string,
+  provider: Provider
 ): Promise<SolutionDetailsERC721> => {
   // TODO: Handle multi-step / incomplete responses
 
@@ -47,6 +50,32 @@ export const solve = async (
   // - transfer directly to the memswap contract where possible
   const gasUsed = 100000 + 75000 * quantity + 50000 * quantity;
 
+  const contract = new Contract(
+    intent.buyToken,
+    new Interface([
+      "function isApprovedForAll(address owner, address operator) view returns (bool)",
+      "function setApprovalForAll(address operator, bool approved)",
+    ]),
+    provider
+  );
+
+  let approvalTxData: TxData | undefined;
+  const isApproved = await contract.isApprovedForAll(
+    solver.address,
+    SOLUTION_PROXY_ERC721[config.chainId]
+  );
+  if (!isApproved) {
+    approvalTxData = {
+      from: solver.address,
+      to: intent.buyToken,
+      data: contract.interface.encodeFunctionData("setApprovalForAll", [
+        SOLUTION_PROXY_ERC721[config.chainId],
+        true,
+      ]),
+      gasLimit: 100000,
+    };
+  }
+
   return {
     kind: "buy",
     data: {
@@ -56,18 +85,7 @@ export const solve = async (
           ...tx,
           gasLimit: gasUsed,
         },
-        ...result.path.map((item: any) => ({
-          to: intent.buyToken,
-          data: new Interface([
-            "function transferFrom(address from, address to, uint256 tokenId)",
-          ]).encodeFunctionData("transferFrom", [
-            solver.address,
-            SOLUTION_PROXY_ERC721[config.chainId],
-            item.tokenId,
-          ]),
-          value: "0",
-          gasLimit: 100000,
-        })),
+        ...(approvalTxData ? [approvalTxData] : []),
       ],
       tokenIds: result.path.map((item: any) => item.tokenId),
       maxSellAmountInEth: price.toString(),

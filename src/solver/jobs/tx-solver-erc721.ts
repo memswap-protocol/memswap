@@ -230,7 +230,8 @@ const worker = new Worker(
 
         const { data: solutionDetails } = (await solutions.reservoir.solve(
           intent,
-          intent.amount
+          intent.amount,
+          provider
         )) as { data: BuySolutionDataERC721 };
 
         const gasConsumed = bn(memswapGas)
