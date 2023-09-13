@@ -18,6 +18,16 @@ import { redis } from "../redis";
 
 const COMPONENT = "tx-listener";
 
+type AlchemyPendingTx = {
+  hash: string;
+  input: string;
+  to: string | null;
+};
+
+type AlchemyMinedTx = {
+  transaction: AlchemyPendingTx;
+};
+
 // Listen to mempool transactions
 const wsProvider = new Alchemy({
   apiKey: config.alchemyApiKey,
@@ -28,15 +38,15 @@ if (!process.env.DEBUG_MODE) {
     {
       method: AlchemySubscription.PENDING_TRANSACTIONS,
     },
-    (tx: AlchemyTx) => addToQueue(tx)
+    (tx: AlchemyPendingTx) => addToQueue(tx)
+  );
+  wsProvider.on(
+    {
+      method: AlchemySubscription.MINED_TRANSACTIONS,
+    },
+    (tx: AlchemyMinedTx) => addToQueue(tx.transaction)
   );
 }
-
-type AlchemyTx = {
-  hash: string;
-  input: string;
-  to: string | null;
-};
 
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
@@ -50,7 +60,7 @@ export const queue = new Queue(COMPONENT, {
 const worker = new Worker(
   COMPONENT,
   async (job) => {
-    const tx = job.data as AlchemyTx;
+    const tx = job.data as AlchemyPendingTx;
 
     try {
       const intentTypesERC20 = [
@@ -324,4 +334,5 @@ worker.on("error", (error) => {
   logger.error(COMPONENT, JSON.stringify({ msg: "Worker errored", error }));
 });
 
-export const addToQueue = async (tx: AlchemyTx) => queue.add(randomUUID(), tx);
+export const addToQueue = async (tx: AlchemyPendingTx) =>
+  queue.add(randomUUID(), tx);
