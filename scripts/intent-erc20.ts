@@ -57,9 +57,9 @@ const main = async () => {
     isPartiallyFillable: false,
     isSmartOrder: false,
     amount: parseUnits("0.001", 18).toString(),
-    expectedAmount: parseUnits("10000", 6).toString(),
+    endAmount: parseUnits("10000", 6).toString(),
     startAmountBps: 0,
-    endAmountBps: 0,
+    expectedAmountBps: 0,
     // Mock value to pass type checks
     signature: "0x",
   };
@@ -79,7 +79,7 @@ const main = async () => {
     provider
   );
 
-  const amountToApprove = !intent.isBuy ? intent.amount : intent.expectedAmount;
+  const amountToApprove = !intent.isBuy ? intent.amount : intent.endAmount;
 
   // Generate approval transaction
   const approveMethod =
@@ -129,9 +129,9 @@ const main = async () => {
           intent.isPartiallyFillable,
           intent.isSmartOrder,
           intent.amount,
-          intent.expectedAmount,
+          intent.endAmount,
           intent.startAmountBps,
-          intent.endAmountBps,
+          intent.expectedAmountBps,
           intent.signature,
         ]
       )
