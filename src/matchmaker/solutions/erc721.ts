@@ -7,9 +7,9 @@ import { formatEther } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import { getCallTraces, getStateChange } from "@georgeroman/evm-tx-simulator";
 
-import { MEMSWAP_ERC20 } from "../../common/addresses";
+import { MEMSWAP_ERC721 } from "../../common/addresses";
 import { logger } from "../../common/logger";
-import { IntentERC20, Protocol } from "../../common/types";
+import { IntentERC721, Protocol } from "../../common/types";
 import {
   AVERAGE_BLOCK_TIME,
   bn,
@@ -22,12 +22,12 @@ import * as jobs from "../jobs";
 import { redis } from "../redis";
 import { Solution } from "../types";
 
-const COMPONENT = "solution-process-erc20";
+const COMPONENT = "solution-process-erc721";
 
 export const process = async (
   uuid: string,
   baseUrl: string,
-  intent: IntentERC20,
+  intent: IntentERC721,
   txs: string[]
 ): Promise<{
   status: "success" | "error";
@@ -40,7 +40,7 @@ export const process = async (
     // Determine the hash of the intent
     const intentHash = _TypedDataEncoder.hashStruct(
       "Intent",
-      getEIP712TypesForIntent(Protocol.ERC20),
+      getEIP712TypesForIntent(Protocol.ERC721),
       intent
     );
 
@@ -57,6 +57,22 @@ export const process = async (
     );
 
     const perfTime1 = performance.now();
+
+    if (!intent.isBuy) {
+      const msg = "Sell intents not yet supported";
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          msg,
+          intentHash,
+        })
+      );
+
+      return {
+        status: "error",
+        error: msg,
+      };
+    }
 
     // Return early if the intent is not yet started
     if (intent.startTime > now()) {
@@ -127,7 +143,7 @@ export const process = async (
 
     // Return early if the submission period is already over (for the current target block)
     const solutionKey = `matchmaker:solutions:${intentHash}:${targetBlockNumber}`;
-    if (await jobs.signatureReleaseERC20.isLocked(solutionKey)) {
+    if (await jobs.signatureReleaseERC721.isLocked(solutionKey)) {
       const msg = "Submission period is over";
       logger.info(
         COMPONENT,
@@ -148,7 +164,7 @@ export const process = async (
     // Assume the solution transaction is the last one in the list
     const parsedSolutionTx = parse(txs[txs.length - 1]);
     const solver =
-      parsedSolutionTx.to!.toLowerCase() === MEMSWAP_ERC20[config.chainId]
+      parsedSolutionTx.to!.toLowerCase() === MEMSWAP_ERC721[config.chainId]
         ? parsedSolutionTx.from!
         : parsedSolutionTx.to!;
 
@@ -157,7 +173,7 @@ export const process = async (
       // Authorization transaction
       {
         from: matchmaker.address,
-        to: MEMSWAP_ERC20[config.chainId],
+        to: MEMSWAP_ERC721[config.chainId],
         data: new Interface([
           `
             function authorize(
@@ -174,6 +190,8 @@ export const process = async (
                 uint32 endTime,
                 bool isPartiallyFillable,
                 bool isSmartOrder,
+                bool isCriteriaOrder,
+                uint256 tokenIdOrCriteria,
                 uint128 amount,
                 uint128 endAmount,
                 uint16 startAmountBps,
@@ -265,34 +283,10 @@ export const process = async (
           executeAmountToCheck: bn(amountPulled).mul(-1).toString(),
         } as Solution)
       );
-    } else {
-      // Compute the amount received by the intent maker
-      const stateChange = getStateChange(solveTrace);
-      const isTokenOutETH = intent.buyToken.toLowerCase() === AddressZero;
-      const amountReceived =
-        stateChange[intent.maker.toLowerCase()].tokenBalanceState[
-          `${
-            isTokenOutETH ? "native" : "erc20"
-          }:${intent.buyToken.toLowerCase()}`
-        ];
-
-      // Save the solution
-      await redis.zadd(
-        solutionKey,
-        Number(formatEther(amountReceived)),
-        JSON.stringify({
-          uuid,
-          baseUrl,
-          intentHash,
-          solver,
-          fillAmountToCheck: intent.amount,
-          executeAmountToCheck: amountReceived,
-        } as Solution)
-      );
     }
 
     // Put a delayed job to release the signatures
-    await jobs.signatureReleaseERC20.addToQueue(
+    await jobs.signatureReleaseERC721.addToQueue(
       solutionKey,
       targetBlockTimestamp - now()
     );
