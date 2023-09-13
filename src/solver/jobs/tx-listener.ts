@@ -212,8 +212,6 @@ const worker = new Worker(
           intentTypesERC721,
           result.intents[0]
         );
-      } else {
-        restOfCalldata = tx.input;
       }
 
       let intent: IntentERC20 | IntentERC721 | undefined;
