@@ -2,15 +2,15 @@ type ChainIdToAddress = { [chainId: number]: string };
 
 // Protocol
 export const MEMSWAP_ERC20: ChainIdToAddress = {
-  1: "0x63c9362a7bedc92dec83433c15d623fbd3e1e5a9",
+  1: "0x19a1b89a83b2729c5c3920e5719b01f80af49621",
   5: "0xa5005349b7dcd9536832d97235675ef5ae40f095",
 };
 export const MEMSWAP_ERC721: ChainIdToAddress = {
-  1: "",
+  1: "0xdb4f0db998bc1d429499fb11638fd3705e8e60cc",
   5: "0xafa58bbc787dcda022b698df78d613ea760727e2",
 };
 export const MEMETH: ChainIdToAddress = {
-  1: "0x2712515766af2e2680f20e8372c7ea6010eaca66",
+  1: "0x8adda31fe63696ac64ded7d0ea208102b1358c44",
   5: "0x6cb5504b957625d01a88db4b27eaafd5ae4422b6",
 };
 
@@ -20,11 +20,11 @@ export const SOLVER: ChainIdToAddress = {
   5: "0x743dbd073d951bc1e7ee276eb79a285595993d63",
 };
 export const SOLUTION_PROXY_ERC20: ChainIdToAddress = {
-  1: "0xeae2f5b8e7085fb766f7f270955abef018d61fdb",
+  1: "0x58c90b5dbc69963fb0cabee1163747fdbb7a8b18",
   5: "0xc4d8afb323c316dd7c91ddd4f818d5accd0661e3",
 };
 export const SOLUTION_PROXY_ERC721: ChainIdToAddress = {
-  1: "",
+  1: "0x27ee048b431d00d8f9ffc3fe3b8e657efeb58538",
   5: "0xe8ce43f2697491f2bf20dbc206f1cfde33f10fba",
 };
 

@@ -412,8 +412,8 @@ describe("[ERC20] Misc", async () => {
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token1.connect(alice).mint(intent.endAmount);
-    await token1.connect(alice).approve(memswap.address, intent.endAmount);
+    await token1.connect(alice).mint(intent.amount);
+    await token1.connect(alice).approve(memswap.address, intent.amount);
 
     // Save private data that wil get overridden
     const privateMaker = intent.maker;
