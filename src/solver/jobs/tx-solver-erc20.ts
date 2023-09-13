@@ -549,9 +549,9 @@ const worker = new Worker(
                     bool isPartiallyFillable,
                     bool isSmartOrder,
                     uint128 amount,
-                    uint128 expectedAmount,
+                    uint128 endAmount,
                     uint16 startAmountBps,
-                    uint16 endAmountBps,
+                    uint16 expectedAmountBps,
                     bytes signature
                   ) intent,
                   (

@@ -170,7 +170,7 @@ export const getEIP712TypesForIntent = (protocol: Protocol) => ({
       type: "uint128",
     },
     {
-      name: "expectedAmount",
+      name: "endAmount",
       type: "uint128",
     },
     {
@@ -178,7 +178,7 @@ export const getEIP712TypesForIntent = (protocol: Protocol) => ({
       type: "uint16",
     },
     {
-      name: "endAmountBps",
+      name: "expectedAmountBps",
       type: "uint16",
     },
   ],

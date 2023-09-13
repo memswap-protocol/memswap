@@ -21,6 +21,8 @@ const deployContract = async (
     address: contract.address,
     constructorArguments,
   });
+
+  return contract.address;
 };
 
 const main = async () => {
@@ -31,18 +33,18 @@ const main = async () => {
   // await deployContract(deployer, "MEMETH");
 
   // MemswapERC20
-  // await deployContract(deployer, "MemswapERC20");
+  // MEMSWAP_ERC20[chainId] = await deployContract(deployer, "MemswapERC20");
   // await deployContract(deployer, "SolutionProxyERC20", [
   //   SOLVER[chainId],
   //   MEMSWAP_ERC20[chainId],
   // ]);
 
   // MemswapERC721
-  // await deployContract(deployer, "MemswapERC721");
-  await deployContract(deployer, "SolutionProxyERC721", [
-    SOLVER[chainId],
-    MEMSWAP_ERC721[chainId],
-  ]);
+  // MEMSWAP_ERC721[chainId] = await deployContract(deployer, "MemswapERC721");
+  // await deployContract(deployer, "SolutionProxyERC721", [
+  //   SOLVER[chainId],
+  //   MEMSWAP_ERC721[chainId],
+  // ]);
 };
 
 main()

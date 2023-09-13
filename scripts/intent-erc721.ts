@@ -36,12 +36,12 @@ const main = async () => {
     USDC: USDC[chainId],
   };
 
-  const buyToken = CURRENCIES.USDC;
+  const buyToken = "0x3a0e573f1e59ff6cea75d987cf73643e9f7feac6";
   const sellToken = CURRENCIES.ETH_IN;
 
   // Create intent
   const intent: IntentERC721 = {
-    isBuy: false,
+    isBuy: true,
     buyToken,
     sellToken,
     maker: maker.address,
@@ -58,8 +58,8 @@ const main = async () => {
     isSmartOrder: false,
     isCriteriaOrder: true,
     tokenIdOrCriteria: "0",
-    amount: parseUnits("0.001", 18).toString(),
-    endAmount: parseUnits("10000", 6).toString(),
+    amount: "1",
+    endAmount: parseUnits("0.01", 18).toString(),
     startAmountBps: 0,
     expectedAmountBps: 0,
     // Mock value to pass type checks

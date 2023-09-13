@@ -323,8 +323,8 @@ const worker = new Worker(
         solution = {
           txs: solutionDetails.txs,
           data: defaultAbiCoder.encode(
-            ["uint128", "(address to, bytes data, uint256 value)[]"],
-            [maxAmountIn, solutionDetails.calls]
+            ["(address to, bytes data, uint256 value)[]"],
+            [solutionDetails.calls]
           ),
           fillTokenDetails: solutionDetails.tokenIds.map((tokenId) => ({
             tokenId,
@@ -422,9 +422,9 @@ const worker = new Worker(
                     bool isCriteriaOrder,
                     uint256 tokenIdOrCriteria,
                     uint128 amount,
-                    uint128 expectedAmount,
+                    uint128 endAmount,
                     uint16 startAmountBps,
-                    uint16 endAmountBps,
+                    uint16 expectedAmountBps,
                     bytes signature
                   ) intent,
                   (
