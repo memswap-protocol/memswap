@@ -4,6 +4,11 @@ export const config = {
   redisUrl: process.env.REDIS_URL!,
   flashbotsSignerPk: process.env.FLASHBOTS_SIGNER_PK!,
   matchmakerPk: process.env.MATCHMAKER_PK!,
-  knownSolvers: JSON.parse(process.env.KNOWN_SOLVERS ?? "[]") as string[],
+  knownSolversERC20: JSON.parse(
+    process.env.KNOWN_SOLVERS_ERC20 ?? "[]"
+  ) as string[],
+  knownSolversERC721: JSON.parse(
+    process.env.KNOWN_SOLVERS_ERC721 ?? "[]"
+  ) as string[],
   port: process.env.PORT!,
 };

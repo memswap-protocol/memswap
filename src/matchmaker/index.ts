@@ -50,13 +50,13 @@ app.post("/erc20/intents/private", async (req, res) => {
     intent: IntentERC20;
   };
 
-  if (!config.knownSolvers.length) {
+  if (!config.knownSolversERC20.length) {
     return res.status(400).json({ error: "No known solvers" });
   }
 
   // Send to a single solver
   await jobs.signatureReleaseERC20.submitDirectlyToSolver(
-    config.knownSolvers.slice(0, 1).map((s) => {
+    config.knownSolversERC20.slice(0, 1).map((s) => {
       const [address, baseUrl] = s.split(" ");
       return { address, baseUrl };
     }),
@@ -73,13 +73,13 @@ app.post("/erc20/intents/public", async (req, res) => {
     intent: IntentERC20;
   };
 
-  if (!config.knownSolvers.length) {
+  if (!config.knownSolversERC20.length) {
     return res.status(400).json({ error: "No known solvers" });
   }
 
   // Send to all solvers
   await jobs.signatureReleaseERC20.submitDirectlyToSolver(
-    config.knownSolvers.map((s) => {
+    config.knownSolversERC20.map((s) => {
       const [address, baseUrl] = s.split(" ");
       return { address, baseUrl };
     }),
@@ -124,13 +124,13 @@ app.post("/erc721/intents/private", async (req, res) => {
     intent: IntentERC721;
   };
 
-  if (!config.knownSolvers.length) {
+  if (!config.knownSolversERC721.length) {
     return res.status(400).json({ error: "No known solvers" });
   }
 
   // Send to a single solver
   await jobs.signatureReleaseERC721.submitDirectlyToSolver(
-    config.knownSolvers.slice(0, 1).map((s) => {
+    config.knownSolversERC721.slice(0, 1).map((s) => {
       const [address, baseUrl] = s.split(" ");
       return { address, baseUrl };
     }),
@@ -147,13 +147,13 @@ app.post("/erc721/intents/public", async (req, res) => {
     intent: IntentERC721;
   };
 
-  if (!config.knownSolvers.length) {
+  if (!config.knownSolversERC721.length) {
     return res.status(400).json({ error: "No known solvers" });
   }
 
   // Send to all solvers
   await jobs.signatureReleaseERC721.submitDirectlyToSolver(
-    config.knownSolvers.map((s) => {
+    config.knownSolversERC721.map((s) => {
       const [address, baseUrl] = s.split(" ");
       return { address, baseUrl };
     }),
