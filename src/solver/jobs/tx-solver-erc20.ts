@@ -182,12 +182,9 @@ const worker = new Worker(
         if (!intent.isBuy) {
           // Sell
 
-          const expectedAmount = bn(intent.expectedAmount);
-          const startAmount = expectedAmount.add(
-            expectedAmount.mul(intent.startAmountBps).div(10000)
-          );
-          const endAmount = expectedAmount.sub(
-            expectedAmount.mul(intent.startAmountBps).div(10000)
+          const endAmount = bn(intent.endAmount);
+          const startAmount = endAmount.add(
+            endAmount.mul(intent.startAmountBps).div(10000)
           );
 
           let minAmountOut = startAmount.sub(
@@ -319,12 +316,12 @@ const worker = new Worker(
             fillAmount: intent.amount,
           };
         } else {
-          const expectedAmount = bn(intent.expectedAmount);
-          const startAmount = expectedAmount.sub(
-            expectedAmount.mul(intent.startAmountBps).div(10000)
+          const endAmount = bn(intent.endAmount);
+          const startAmount = endAmount.sub(
+            endAmount.mul(intent.startAmountBps).div(10000)
           );
-          const endAmount = expectedAmount.add(
-            expectedAmount.mul(intent.startAmountBps).div(10000)
+          const expectedAmount = endAmount.sub(
+            endAmount.mul(intent.expectedAmountBps).div(10000)
           );
 
           let maxAmountIn = startAmount.add(

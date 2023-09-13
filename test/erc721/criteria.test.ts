@@ -74,15 +74,15 @@ describe("[ERC721] Criteria", async () => {
       isCriteriaOrder: false,
       tokenIdOrCriteria: 999,
       amount: 2,
-      expectedAmount: ethers.utils.parseEther("0.3"),
+      endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      endAmountBps: 0,
+      expectedAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.expectedAmount);
-    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
 
     // When the intent has no criteria, a single token id can be used for filling
     await expect(
@@ -138,15 +138,15 @@ describe("[ERC721] Criteria", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 4,
-      expectedAmount: ethers.utils.parseEther("0.3"),
+      endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      endAmountBps: 0,
+      expectedAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.expectedAmount);
-    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
 
     // When the criteria is `0`, any token id can be used for filling
     const randomTokenId = getRandomInteger(1, 100000);
@@ -198,17 +198,15 @@ describe("[ERC721] Criteria", async () => {
         isCriteriaOrder: true,
         tokenIdOrCriteria: criteria,
         amount: 1,
-        expectedAmount: ethers.utils.parseEther("0.3"),
+        endAmount: ethers.utils.parseEther("0.3"),
         startAmountBps: 0,
-        endAmountBps: 0,
+        expectedAmountBps: 0,
       };
       intent.signature = await signIntent(alice, memswap.address, intent);
 
       // Mint and approve
-      await token0.connect(alice).mint(intent.expectedAmount);
-      await token0
-        .connect(alice)
-        .approve(memswap.address, intent.expectedAmount);
+      await token0.connect(alice).mint(intent.endAmount);
+      await token0.connect(alice).approve(memswap.address, intent.endAmount);
 
       const randomTokenId = getRandomBoolean()
         ? criteriaTokenIds[getRandomInteger(0, criteriaTokenIds.length - 1)]

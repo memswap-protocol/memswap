@@ -235,9 +235,9 @@ const worker = new Worker(
             isPartiallyFillable: result[11],
             isSmartOrder: result[12],
             amount: result[13].toString(),
-            expectedAmount: result[14].toString(),
+            endAmount: result[14].toString(),
             startAmountBps: result[15],
-            endAmountBps: result[16],
+            expectedAmountBps: result[16],
             signature: result[17].toLowerCase(),
           } as IntentERC20;
         } catch {
@@ -268,9 +268,9 @@ const worker = new Worker(
             isCriteriaOrder: result[13],
             tokenIdOrCriteria: result[14].toString(),
             amount: result[15].toString(),
-            expectedAmount: result[16].toString(),
+            endAmount: result[16].toString(),
             startAmountBps: result[17],
-            endAmountBps: result[18],
+            expectedAmountBps: result[18],
             signature: result[19].toLowerCase(),
           } as IntentERC721;
         } catch {

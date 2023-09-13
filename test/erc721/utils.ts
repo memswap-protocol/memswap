@@ -28,9 +28,9 @@ export type Intent = {
   isCriteriaOrder: boolean;
   tokenIdOrCriteria: BigNumberish;
   amount: BigNumberish;
-  expectedAmount: BigNumberish;
+  endAmount: BigNumberish;
   startAmountBps: number;
-  endAmountBps: number;
+  expectedAmountBps: number;
   signature?: string;
 };
 
@@ -167,7 +167,7 @@ export const INTENT_EIP712_TYPES = {
       type: "uint128",
     },
     {
-      name: "expectedAmount",
+      name: "endAmount",
       type: "uint128",
     },
     {
@@ -175,7 +175,7 @@ export const INTENT_EIP712_TYPES = {
       type: "uint16",
     },
     {
-      name: "endAmountBps",
+      name: "expectedAmountBps",
       type: "uint16",
     },
   ],
@@ -228,8 +228,8 @@ const getBulkSignatureDataWithProofs = (
   const elements = [...intents];
   const leaves = elements.map((i) => hashElement(i));
 
-  const defaultElement = {
-    isBuy: 0,
+  const defaultElement: Intent = {
+    isBuy: false,
     buyToken: AddressZero,
     sellToken: AddressZero,
     maker: AddressZero,
@@ -245,9 +245,9 @@ const getBulkSignatureDataWithProofs = (
     isCriteriaOrder: false,
     tokenIdOrCriteria: 0,
     amount: 0,
-    expectedAmount: 0,
+    endAmount: 0,
     startAmountBps: 0,
-    endAmountBps: 0,
+    expectedAmountBps: 0,
   };
   const defaultLeaf = hashElement(defaultElement);
 

@@ -69,9 +69,9 @@ describe("[ERC20] Bulk-signing", async () => {
         isPartiallyFillable: true,
         isSmartOrder: false,
         amount: ethers.utils.parseEther("0.5"),
-        expectedAmount: ethers.utils.parseEther("0.3"),
+        endAmount: ethers.utils.parseEther("0.3"),
         startAmountBps: 0,
-        endAmountBps: 0,
+        expectedAmountBps: 0,
       });
     }
 
@@ -96,17 +96,14 @@ describe("[ERC20] Bulk-signing", async () => {
     );
 
     // Compute start amount
-    const startAmount = bn(intent.expectedAmount).add(
-      bn(intent.expectedAmount).mul(intent.startAmountBps).div(10000)
-    );
-    const endAmount = bn(intent.expectedAmount).sub(
-      bn(intent.expectedAmount).mul(intent.endAmountBps).div(10000)
+    const startAmount = bn(intent.endAmount).add(
+      bn(intent.endAmount).mul(intent.startAmountBps).div(10000)
     );
 
     // Compute the required amount at above timestamp
     const amount = bn(startAmount).sub(
       bn(startAmount)
-        .sub(endAmount)
+        .sub(intent.endAmount)
         .mul(bn(nextBlockTime).sub(intent.startTime))
         .div(bn(intent.endTime).sub(intent.startTime))
     );

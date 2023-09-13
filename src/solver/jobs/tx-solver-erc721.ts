@@ -201,12 +201,12 @@ const worker = new Worker(
           .getBlock("pending")
           .then((b) => b!.baseFeePerGas!);
 
-        const expectedAmount = bn(intent.expectedAmount);
-        const startAmount = expectedAmount.sub(
-          expectedAmount.mul(intent.startAmountBps).div(10000)
+        const endAmount = bn(intent.endAmount);
+        const startAmount = endAmount.sub(
+          endAmount.mul(intent.startAmountBps).div(10000)
         );
-        const endAmount = expectedAmount.add(
-          expectedAmount.mul(intent.endAmountBps).div(10000)
+        const expectedAmount = endAmount.sub(
+          endAmount.mul(intent.expectedAmountBps).div(10000)
         );
 
         let maxAmountIn = startAmount.add(

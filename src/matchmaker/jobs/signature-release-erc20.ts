@@ -171,12 +171,9 @@ export const submitDirectlyToSolver = async (
 
   let executeAmountToCheck: string;
   if (intent.isBuy) {
-    const expectedAmount = bn(intent.expectedAmount);
-    const startAmount = expectedAmount.sub(
-      expectedAmount.mul(intent.startAmountBps).div(10000)
-    );
-    const endAmount = expectedAmount.add(
-      expectedAmount.mul(intent.startAmountBps).div(10000)
+    const endAmount = bn(intent.endAmount);
+    const startAmount = endAmount.sub(
+      endAmount.mul(intent.startAmountBps).div(10000)
     );
 
     executeAmountToCheck = startAmount
@@ -188,12 +185,9 @@ export const submitDirectlyToSolver = async (
       )
       .toString();
   } else {
-    const expectedAmount = bn(intent.expectedAmount);
-    const startAmount = expectedAmount.add(
-      expectedAmount.mul(intent.startAmountBps).div(10000)
-    );
-    const endAmount = expectedAmount.sub(
-      expectedAmount.mul(intent.startAmountBps).div(10000)
+    const endAmount = bn(intent.endAmount);
+    const startAmount = endAmount.add(
+      endAmount.mul(intent.startAmountBps).div(10000)
     );
 
     executeAmountToCheck = startAmount

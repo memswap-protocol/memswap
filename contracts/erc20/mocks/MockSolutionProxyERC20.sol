@@ -67,13 +67,13 @@ contract MockSolutionProxyERC20 is ISolution {
             // Amount to refund to the maker
             uint128 surplusAmount = abi.decode(data, (uint128));
 
-            uint128 expectedAmount = (intent.expectedAmount * amountToFill) /
+            uint128 endAmount = (intent.endAmount * amountToFill) /
                 intent.amount;
-            uint128 startAmount = expectedAmount -
-                (expectedAmount * intent.startAmountBps) /
+            uint128 startAmount = endAmount -
+                (endAmount * intent.startAmountBps) /
                 10000;
-            uint128 endAmount = expectedAmount +
-                (expectedAmount * intent.endAmountBps) /
+            uint128 expectedAmount = endAmount -
+                (endAmount * intent.expectedAmountBps) /
                 10000;
 
             // Total amount pulled from the maker
@@ -129,13 +129,13 @@ contract MockSolutionProxyERC20 is ISolution {
             // Amount to send on top to the maker
             uint128 surplusAmount = abi.decode(data, (uint128));
 
-            uint128 expectedAmount = (intent.expectedAmount * amountToFill) /
+            uint128 endAmount = (intent.endAmount * amountToFill) /
                 intent.amount;
-            uint128 startAmount = expectedAmount +
-                (expectedAmount * intent.startAmountBps) /
+            uint128 startAmount = endAmount +
+                (endAmount * intent.startAmountBps) /
                 10000;
-            uint128 endAmount = expectedAmount -
-                (expectedAmount * intent.endAmountBps) /
+            uint128 expectedAmount = endAmount +
+                (endAmount * intent.expectedAmountBps) /
                 10000;
 
             // Total amount pushed to the maker

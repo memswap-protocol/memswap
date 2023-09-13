@@ -69,15 +69,15 @@ describe("[ERC721] Misc", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 2,
-      expectedAmount: ethers.utils.parseEther("0.3"),
+      endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      endAmountBps: 0,
+      expectedAmountBps: 0,
       signature: "0x",
     };
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.expectedAmount);
-    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
 
     const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
@@ -133,15 +133,15 @@ describe("[ERC721] Misc", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 2,
-      expectedAmount: ethers.utils.parseEther("0.3"),
+      endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      endAmountBps: 0,
+      expectedAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.expectedAmount);
-    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
 
     const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
@@ -192,15 +192,15 @@ describe("[ERC721] Misc", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 2,
-      expectedAmount: ethers.utils.parseEther("0.3"),
+      endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      endAmountBps: 0,
+      expectedAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token0.connect(alice).mint(intent.expectedAmount);
-    await token0.connect(alice).approve(memswap.address, intent.expectedAmount);
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
 
     const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
@@ -248,17 +248,15 @@ describe("[ERC721] Misc", async () => {
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 2,
-      expectedAmount: ethers.utils.parseEther("0.3"),
+      endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
-      endAmountBps: 0,
+      expectedAmountBps: 0,
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve Permit2
-    await token0.connect(alice).mint(intent.expectedAmount);
-    await token0
-      .connect(alice)
-      .approve(PERMIT2[chainId], intent.expectedAmount);
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(PERMIT2[chainId], intent.endAmount);
 
     const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
@@ -281,7 +279,7 @@ describe("[ERC721] Misc", async () => {
     const permit = {
       details: {
         token: intent.sellToken,
-        amount: intent.expectedAmount,
+        amount: intent.endAmount,
         expiration: currentTime + 3600,
         nonce: 0,
       },
