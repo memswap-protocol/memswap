@@ -1,6 +1,7 @@
 import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
+import { JsonRpcProvider } from "@ethersproject/providers";
 import express from "express";
 
 import { logger } from "../common/logger";
@@ -38,6 +39,21 @@ app.use("/admin/bullmq", serverAdapter.getRouter());
 
 app.get("/lives", (_req, res) => {
   return res.json({ message: "Yes" });
+});
+
+app.post("/tx-listener", async (req, res) => {
+  const txHash = req.body.txHash as string;
+
+  const provider = new JsonRpcProvider(config.jsonUrl);
+  const tx = await provider.getTransaction(txHash);
+
+  await jobs.txListener.addToQueue({
+    to: tx.to ?? null,
+    input: tx.data,
+    hash: txHash,
+  });
+
+  return res.json({ message: "Success" });
 });
 
 app.post("/erc20/intents", async (req, res) => {
