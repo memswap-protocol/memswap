@@ -1,6 +1,6 @@
 import { Interface, defaultAbiCoder } from "@ethersproject/abi";
-import { WebSocketProvider } from "@ethersproject/providers";
 import { verifyTypedData } from "@ethersproject/wallet";
+import { Alchemy, AlchemySubscription, Network } from "alchemy-sdk";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
@@ -19,10 +19,24 @@ import { redis } from "../redis";
 const COMPONENT = "tx-listener";
 
 // Listen to mempool transactions
-const wsProvider = new WebSocketProvider(config.wsUrl);
+const wsProvider = new Alchemy({
+  apiKey: config.alchemyApiKey,
+  network: config.chainId ? Network.ETH_MAINNET : Network.ETH_GOERLI,
+}).ws;
 if (!process.env.DEBUG_MODE) {
-  wsProvider.on("pending", (txHash) => addToQueue(txHash));
+  wsProvider.on(
+    {
+      method: AlchemySubscription.PENDING_TRANSACTIONS,
+    },
+    (tx: AlchemyTx) => addToQueue(tx)
+  );
 }
+
+type AlchemyTx = {
+  hash: string;
+  input: string;
+  to: string | null;
+};
 
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
@@ -36,16 +50,9 @@ export const queue = new Queue(COMPONENT, {
 const worker = new Worker(
   COMPONENT,
   async (job) => {
-    const { txHash } = job.data as {
-      txHash: string;
-    };
+    const tx = job.data as AlchemyTx;
 
     try {
-      const tx = await wsProvider.getTransaction(txHash);
-      if (!tx || !tx.data || !tx.from) {
-        return;
-      }
-
       const intentTypesERC20 = [
         "uint8",
         "address",
@@ -94,13 +101,13 @@ const worker = new Worker(
       // Try to decode any intent appended at the end of the calldata
       let restOfCalldata: string | undefined;
       let approvalTxOrTxHash: string | undefined;
-      if (tx.data.startsWith("0x095ea7b3")) {
+      if (tx.input.startsWith("0x095ea7b3")) {
         const iface = new Interface([
           "function approve(address spender, uint256 amount)",
         ]);
 
         const spender = iface
-          .decodeFunctionData("approve", tx.data)
+          .decodeFunctionData("approve", tx.input)
           .spender.toLowerCase();
         if (
           [
@@ -108,11 +115,11 @@ const worker = new Worker(
             MEMSWAP_ERC721[config.chainId],
           ].includes(spender)
         ) {
-          restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
-          approvalTxOrTxHash = txHash;
+          restOfCalldata = "0x" + tx.input.slice(2 + 2 * (4 + 32 + 32));
+          approvalTxOrTxHash = tx.hash;
         }
       } else if (
-        tx.data.startsWith("0x28026ace") &&
+        tx.input.startsWith("0x28026ace") &&
         tx.to?.toLowerCase() === MEMETH[config.chainId]
       ) {
         const iface = new Interface([
@@ -120,7 +127,7 @@ const worker = new Worker(
         ]);
 
         const spender = iface
-          .decodeFunctionData("depositAndApprove", tx.data)
+          .decodeFunctionData("depositAndApprove", tx.input)
           .spender.toLowerCase();
         if (
           [
@@ -128,12 +135,12 @@ const worker = new Worker(
             MEMSWAP_ERC721[config.chainId],
           ].includes(spender)
         ) {
-          restOfCalldata = "0x" + tx.data.slice(2 + 2 * (4 + 32 + 32));
-          approvalTxOrTxHash = txHash;
+          restOfCalldata = "0x" + tx.input.slice(2 + 2 * (4 + 32 + 32));
+          approvalTxOrTxHash = tx.hash;
         }
       } else if (
         // TODO: Fix 4byte value
-        tx.data.startsWith("0x4adb41f5") &&
+        tx.input.startsWith("0x4adb41f5") &&
         tx.to?.toLowerCase() === MEMSWAP_ERC20[config.chainId]
       ) {
         const iface = new Interface([
@@ -161,7 +168,7 @@ const worker = new Worker(
           )`,
         ]);
 
-        const result = iface.decodeFunctionData("post", tx.data);
+        const result = iface.decodeFunctionData("post", tx.input);
         // TODO: Add support for multiple intents
         restOfCalldata = defaultAbiCoder.encode(
           intentTypesERC20,
@@ -169,7 +176,7 @@ const worker = new Worker(
         );
       } else if (
         // TODO: Fix 4byte value
-        tx.data.startsWith("0x4adb41f5") &&
+        tx.input.startsWith("0x4adb41f5") &&
         tx.to?.toLowerCase() === MEMSWAP_ERC721[config.chainId]
       ) {
         const iface = new Interface([
@@ -199,14 +206,14 @@ const worker = new Worker(
             )`,
         ]);
 
-        const result = iface.decodeFunctionData("post", tx.data);
+        const result = iface.decodeFunctionData("post", tx.input);
         // TODO: Add support for multiple intents
         restOfCalldata = defaultAbiCoder.encode(
           intentTypesERC721,
           result.intents[0]
         );
       } else {
-        restOfCalldata = tx.data;
+        restOfCalldata = tx.input;
       }
 
       let intent: IntentERC20 | IntentERC721 | undefined;
@@ -293,7 +300,7 @@ const worker = new Worker(
             COMPONENT,
             JSON.stringify({
               msg: "Invalid intent signature in transaction",
-              txHash,
+              txHash: tx.hash,
               intent,
             })
           );
@@ -324,5 +331,4 @@ worker.on("error", (error) => {
   logger.error(COMPONENT, JSON.stringify({ msg: "Worker errored", error }));
 });
 
-export const addToQueue = async (txHash: string) =>
-  queue.add(randomUUID(), { txHash });
+export const addToQueue = async (tx: AlchemyTx) => queue.add(randomUUID(), tx);
