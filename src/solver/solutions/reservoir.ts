@@ -6,7 +6,7 @@ import { Contract } from "@ethersproject/contracts";
 import { Wallet } from "@ethersproject/wallet";
 import axios from "axios";
 
-import { SOLUTION_PROXY_ERC721 } from "../../common/addresses";
+import { MEMETH, SOLUTION_PROXY_ERC721 } from "../../common/addresses";
 import { IntentERC721, TxData } from "../../common/types";
 import { bn } from "../../common/utils";
 import { config } from "../config";
@@ -89,11 +89,14 @@ export const solve = async (
       ],
       tokenIds: result.path.map((item: any) => item.tokenId),
       maxSellAmountInEth: price.toString(),
-      sellTokenToEthRate: await axios
-        .get(
-          `${reservoirBaseUrl}/currencies/conversion/v1?from=${AddressZero}&to=${intent.sellToken}`
-        )
-        .then((response) => response.data.conversion),
+      sellTokenToEthRate:
+        intent.sellToken === MEMETH[config.chainId]
+          ? "1"
+          : await axios
+              .get(
+                `${reservoirBaseUrl}/currencies/conversion/v1?from=${AddressZero}&to=${intent.sellToken}`
+              )
+              .then((response) => response.data.conversion),
       gasUsed,
     },
   };
