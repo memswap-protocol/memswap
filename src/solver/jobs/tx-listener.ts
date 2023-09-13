@@ -1,4 +1,5 @@
 import { Interface, defaultAbiCoder } from "@ethersproject/abi";
+import { JsonRpcProvider } from "@ethersproject/providers";
 import { verifyTypedData } from "@ethersproject/wallet";
 import { Alchemy, AlchemySubscription, Network } from "alchemy-sdk";
 import { Queue, Worker } from "bullmq";
@@ -24,28 +25,33 @@ type AlchemyPendingTx = {
   to: string | null;
 };
 
-type AlchemyMinedTx = {
-  transaction: AlchemyPendingTx;
-};
-
-// Listen to mempool transactions
-const wsProvider = new Alchemy({
-  apiKey: config.alchemyApiKey,
-  network: config.chainId ? Network.ETH_MAINNET : Network.ETH_GOERLI,
-}).ws;
 if (!process.env.DEBUG_MODE) {
+  // Listen to pending transactions
+  const wsProvider = new Alchemy({
+    apiKey: config.alchemyApiKey,
+    network: config.chainId ? Network.ETH_MAINNET : Network.ETH_GOERLI,
+  }).ws;
   wsProvider.on(
     {
       method: AlchemySubscription.PENDING_TRANSACTIONS,
     },
     (tx: AlchemyPendingTx) => addToQueue(tx)
   );
-  wsProvider.on(
-    {
-      method: AlchemySubscription.MINED_TRANSACTIONS,
-    },
-    (tx: AlchemyMinedTx) => addToQueue(tx.transaction)
-  );
+
+  // Listen to included transactions
+  const provider = new JsonRpcProvider(config.jsonUrl);
+  provider.on("block", async (block: number) => {
+    const blockWithTxs = await provider.getBlockWithTransactions(block);
+    await Promise.all(
+      blockWithTxs.transactions.map((tx) =>
+        addToQueue({
+          to: tx.to ?? null,
+          input: tx.data,
+          hash: tx.hash,
+        })
+      )
+    );
+  });
 }
 
 export const queue = new Queue(COMPONENT, {
