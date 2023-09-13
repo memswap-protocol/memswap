@@ -2,6 +2,7 @@ import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
 import express from "express";
+import cors from "cors";
 
 import { logger } from "../common/logger";
 import { IntentERC20, IntentERC721 } from "../common/types";
@@ -31,6 +32,7 @@ createBullBoard({
   serverAdapter: serverAdapter,
 });
 
+app.use(cors());
 app.use(express.json());
 app.use("/admin/bullmq", serverAdapter.getRouter());
 
