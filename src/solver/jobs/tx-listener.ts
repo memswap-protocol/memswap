@@ -139,8 +139,7 @@ const worker = new Worker(
           approvalTxOrTxHash = tx.hash;
         }
       } else if (
-        // TODO: Fix 4byte value
-        tx.input.startsWith("0x4adb41f5") &&
+        tx.input.startsWith("0x4cd6d7bf") &&
         tx.to?.toLowerCase() === MEMSWAP_ERC20[config.chainId]
       ) {
         const iface = new Interface([
