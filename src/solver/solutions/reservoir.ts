@@ -17,8 +17,6 @@ export const solve = async (
   fillAmount: string,
   provider: Provider
 ): Promise<SolutionDetailsERC721> => {
-  // TODO: Handle multi-step / incomplete responses
-
   const solver = new Wallet(config.solverPk);
   const quantity = Number(fillAmount);
 
@@ -41,7 +39,25 @@ export const solve = async (
     })
     .then((r) => r.data);
 
-  const tx = result.steps[0].items[0].data;
+  const saleStep = result.steps.find((s: any) => s.id === "sale");
+
+  const firstStep = result.steps[0];
+  if (firstStep.id === "auth") {
+    const item = firstStep.items[0];
+    if (item.status === "incomplete") {
+      const message = item.data.sign.message;
+      const messageSignature = await solver.signMessage(message);
+
+      await axios.post(
+        `${reservoirBaseUrl}${item.data.post.endpoint}?signature=${messageSignature}`,
+        item.data.post.body
+      );
+
+      return solve(intent, fillAmount, provider);
+    }
+  }
+
+  const tx = saleStep.items[0].data;
   const price = result.path
     .map((item: any) => bn(item.buyInRawQuote ?? item.rawQuote))
     .reduce((a: BigNumber, b: BigNumber) => a.add(b));
