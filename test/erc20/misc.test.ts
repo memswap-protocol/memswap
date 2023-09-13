@@ -2,6 +2,7 @@ import { defaultAbiCoder } from "@ethersproject/abi";
 import { splitSignature } from "@ethersproject/bytes";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
@@ -11,6 +12,8 @@ import {
   PermitKind,
   bn,
   getCurrentTimestamp,
+  getRandomInteger,
+  getRandomFloat,
   signPermit2,
   signPermitEIP2612,
 } from "../utils";
@@ -22,6 +25,7 @@ describe("[ERC20] Misc", async () => {
   let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
+  let carol: SignerWithAddress;
 
   let memswap: Contract;
 
@@ -32,7 +36,7 @@ describe("[ERC20] Misc", async () => {
   beforeEach(async () => {
     chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
 
-    [deployer, alice, bob] = await ethers.getSigners();
+    [deployer, alice, bob, carol] = await ethers.getSigners();
 
     memswap = await ethers
       .getContractFactory("MemswapERC20")
@@ -408,8 +412,8 @@ describe("[ERC20] Misc", async () => {
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token1.connect(alice).mint(intent.amount);
-    await token1.connect(alice).approve(memswap.address, intent.amount);
+    await token1.connect(alice).mint(intent.endAmount);
+    await token1.connect(alice).approve(memswap.address, intent.endAmount);
 
     // Save private data that wil get overridden
     const privateMaker = intent.maker;
@@ -448,6 +452,235 @@ describe("[ERC20] Misc", async () => {
         fillAmount: intent.amount,
       },
       []
+    );
+  });
+
+  it("Buy limit order with slippage", async () => {
+    const currentTime = await getCurrentTimestamp();
+
+    // Generate intent
+    const intent: Intent = {
+      isBuy: true,
+      buyToken: token0.address,
+      sellToken: token1.address,
+      maker: alice.address,
+      solver: AddressZero,
+      source: carol.address,
+      feeBps: getRandomInteger(0, 1000),
+      surplusBps: getRandomInteger(0, 1000),
+      startTime: currentTime,
+      endTime: currentTime + 60,
+      nonce: 0,
+      isPartiallyFillable: true,
+      isSmartOrder: false,
+      amount: ethers.utils.parseEther("0.5"),
+      endAmount: ethers.utils.parseEther("0.3"),
+      startAmountBps: 0,
+      expectedAmountBps: 1000,
+    };
+    intent.signature = await signIntent(alice, memswap.address, intent);
+
+    // Mint and approve
+    await token1.connect(alice).mint(intent.endAmount);
+    await token1.connect(alice).approve(memswap.address, intent.endAmount);
+
+    // Move to a known block timestamp
+    const nextBlockTime = getRandomInteger(intent.startTime, intent.endTime);
+    await time.setNextBlockTimestamp(
+      // Try to avoid `Timestamp is lower than the previous block's timestamp` errors
+      Math.max(
+        nextBlockTime,
+        await ethers.provider.getBlock("latest").then((b) => b.timestamp + 1)
+      )
+    );
+
+    // Compute the start / expected / end amounts
+    const endAmount = bn(intent.endAmount);
+    const startAmount = endAmount.sub(
+      endAmount.mul(intent.startAmountBps).div(10000)
+    );
+    const expectedAmount = endAmount.sub(
+      endAmount.mul(intent.expectedAmountBps).div(10000)
+    );
+
+    // Compute the required amount at above timestamp
+    const amount = bn(startAmount).add(
+      bn(endAmount)
+        .sub(startAmount)
+        .mul(bn(nextBlockTime).sub(intent.startTime))
+        .div(bn(intent.endTime).sub(intent.startTime))
+    );
+
+    // Get balances before the execution
+    const makerBalanceBefore = await token1.balanceOf(intent.maker);
+    const sourceBalanceBefore = await token1.balanceOf(intent.source);
+
+    // Optionally have some surplus (eg. on top of amount required by intent)
+    const surplus = ethers.utils.parseEther(getRandomFloat(0.001, 0.1));
+
+    // Compute fees
+    const fee =
+      intent.source === AddressZero
+        ? bn(0)
+        : amount.sub(surplus).mul(intent.feeBps).div(10000);
+    const surplusFee =
+      intent.source === AddressZero
+        ? bn(0)
+        : amount.sub(surplus).lt(expectedAmount)
+        ? expectedAmount
+            .sub(amount.sub(surplus))
+            .mul(intent.surplusBps)
+            .div(10000)
+        : bn(0);
+
+    // Solve
+    const solve = solutionProxy.connect(bob).solve(
+      intent,
+      {
+        data: defaultAbiCoder.encode(["uint128"], [surplus]),
+        fillAmount: intent.amount,
+      },
+      []
+    );
+
+    await expect(solve)
+      .to.emit(memswap, "IntentSolved")
+      .withArgs(
+        getIntentHash(intent),
+        intent.isBuy,
+        intent.buyToken,
+        intent.sellToken,
+        intent.maker,
+        solutionProxy.address,
+        intent.amount,
+        amount.sub(surplus)
+      );
+
+    // Get balances after the execution
+    const makerBalanceAfter = await token1.balanceOf(intent.maker);
+    const sourceBalanceAfter = await token1.balanceOf(intent.source);
+
+    // Make sure the maker and the source got the right amounts
+    expect(makerBalanceBefore.sub(makerBalanceAfter)).to.eq(
+      amount.sub(surplus)
+    );
+    expect(sourceBalanceAfter.sub(sourceBalanceBefore)).to.eq(
+      fee.add(surplusFee)
+    );
+  });
+
+  it("Sell limit order with slippage", async () => {
+    const currentTime = await getCurrentTimestamp();
+
+    // Generate intent
+    const intent: Intent = {
+      isBuy: false,
+      buyToken: token0.address,
+      sellToken: token1.address,
+      maker: alice.address,
+      solver: AddressZero,
+      source: carol.address,
+      feeBps: getRandomInteger(0, 1000),
+      surplusBps: getRandomInteger(0, 1000),
+      startTime: currentTime,
+      endTime: currentTime + 60,
+      nonce: 0,
+      isPartiallyFillable: true,
+      isSmartOrder: false,
+      amount: ethers.utils.parseEther("0.5"),
+      endAmount: ethers.utils.parseEther("0.3"),
+      startAmountBps: 0,
+      expectedAmountBps: 1000,
+    };
+    intent.signature = await signIntent(alice, memswap.address, intent);
+
+    // Mint and approve
+    await token1.connect(alice).mint(intent.amount);
+    await token1.connect(alice).approve(memswap.address, intent.amount);
+
+    // Move to a known block timestamp
+    const nextBlockTime = getRandomInteger(intent.startTime, intent.endTime);
+    await time.setNextBlockTimestamp(
+      // Try to avoid `Timestamp is lower than the previous block's timestamp` errors
+      Math.max(
+        nextBlockTime,
+        await ethers.provider.getBlock("latest").then((b) => b.timestamp + 1)
+      )
+    );
+
+    // Compute the start / expected / end amounts
+    const endAmount = bn(intent.endAmount);
+    const startAmount = endAmount.add(
+      endAmount.mul(intent.startAmountBps).div(10000)
+    );
+    const expectedAmount = endAmount.add(
+      endAmount.mul(intent.expectedAmountBps).div(10000)
+    );
+
+    // Compute the required amount at above timestamp
+    const amount = bn(startAmount).sub(
+      bn(startAmount)
+        .sub(endAmount)
+        .mul(bn(nextBlockTime).sub(intent.startTime))
+        .div(bn(intent.endTime).sub(intent.startTime))
+    );
+
+    // Get balances before the execution
+    const makerBalanceBefore = await token0.balanceOf(intent.maker);
+    const sourceBalanceBefore = await token0.balanceOf(intent.source);
+
+    // Optionally have some surplus (eg. on top of amount required by intent)
+    const surplus = ethers.utils.parseEther(getRandomFloat(0.001, 0.1));
+
+    // Compute fees
+    const fee =
+      intent.source === AddressZero
+        ? bn(0)
+        : amount.add(surplus).mul(intent.feeBps).div(10000);
+    const surplusFee =
+      intent.source === AddressZero
+        ? bn(0)
+        : amount.add(surplus).gt(expectedAmount)
+        ? amount
+            .add(surplus)
+            .sub(expectedAmount)
+            .mul(intent.surplusBps)
+            .div(10000)
+        : bn(0);
+
+    // Solve
+    const solve = solutionProxy.connect(bob).solve(
+      intent,
+      {
+        data: defaultAbiCoder.encode(["uint128"], [surplus]),
+        fillAmount: intent.amount,
+      },
+      []
+    );
+
+    await expect(solve)
+      .to.emit(memswap, "IntentSolved")
+      .withArgs(
+        getIntentHash(intent),
+        intent.isBuy,
+        intent.buyToken,
+        intent.sellToken,
+        intent.maker,
+        solutionProxy.address,
+        amount.add(surplus),
+        intent.amount
+      );
+
+    // Get balances after the execution
+    const makerBalanceAfter = await token0.balanceOf(intent.maker);
+    const sourceBalanceAfter = await token0.balanceOf(intent.source);
+
+    // Make sure the maker and the source got the right amounts
+    expect(makerBalanceAfter.sub(makerBalanceBefore)).to.eq(
+      amount.add(surplus).sub(fee).sub(surplusFee)
+    );
+    expect(sourceBalanceAfter.sub(sourceBalanceBefore)).to.eq(
+      fee.add(surplusFee)
     );
   });
 });
