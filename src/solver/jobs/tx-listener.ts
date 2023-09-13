@@ -1,5 +1,5 @@
 import { Interface, defaultAbiCoder } from "@ethersproject/abi";
-import { JsonRpcProvider, WebSocketProvider } from "@ethersproject/providers";
+import { WebSocketProvider } from "@ethersproject/providers";
 import { verifyTypedData } from "@ethersproject/wallet";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
@@ -41,9 +41,7 @@ const worker = new Worker(
     };
 
     try {
-      const provider = new JsonRpcProvider(config.jsonUrl);
-
-      const tx = await provider.getTransaction(txHash);
+      const tx = await wsProvider.getTransaction(txHash);
       if (!tx || !tx.data || !tx.from) {
         return;
       }
