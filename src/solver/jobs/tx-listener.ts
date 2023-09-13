@@ -54,7 +54,7 @@ const worker = new Worker(
 
     try {
       const intentTypesERC20 = [
-        "uint8",
+        "bool",
         "address",
         "address",
         "address",
@@ -73,7 +73,7 @@ const worker = new Worker(
         "bytes",
       ];
       const intentTypesERC721 = [
-        "uint8",
+        "bool",
         "address",
         "address",
         "address",
@@ -149,8 +149,8 @@ const worker = new Worker(
               address maker,
               address solver,
               address source,
-              uint32 feeBps,
-              uint32 surplusBps,
+              uint16 feeBps,
+              uint16 surplusBps,
               uint32 startTime,
               uint32 endTime,
               bool isPartiallyFillable,
@@ -184,8 +184,8 @@ const worker = new Worker(
                 address maker,
                 address solver,
                 address source,
-                uint32 feeBps,
-                uint32 surplusBps,
+                uint16 feeBps,
+                uint16 surplusBps,
                 uint32 startTime,
                 uint32 endTime,
                 bool isPartiallyFillable,
