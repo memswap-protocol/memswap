@@ -36,7 +36,7 @@ const main = async () => {
     USDC: USDC[chainId],
   };
 
-  const buyToken = "0x3a0e573f1e59ff6cea75d987cf73643e9f7feac6";
+  const buyToken = "0x9fa184c43b00da59b06f2296d509fbb465fb362e";
   const sellToken = CURRENCIES.ETH_IN;
 
   // Create intent

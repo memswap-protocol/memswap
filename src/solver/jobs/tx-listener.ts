@@ -320,7 +320,7 @@ const worker = new Worker(
       throw error;
     }
   },
-  { connection: redis.duplicate(), concurrency: 500 }
+  { connection: redis.duplicate(), concurrency: 2000 }
 );
 worker.on("error", (error) => {
   logger.error(COMPONENT, JSON.stringify({ msg: "Worker errored", error }));
