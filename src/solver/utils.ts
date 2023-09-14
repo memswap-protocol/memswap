@@ -264,66 +264,84 @@ export const relayViaBloxroute = async (
     })
   );
 
-  const receipt = await (flashbotsProvider as any).blxrSubmitBundle(
-    txs,
-    targetBlock
-  );
-  const hash = (receipt as any).bundleHash;
-
-  logger.info(
-    logComponent,
-    JSON.stringify({
-      msg: "Bundle relayed using bloxroute",
-      intentHash,
-      targetBlock,
-      bundleHash: hash,
-    })
-  );
-
-  const waitResponse = await (receipt as any).wait();
-  if (
-    waitResponse === FlashbotsBundleResolution.BundleIncluded ||
-    waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
-  ) {
-    if (
-      await isTxIncluded(
-        parse(txs[txs.length - 1].signedTransaction).hash!,
-        provider
-      )
-    ) {
-      logger.info(
-        logComponent,
-        JSON.stringify({
-          msg: "Bundle included",
-          intentHash,
-          targetBlock,
-          bundleHash: hash,
-        })
+  let done = false;
+  while (!done) {
+    try {
+      const receipt = await (flashbotsProvider as any).blxrSubmitBundle(
+        txs,
+        targetBlock
       );
-    } else {
+      const hash = (receipt as any).bundleHash;
+
       logger.info(
         logComponent,
         JSON.stringify({
-          msg: "Bundle not included",
+          msg: "Bundle relayed using bloxroute",
           intentHash,
           targetBlock,
           bundleHash: hash,
         })
       );
 
-      throw new Error("Bundle not included");
+      const waitResponse = await (receipt as any).wait();
+      if (
+        waitResponse === FlashbotsBundleResolution.BundleIncluded ||
+        waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
+      ) {
+        if (
+          await isTxIncluded(
+            parse(txs[txs.length - 1].signedTransaction).hash!,
+            provider
+          )
+        ) {
+          logger.info(
+            logComponent,
+            JSON.stringify({
+              msg: "Bundle included",
+              intentHash,
+              targetBlock,
+              bundleHash: hash,
+            })
+          );
+        } else {
+          logger.info(
+            logComponent,
+            JSON.stringify({
+              msg: "Bundle not included",
+              intentHash,
+              targetBlock,
+              bundleHash: hash,
+            })
+          );
+
+          throw new Error("Bundle not included");
+        }
+      } else {
+        logger.info(
+          logComponent,
+          JSON.stringify({
+            msg: "Bundle not included",
+            intentHash,
+            targetBlock,
+            bundleHash: hash,
+          })
+        );
+
+        throw new Error("Bundle not included");
+      }
+    } catch (error: any) {
+      if (
+        JSON.stringify(error.response?.data).includes(
+          "1 bundle submissions per second"
+        )
+      ) {
+        // Retry after waiting for 1 second
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+      } else {
+        throw error;
+      }
     }
-  } else {
-    logger.info(
-      logComponent,
-      JSON.stringify({
-        msg: "Bundle not included",
-        intentHash,
-        targetBlock,
-        bundleHash: hash,
-      })
-    );
 
-    throw new Error("Bundle not included");
+    done = true;
   }
 };
