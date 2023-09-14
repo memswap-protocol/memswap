@@ -42,36 +42,38 @@ if (!process.env.DEBUG_MODE) {
   // );
 
   // Via Bloxroute
-  const bloxrouteWs = new Websocket("wss://api.blxrbdn.com/ws", {
-    headers: {
-      Authorization: config.bloxrouteAuth,
-    },
-  });
-  bloxrouteWs.on("open", () => {
-    bloxrouteWs.send(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "subscribe",
-        params: [
-          "pendingTxs",
-          {
-            include: ["tx_hash", "tx_contents.input", "tx_contents.to"],
-          },
-        ],
-      })
-    );
-  });
-  bloxrouteWs.on("message", async (msg) => {
-    const parsedMsg = JSON.parse(msg.toString());
-
-    const data = parsedMsg.params.result;
-    await addToQueue({
-      hash: data.txHash,
-      to: data.txContents.to,
-      input: data.txContents.input,
+  if (config.bloxrouteAuth) {
+    const bloxrouteWs = new Websocket("wss://api.blxrbdn.com/ws", {
+      headers: {
+        Authorization: config.bloxrouteAuth,
+      },
     });
-  });
+    bloxrouteWs.on("open", () => {
+      bloxrouteWs.send(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "subscribe",
+          params: [
+            "pendingTxs",
+            {
+              include: ["tx_hash", "tx_contents.input", "tx_contents.to"],
+            },
+          ],
+        })
+      );
+    });
+    bloxrouteWs.on("message", async (msg) => {
+      const parsedMsg = JSON.parse(msg.toString());
+
+      const data = parsedMsg.params.result;
+      await addToQueue({
+        hash: data.txHash,
+        to: data.txContents.to,
+        input: data.txContents.input,
+      });
+    });
+  }
 
   // Listen to included transactions
 
