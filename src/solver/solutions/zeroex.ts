@@ -4,6 +4,7 @@ import axios from "axios";
 
 import { MEMETH } from "../../common/addresses";
 import { IntentERC20 } from "../../common/types";
+import { bn } from "../../common/utils";
 import { config } from "../config";
 import { SolutionDetailsERC20 } from "../types";
 
@@ -34,6 +35,9 @@ export const solve = async (
       }
     );
 
+    // Adjust the sell amount based on the slippage (which defaults to 1%)
+    const sellAmount = bn(swapData.sellAmount).add(1).mul(10100).div(10000);
+
     return {
       kind: "buy",
       data: {
@@ -45,7 +49,7 @@ export const solve = async (
               "function withdraw(uint256 amount)",
             ]).encodeFunctionData(
               inETH ? "withdraw" : "approve",
-              inETH ? [swapData.sellAmount] : [swapData.to, swapData.sellAmount]
+              inETH ? [sellAmount] : [swapData.to, sellAmount]
             ),
             value: "0",
           },
@@ -55,7 +59,7 @@ export const solve = async (
             value: inETH ? fillAmount : "0",
           },
         ],
-        maxSellAmount: swapData.sellAmount,
+        maxSellAmount: sellAmount.toString(),
         sellTokenToEthRate: swapData.sellTokenToEthRate,
         gasUsed: swapData.estimatedGas,
       },
