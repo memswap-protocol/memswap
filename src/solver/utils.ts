@@ -330,10 +330,10 @@ export const relayViaBloxroute = async (
         throw new Error("Bundle not included");
       }
     } catch (error: any) {
+      const data = error.response?.data;
       if (
-        JSON.stringify(error.response?.data).includes(
-          "1 bundle submissions per second"
-        )
+        data &&
+        JSON.stringify(data).includes("1 bundle submissions per second")
       ) {
         // Retry after waiting for 1 second
         await new Promise((resolve) => setTimeout(resolve, 1100));
