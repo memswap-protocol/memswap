@@ -191,10 +191,9 @@ const worker = new Worker(
               .div(intent.endTime - intent.startTime)
           );
 
-          const { data: solutionDetails } = (await solutions.uniswap.solve(
+          const { data: solutionDetails } = (await solutions.zeroex.solve(
             intent,
-            intent.amount,
-            provider
+            intent.amount
           )) as { data: SellSolutionDataERC20 };
 
           const gasConsumed = bn(memswapGas)
@@ -264,10 +263,9 @@ const worker = new Worker(
             );
           }
 
-          const { data: solutionDetails } = (await solutions.uniswap.solve(
+          const { data: solutionDetails } = (await solutions.zeroex.solve(
             intent,
-            intent.amount,
-            provider
+            intent.amount
           )) as { data: BuySolutionDataERC20 };
 
           const gasConsumed = bn(memswapGas)
