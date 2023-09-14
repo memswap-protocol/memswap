@@ -1,3 +1,5 @@
+import { Call } from "../solver/types";
+
 export enum Protocol {
   ERC20,
   ERC721,
@@ -30,9 +32,15 @@ export type IntentERC721 = IntentERC20 & {
 };
 
 export type SolutionERC20 = {
-  // On-chain data
-  data: string;
+  // Data needed for on-chain purposes
+  calls: Call[];
   fillAmount: string;
+  executeAmount: string;
+  // Data needed for off-chain purposes
+  gasConsumed: string;
+  executeTokenToEthRate: string;
+  executeTokenDecimals: number;
+  grossProfitInEth: string;
 };
 
 export type TokenDetails = {
