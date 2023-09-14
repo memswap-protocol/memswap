@@ -516,6 +516,7 @@ const worker = new Worker(
           provider,
           flashbotsProvider,
           txs,
+          includeApprovalTx ? [approvalTx!] : [],
           targetBlock,
           COMPONENT
         );
@@ -585,6 +586,7 @@ const worker = new Worker(
             provider,
             flashbotsProvider,
             txs,
+            includeApprovalTx ? [approvalTx!] : [],
             targetBlock,
             COMPONENT
           );

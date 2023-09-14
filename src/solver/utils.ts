@@ -92,25 +92,44 @@ export const relayViaFlashbots = async (
   provider: JsonRpcProvider,
   flashbotsProvider: FlashbotsBundleProvider,
   txs: FlashbotsBundleRawTransaction[],
+  // These are to be removed if the simulation fails with "nonce too high"
+  userTxs: FlashbotsBundleRawTransaction[],
   targetBlock: number,
   logComponent: string
-) => {
+): Promise<any> => {
   const signedBundle = await flashbotsProvider.signBundle(txs);
 
   const simulationResult: { error?: string; results: [{ error?: string }] } =
     (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
-  if (simulationResult.error || simulationResult.results.some((r) => r.error)) {
-    logger.error(
-      logComponent,
-      JSON.stringify({
-        msg: "Bundle simulation failed",
-        intentHash,
-        simulationResult,
-        txs,
-      })
-    );
+  if (simulationResult.error) {
+    if (JSON.stringify(simulationResult.error).includes("nonce too high")) {
+      // Retry with all user transactions removed - assuming the
+      // error is coming from their inclusion in previous blocks
+      const mappedUserTxs = userTxs.map((tx) => tx.signedTransaction);
+      txs = txs.filter((tx) => !mappedUserTxs.includes(tx.signedTransaction));
 
-    throw new Error("Bundle simulation failed");
+      return relayViaFlashbots(
+        intentHash,
+        provider,
+        flashbotsProvider,
+        txs,
+        [],
+        targetBlock,
+        logComponent
+      );
+    } else {
+      logger.error(
+        logComponent,
+        JSON.stringify({
+          msg: "Bundle simulation failed",
+          intentHash,
+          simulationResult,
+          txs,
+        })
+      );
+
+      throw new Error("Bundle simulation failed");
+    }
   }
 
   const receipt = await flashbotsProvider.sendRawBundle(
@@ -182,25 +201,44 @@ export const relayViaBloxroute = async (
   provider: JsonRpcProvider,
   flashbotsProvider: FlashbotsBundleProvider,
   txs: FlashbotsBundleRawTransaction[],
+  // These are to be removed if the simulation fails with "nonce too high"
+  userTxs: FlashbotsBundleRawTransaction[],
   targetBlock: number,
   logComponent: string
-) => {
+): Promise<any> => {
   // Simulate via flashbots
   const signedBundle = await flashbotsProvider.signBundle(txs);
   const simulationResult: { error?: string; results: [{ error?: string }] } =
     (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
-  if (simulationResult.error || simulationResult.results.some((r) => r.error)) {
-    logger.error(
-      logComponent,
-      JSON.stringify({
-        msg: "Bundle simulation failed",
-        intentHash,
-        simulationResult,
-        txs,
-      })
-    );
+  if (simulationResult.error) {
+    if (JSON.stringify(simulationResult.error).includes("nonce too high")) {
+      // Retry with all user transactions removed - assuming the
+      // error is coming from their inclusion in previous blocks
+      const mappedUserTxs = userTxs.map((tx) => tx.signedTransaction);
+      txs = txs.filter((tx) => !mappedUserTxs.includes(tx.signedTransaction));
 
-    throw new Error("Bundle simulation failed");
+      return relayViaBloxroute(
+        intentHash,
+        provider,
+        flashbotsProvider,
+        txs,
+        [],
+        targetBlock,
+        logComponent
+      );
+    } else {
+      logger.error(
+        logComponent,
+        JSON.stringify({
+          msg: "Bundle simulation failed",
+          intentHash,
+          simulationResult,
+          txs,
+        })
+      );
+
+      throw new Error("Bundle simulation failed");
+    }
   }
 
   logger.info(
