@@ -494,7 +494,7 @@ const worker = new Worker(
       const includeApprovalTx =
         approvalTxHash && !(await isTxIncluded(approvalTxHash, provider));
 
-      const relayMethod = process.env.BLOXROUTE_AUTH
+      const relayMethod = config.bloxrouteAuth
         ? relayViaBloxroute
         : relayViaFlashbots;
 

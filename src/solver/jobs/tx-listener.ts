@@ -1,9 +1,10 @@
 import { Interface, defaultAbiCoder } from "@ethersproject/abi";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { verifyTypedData } from "@ethersproject/wallet";
-import { Alchemy, AlchemySubscription, Network } from "alchemy-sdk";
+// import { Alchemy, AlchemySubscription, Network } from "alchemy-sdk";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
+import Websocket from "ws";
 
 import { MEMSWAP_ERC20, MEMSWAP_ERC721, MEMETH } from "../../common/addresses";
 import { logger } from "../../common/logger";
@@ -27,18 +28,53 @@ type AlchemyPendingTx = {
 
 if (!process.env.DEBUG_MODE) {
   // Listen to pending transactions
-  const wsProvider = new Alchemy({
-    apiKey: config.alchemyApiKey,
-    network: config.chainId ? Network.ETH_MAINNET : Network.ETH_GOERLI,
-  }).ws;
-  wsProvider.on(
-    {
-      method: AlchemySubscription.PENDING_TRANSACTIONS,
+
+  // Via Alchemy
+  // const alchemyWs = new Alchemy({
+  //   apiKey: config.alchemyApiKey,
+  //   network: config.chainId ? Network.ETH_MAINNET : Network.ETH_GOERLI,
+  // }).ws;
+  // alchemyWs.on(
+  //   {
+  //     method: AlchemySubscription.PENDING_TRANSACTIONS,
+  //   },
+  //   (tx: AlchemyPendingTx) => addToQueue(tx)
+  // );
+
+  // Via Bloxroute
+  const bloxrouteWs = new Websocket("wss://api.blxrbdn.com/ws", {
+    headers: {
+      Authorization: config.bloxrouteAuth,
     },
-    (tx: AlchemyPendingTx) => addToQueue(tx)
-  );
+  });
+  bloxrouteWs.on("open", () => {
+    bloxrouteWs.send(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "subscribe",
+        params: [
+          "pendingTxs",
+          {
+            include: ["tx_hash", "tx_contents.input", "tx_contents.to"],
+          },
+        ],
+      })
+    );
+  });
+  bloxrouteWs.on("message", async (msg) => {
+    const parsedMsg = JSON.parse(msg.toString());
+
+    const data = parsedMsg.params.result;
+    await addToQueue({
+      hash: data.txHash,
+      to: data.txContents.to,
+      input: data.txContents.input,
+    });
+  });
 
   // Listen to included transactions
+
   const provider = new JsonRpcProvider(config.jsonUrl);
   provider.on("block", async (block: number) => {
     const blockWithTxs = await provider.getBlockWithTransactions(block);

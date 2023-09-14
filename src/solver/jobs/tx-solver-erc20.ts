@@ -613,7 +613,7 @@ const worker = new Worker(
         useRelay = false;
       }
 
-      const relayMethod = process.env.BLOXROUTE_AUTH
+      const relayMethod = config.bloxrouteAuth
         ? relayViaBloxroute
         : relayViaFlashbots;
 
