@@ -68,6 +68,7 @@ describe("[ERC20] Bulk-signing", async () => {
         nonce: 0,
         isPartiallyFillable: true,
         isSmartOrder: false,
+        isIncentivized: false,
         amount: ethers.utils.parseEther("0.5"),
         endAmount: ethers.utils.parseEther("0.3"),
         startAmountBps: 0,

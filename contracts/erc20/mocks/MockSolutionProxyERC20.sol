@@ -7,17 +7,24 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MemswapERC20} from "../MemswapERC20.sol";
 import {PermitExecutor} from "../../common/PermitExecutor.sol";
 
-import {ISolution} from "../interfaces/ISolution.sol";
+import {ISolutionERC20} from "../interfaces/ISolutionERC20.sol";
 
 interface IMintableERC20 is IERC20 {
     function mint(uint256 amount) external;
 }
 
-contract MockSolutionProxyERC20 is ISolution {
+contract MockSolutionProxyERC20 is ISolutionERC20 {
     address public memswap;
+    bool public payBuilderOnRefund;
+
+    event Refunded(uint256 amount);
 
     constructor(address memswapAddress) {
         memswap = memswapAddress;
+    }
+
+    function setPayBuilderOnRefund(bool _payBuilderOnRefund) external {
+        payBuilderOnRefund = _payBuilderOnRefund;
     }
 
     receive() external payable {}
@@ -26,20 +33,22 @@ contract MockSolutionProxyERC20 is ISolution {
         MemswapERC20.Intent calldata intent,
         MemswapERC20.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
-    ) external {
-        MemswapERC20(payable(memswap)).solve(intent, solution, permits);
+    ) external payable {
+        MemswapERC20(payable(memswap)).solve{value: msg.value}(
+            intent,
+            solution,
+            permits
+        );
     }
 
     function solveWithOnChainAuthorizationCheck(
         MemswapERC20.Intent calldata intent,
         MemswapERC20.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
-    ) external {
-        MemswapERC20(payable(memswap)).solveWithOnChainAuthorizationCheck(
-            intent,
-            solution,
-            permits
-        );
+    ) external payable {
+        MemswapERC20(payable(memswap)).solveWithOnChainAuthorizationCheck{
+            value: msg.value
+        }(intent, solution, permits);
     }
 
     function solveWithSignatureAuthorizationCheck(
@@ -48,14 +57,18 @@ contract MockSolutionProxyERC20 is ISolution {
         MemswapERC20.Authorization calldata auth,
         bytes calldata authSignature,
         PermitExecutor.Permit[] calldata permits
-    ) external {
-        MemswapERC20(payable(memswap)).solveWithSignatureAuthorizationCheck(
-            intent,
-            solution,
-            auth,
-            authSignature,
-            permits
-        );
+    ) external payable {
+        MemswapERC20(payable(memswap)).solveWithSignatureAuthorizationCheck{
+            value: msg.value
+        }(intent, solution, auth, authSignature, permits);
+    }
+
+    function refund() external payable {
+        if (payBuilderOnRefund) {
+            block.coinbase.transfer(msg.value);
+        }
+
+        emit Refunded(msg.value);
     }
 
     function callback(

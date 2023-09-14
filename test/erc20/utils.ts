@@ -1,12 +1,15 @@
 import { defaultAbiCoder } from "@ethersproject/abi";
 import { TypedDataSigner } from "@ethersproject/abstract-signer";
-import { BigNumberish } from "@ethersproject/bignumber";
+import { BigNumberish, BigNumber } from "@ethersproject/bignumber";
 import { hexConcat } from "@ethersproject/bytes";
 import { AddressZero } from "@ethersproject/constants";
+import { Contract } from "@ethersproject/contracts";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 import { keccak256 } from "@ethersproject/keccak256";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { MerkleTree } from "merkletreejs";
+
+import { bn } from "../utils";
 
 // Contract utilities
 
@@ -24,6 +27,7 @@ export type Intent = {
   nonce: BigNumberish;
   isPartiallyFillable: boolean;
   isSmartOrder: boolean;
+  isIncentivized: boolean;
   amount: BigNumberish;
   endAmount: BigNumberish;
   startAmountBps: number;
@@ -152,6 +156,10 @@ export const INTENT_EIP712_TYPES = {
       type: "bool",
     },
     {
+      name: "isIncentivized",
+      type: "bool",
+    },
+    {
       name: "amount",
       type: "uint128",
     },
@@ -168,6 +176,59 @@ export const INTENT_EIP712_TYPES = {
       type: "uint16",
     },
   ],
+};
+
+export const getIncentivizationTip = async (
+  memswap: Contract,
+  isBuy: boolean,
+  expectedAmount: BigNumberish,
+  expectedAmountBps: number,
+  executeAmount: BigNumberish
+): Promise<BigNumber> => {
+  const slippage =
+    expectedAmountBps === 0
+      ? await memswap.DEFAULT_SLIPPAGE()
+      : expectedAmountBps;
+
+  const MULTIPLIER = await memswap.MULTIPLIER();
+  const MIN_TIP = await memswap.MIN_TIP();
+  const MAX_TIP = await memswap.MAX_TIP();
+
+  const slippageUnit = bn(expectedAmount).mul(slippage).div(10000);
+
+  if (isBuy) {
+    const minValue = bn(expectedAmount).sub(slippageUnit.mul(MULTIPLIER));
+    const maxValue = bn(expectedAmount).add(slippageUnit);
+
+    if (bn(executeAmount).gte(maxValue)) {
+      return MIN_TIP;
+    } else if (bn(executeAmount).lte(minValue)) {
+      return MAX_TIP;
+    } else {
+      return MAX_TIP.sub(
+        bn(executeAmount)
+          .sub(minValue)
+          .mul(MAX_TIP.sub(MIN_TIP))
+          .div(maxValue.sub(minValue))
+      );
+    }
+  } else {
+    const minValue = bn(expectedAmount).sub(slippageUnit);
+    const maxValue = bn(expectedAmount).add(slippageUnit.mul(MULTIPLIER));
+
+    if (bn(executeAmount).gte(maxValue)) {
+      return MIN_TIP;
+    } else if (bn(executeAmount).lte(minValue)) {
+      return MAX_TIP;
+    } else {
+      return MIN_TIP.add(
+        bn(executeAmount)
+          .sub(minValue)
+          .mul(MAX_TIP.sub(MIN_TIP))
+          .div(maxValue.sub(minValue))
+      );
+    }
+  }
 };
 
 // Bulk-signing utilities
@@ -231,6 +292,7 @@ const getBulkSignatureDataWithProofs = (
     nonce: 0,
     isPartiallyFillable: false,
     isSmartOrder: false,
+    isIncentivized: false,
     amount: 0,
     endAmount: 0,
     startAmountBps: 0,
