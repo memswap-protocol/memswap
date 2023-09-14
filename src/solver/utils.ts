@@ -9,7 +9,7 @@ import {
 import * as txSimulator from "@georgeroman/evm-tx-simulator";
 
 import { logger } from "../common/logger";
-import { isTxIncluded } from "../common/utils";
+import { PESSIMISTIC_BLOCK_TIME, isTxIncluded } from "../common/utils";
 import { config } from "./config";
 
 // Monkey-patch the flashbots bundle provider to support relaying via bloxroute
@@ -283,7 +283,12 @@ export const relayViaBloxroute = async (
         })
       );
 
-      const waitResponse = await (receipt as any).wait();
+      const waitResponse = await Promise.race([
+        (receipt as any).wait(),
+        new Promise((resolve) =>
+          setTimeout(resolve, PESSIMISTIC_BLOCK_TIME * 1000)
+        ),
+      ]);
       if (
         waitResponse === FlashbotsBundleResolution.BundleIncluded ||
         waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh
