@@ -66,12 +66,14 @@ if (!process.env.DEBUG_MODE) {
     bloxrouteWs.on("message", async (msg) => {
       const parsedMsg = JSON.parse(msg.toString());
 
-      const data = parsedMsg.params.result;
-      await addToQueue({
-        hash: data.txHash,
-        to: data.txContents.to,
-        input: data.txContents.input,
-      });
+      if (parsedMsg.params?.result) {
+        const data = parsedMsg.params.result;
+        await addToQueue({
+          hash: data.txHash,
+          to: data.txContents.to,
+          input: data.txContents.input,
+        });
+      }
     });
   }
 

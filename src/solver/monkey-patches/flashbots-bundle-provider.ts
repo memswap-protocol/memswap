@@ -53,6 +53,6 @@ import { config } from "../config";
   return {
     wait: () =>
       this.waitForBundleInclusion(bundleTransactions, targetBlock, 60 * 1000),
-    bundleHash: response.data.result?.bundleHash,
+    bundleHash: response.data?.result?.bundleHash,
   };
 };

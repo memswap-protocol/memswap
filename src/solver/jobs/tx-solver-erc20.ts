@@ -300,10 +300,10 @@ const worker = new Worker(
                 intentHash,
                 gasPerTipIncrement: gasPerTipIncrement.toString(),
                 minTipUnits: minTipUnits.toString(),
-                maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
-                newMaxPriorityFeePerGas: maxPriorityFeePerGas
-                  .add(minTipIncrement.mul(minTipUnits))
+                oldMaxPriorityFeePerGas: maxPriorityFeePerGas
+                  .sub(minTipIncrement.mul(minTipUnits))
                   .toString(),
+                newMaxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
               })
             );
           }
@@ -449,10 +449,10 @@ const worker = new Worker(
                 intentHash,
                 gasPerTipIncrement: gasPerTipIncrement.toString(),
                 minTipUnits: minTipUnits.toString(),
-                maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
-                newMaxPriorityFeePerGas: maxPriorityFeePerGas
-                  .add(minTipIncrement.mul(minTipUnits))
+                oldMaxPriorityFeePerGas: maxPriorityFeePerGas
+                  .sub(minTipIncrement.mul(minTipUnits))
                   .toString(),
+                newMaxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
               })
             );
           }
