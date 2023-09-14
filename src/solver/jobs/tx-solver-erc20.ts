@@ -217,10 +217,10 @@ const worker = new Worker(
           const buyTokenDecimals = await solutions.uniswap
             .getToken(intent.buyToken, provider)
             .then((t) => t.decimals);
-          const grossProfitInTokenOut = bn(solutionDetails.minBuyAmount).sub(
+          const grossProfitInBuyToken = bn(solutionDetails.minBuyAmount).sub(
             minAmountOut
           );
-          const grossProfitInETH = grossProfitInTokenOut
+          const grossProfitInEth = grossProfitInBuyToken
             .mul(parseEther("1"))
             .div(
               parseUnits(solutionDetails.buyTokenToEthRate, buyTokenDecimals)
@@ -232,7 +232,7 @@ const worker = new Worker(
             calls: solutionDetails.calls,
             executeTokenToEthRate: solutionDetails.buyTokenToEthRate,
             executeTokenDecimals: buyTokenDecimals,
-            grossProfitInEth: grossProfitInETH.toString(),
+            grossProfitInEth: grossProfitInEth.toString(),
             gasConsumed,
           };
         } else {
@@ -289,10 +289,10 @@ const worker = new Worker(
           const sellTokenDecimals = await solutions.uniswap
             .getToken(intent.sellToken, provider)
             .then((t) => t.decimals);
-          const grossProfitInSellToken = bn(solutionDetails.maxSellAmount).sub(
-            maxAmountIn
+          const grossProfitInSellToken = maxAmountIn.sub(
+            solutionDetails.maxSellAmount
           );
-          const grossProfitInETH = grossProfitInSellToken
+          const grossProfitInEth = grossProfitInSellToken
             .mul(parseEther("1"))
             .div(
               parseUnits(solutionDetails.sellTokenToEthRate, sellTokenDecimals)
@@ -304,7 +304,7 @@ const worker = new Worker(
             calls: solutionDetails.calls,
             executeTokenToEthRate: solutionDetails.sellTokenToEthRate,
             executeTokenDecimals: sellTokenDecimals,
-            grossProfitInEth: grossProfitInETH.toString(),
+            grossProfitInEth: grossProfitInEth.toString(),
             gasConsumed,
           };
         }
