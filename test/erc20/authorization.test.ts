@@ -32,7 +32,7 @@ describe("[ERC20] Authorization", async () => {
     [deployer, alice, bob, carol, dan] = await ethers.getSigners();
 
     nft = await ethers
-      .getContractFactory("Memswap")
+      .getContractFactory("MemswapAlphaNFT")
       .then((factory) => factory.deploy(deployer.address, "", ""));
     memswap = await ethers
       .getContractFactory("MemswapERC20")

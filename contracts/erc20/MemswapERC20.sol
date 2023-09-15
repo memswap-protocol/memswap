@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {EIP712} from "../common/EIP712.sol";
 import {PermitExecutor} from "../common/PermitExecutor.sol";
 import {SignatureVerification} from "../common/SignatureVerification.sol";
-import {Memswap} from "../nft/Memswap.sol";
+import {MemswapAlphaNFT} from "../nft/MemswapAlphaNFT.sol";
 
 import {ISolutionERC20} from "./interfaces/ISolutionERC20.sol";
 
@@ -128,7 +128,7 @@ contract MemswapERC20 is
 
     bytes32 public immutable AUTHORIZATION_TYPEHASH;
     bytes32 public immutable INTENT_TYPEHASH;
-    address public immutable MEMSWAP_NFT;
+    address public immutable MEMSWAP_ALPHA_NFT;
 
     mapping(address => uint256) public nonce;
     mapping(bytes32 => bytes32) public intentPrivateData;
@@ -144,7 +144,7 @@ contract MemswapERC20 is
 
     // --- Constructor ---
 
-    constructor(address memswapNft) EIP712("MemswapERC20", "1.0") {
+    constructor(address memswapAlphaNft) EIP712("MemswapERC20", "1.0") {
         AUTHORIZATION_TYPEHASH = keccak256(
             abi.encodePacked(
                 "Authorization(",
@@ -182,7 +182,7 @@ contract MemswapERC20 is
             )
         );
 
-        MEMSWAP_NFT = memswapNft;
+        MEMSWAP_ALPHA_NFT = memswapAlphaNft;
 
         defaultSlippage = 50;
         multiplier = 4;
@@ -942,7 +942,7 @@ contract MemswapERC20 is
             sourceBalanceAfter - sourceBalanceBefore
         );
 
-        Memswap(MEMSWAP_NFT).mint(intent.maker);
+        MemswapAlphaNFT(MEMSWAP_ALPHA_NFT).mint(intent.maker);
 
         uint256 coinbaseBalanceAfter = block.coinbase.balance;
         if (
