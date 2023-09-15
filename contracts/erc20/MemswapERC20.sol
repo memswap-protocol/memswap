@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -11,8 +12,9 @@ import {SignatureVerification} from "../common/SignatureVerification.sol";
 import {ISolutionERC20} from "./interfaces/ISolutionERC20.sol";
 
 contract MemswapERC20 is
-    ReentrancyGuard,
+    Ownable,
     PermitExecutor,
+    ReentrancyGuard,
     SignatureVerification
 {
     // --- Structs and enums ---
@@ -85,6 +87,7 @@ contract MemswapERC20 is
 
     // --- Events ---
 
+    event IncentivizationParametersUpdated();
     event IntentCancelled(bytes32 indexed intentHash);
     event IntentPrevalidated(bytes32 indexed intentHash);
     event IntentSolved(
@@ -125,17 +128,17 @@ contract MemswapERC20 is
     bytes32 public immutable AUTHORIZATION_TYPEHASH;
     bytes32 public immutable INTENT_TYPEHASH;
 
-    // Relevant for incentivized intents
-    uint16 public immutable DEFAULT_SLIPPAGE;
-    uint16 public immutable MULTIPLIER;
-    uint256 public immutable REQUIRED_PRIORITY_FEE;
-    uint256 public immutable MIN_TIP;
-    uint256 public immutable MAX_TIP;
-
     mapping(address => uint256) public nonce;
     mapping(bytes32 => bytes32) public intentPrivateData;
     mapping(bytes32 => IntentStatus) public intentStatus;
     mapping(bytes32 => Authorization) public authorization;
+
+    // Relevant for incentivized intents
+    uint16 public defaultSlippage;
+    uint16 public multiplier;
+    uint64 public requiredPriorityFee;
+    uint64 public minTip;
+    uint64 public maxTip;
 
     // --- Constructor ---
 
@@ -177,19 +180,34 @@ contract MemswapERC20 is
             )
         );
 
-        // The default slippage is 0.5%
-        DEFAULT_SLIPPAGE = 50;
-        MULTIPLIER = 4;
-        REQUIRED_PRIORITY_FEE = 1 gwei;
-        // Equivalent to a maxPriorityFee of 0.05 for a 500k gas solution
-        MIN_TIP = 0.05 gwei * 500000;
-        // Equivalent to a maxPriorityFee of 1.5 for a 500k gas solution
-        MAX_TIP = 1.5 gwei * 500000;
+        defaultSlippage = 50;
+        multiplier = 4;
+        requiredPriorityFee = 1 gwei;
+        minTip = 0.05 gwei * 500000;
+        maxTip = 1.5 gwei * 500000;
     }
 
     // Fallback
 
     receive() external payable {}
+
+    // Owner methods
+
+    function updateIncentivizationParameters(
+        uint16 newDefaultSlippage,
+        uint16 newMultiplier,
+        uint64 newRequiredPriorityFee,
+        uint64 newMinTip,
+        uint64 newMaxTip
+    ) external onlyOwner {
+        defaultSlippage = newDefaultSlippage;
+        multiplier = newMultiplier;
+        requiredPriorityFee = newRequiredPriorityFee;
+        minTip = newMinTip;
+        maxTip = newMaxTip;
+
+        emit IncentivizationParametersUpdated();
+    }
 
     // Public methods
 
@@ -685,27 +703,27 @@ contract MemswapERC20 is
 
             if (intent.isIncentivized) {
                 uint256 priorityFee = tx.gasprice - block.basefee;
-                if (priorityFee != REQUIRED_PRIORITY_FEE) {
+                if (priorityFee != requiredPriorityFee) {
                     revert InvalidPriorityFee();
                 }
 
                 uint16 slippage = intent.expectedAmountBps;
                 if (slippage == 0) {
-                    slippage = DEFAULT_SLIPPAGE;
+                    slippage = defaultSlippage;
                 }
 
                 uint128 slippageUnit = (slippage * expectedAmount) / 10000;
-                uint128 minValue = expectedAmount - slippageUnit * MULTIPLIER;
+                uint128 minValue = expectedAmount - slippageUnit * multiplier;
                 uint128 maxValue = expectedAmount + slippageUnit;
 
                 if (executeAmount >= maxValue) {
-                    requiredTip = MIN_TIP;
+                    requiredTip = minTip;
                 } else if (executeAmount <= minValue) {
-                    requiredTip = MAX_TIP;
+                    requiredTip = maxTip;
                 } else {
                     requiredTip =
-                        MAX_TIP -
-                        ((executeAmount - minValue) * (MAX_TIP - MIN_TIP)) /
+                        maxTip -
+                        ((executeAmount - minValue) * (maxTip - minTip)) /
                         (maxValue - minValue);
                 }
 
@@ -799,27 +817,27 @@ contract MemswapERC20 is
 
             if (intent.isIncentivized) {
                 uint256 priorityFee = tx.gasprice - block.basefee;
-                if (priorityFee != REQUIRED_PRIORITY_FEE) {
+                if (priorityFee != requiredPriorityFee) {
                     revert InvalidPriorityFee();
                 }
 
                 uint16 slippage = intent.expectedAmountBps;
                 if (slippage == 0) {
-                    slippage = DEFAULT_SLIPPAGE;
+                    slippage = defaultSlippage;
                 }
 
                 uint128 slippageUnit = (slippage * expectedAmount) / 10000;
                 uint128 minValue = expectedAmount - slippageUnit;
-                uint128 maxValue = expectedAmount + slippageUnit * MULTIPLIER;
+                uint128 maxValue = expectedAmount + slippageUnit * multiplier;
 
                 if (executeAmount >= maxValue) {
-                    requiredTip = MIN_TIP;
+                    requiredTip = minTip;
                 } else if (executeAmount <= minValue) {
-                    requiredTip = MAX_TIP;
+                    requiredTip = maxTip;
                 } else {
                     requiredTip =
-                        MIN_TIP +
-                        ((executeAmount - minValue) * (MAX_TIP - MIN_TIP)) /
+                        minTip +
+                        ((executeAmount - minValue) * (maxTip - minTip)) /
                         (maxValue - minValue);
                 }
 

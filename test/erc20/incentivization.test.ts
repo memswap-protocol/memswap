@@ -81,7 +81,7 @@ describe("[ERC20] Incentivization", async () => {
         "0x" + nextBaseFee.toNumber().toString(16),
       ]);
 
-      const requiredPriorityFee = await memswap.REQUIRED_PRIORITY_FEE();
+      const requiredPriorityFee = await memswap.requiredPriorityFee();
       await expect(
         solutionProxy.connect(bob).solve(
           intent,
@@ -105,7 +105,7 @@ describe("[ERC20] Incentivization", async () => {
         "0x" + nextBaseFee.toNumber().toString(16),
       ]);
 
-      const requiredPriorityFee = await memswap.REQUIRED_PRIORITY_FEE();
+      const requiredPriorityFee = await memswap.requiredPriorityFee();
       await expect(
         solutionProxy.connect(bob).solve(
           intent,
@@ -138,7 +138,7 @@ describe("[ERC20] Incentivization", async () => {
           intent.expectedAmountBps,
           intent.endAmount
         ),
-        maxPriorityFeePerGas: await memswap.REQUIRED_PRIORITY_FEE(),
+        maxPriorityFeePerGas: await memswap.requiredPriorityFee(),
       }
     );
   });
@@ -193,7 +193,7 @@ describe("[ERC20] Incentivization", async () => {
             intent.expectedAmountBps,
             intent.endAmount
           ).then((tip) => tip.add(1)),
-          maxPriorityFeePerGas: await memswap.REQUIRED_PRIORITY_FEE(),
+          maxPriorityFeePerGas: await memswap.requiredPriorityFee(),
         }
       )
     ).to.be.revertedWith("InvalidTip");
@@ -246,7 +246,7 @@ describe("[ERC20] Incentivization", async () => {
             intent.expectedAmountBps,
             intent.endAmount
           ).then((tip) => tip.sub(1)),
-          maxPriorityFeePerGas: await memswap.REQUIRED_PRIORITY_FEE(),
+          maxPriorityFeePerGas: await memswap.requiredPriorityFee(),
         }
       )
     ).to.be.revertedWith("InvalidTip");

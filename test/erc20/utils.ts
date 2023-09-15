@@ -187,44 +187,44 @@ export const getIncentivizationTip = async (
 ): Promise<BigNumber> => {
   const slippage =
     expectedAmountBps === 0
-      ? await memswap.DEFAULT_SLIPPAGE()
+      ? await memswap.defaultSlippage()
       : expectedAmountBps;
 
-  const MULTIPLIER = await memswap.MULTIPLIER();
-  const MIN_TIP = await memswap.MIN_TIP();
-  const MAX_TIP = await memswap.MAX_TIP();
+  const multiplier = await memswap.multiplier();
+  const minTip = await memswap.minTip();
+  const maxTip = await memswap.maxTip();
 
   const slippageUnit = bn(expectedAmount).mul(slippage).div(10000);
 
   if (isBuy) {
-    const minValue = bn(expectedAmount).sub(slippageUnit.mul(MULTIPLIER));
+    const minValue = bn(expectedAmount).sub(slippageUnit.mul(multiplier));
     const maxValue = bn(expectedAmount).add(slippageUnit);
 
     if (bn(executeAmount).gte(maxValue)) {
-      return MIN_TIP;
+      return minTip;
     } else if (bn(executeAmount).lte(minValue)) {
-      return MAX_TIP;
+      return maxTip;
     } else {
-      return MAX_TIP.sub(
+      return maxTip.sub(
         bn(executeAmount)
           .sub(minValue)
-          .mul(MAX_TIP.sub(MIN_TIP))
+          .mul(maxTip.sub(minTip))
           .div(maxValue.sub(minValue))
       );
     }
   } else {
     const minValue = bn(expectedAmount).sub(slippageUnit);
-    const maxValue = bn(expectedAmount).add(slippageUnit.mul(MULTIPLIER));
+    const maxValue = bn(expectedAmount).add(slippageUnit.mul(multiplier));
 
     if (bn(executeAmount).gte(maxValue)) {
-      return MIN_TIP;
+      return minTip;
     } else if (bn(executeAmount).lte(minValue)) {
-      return MAX_TIP;
+      return maxTip;
     } else {
-      return MIN_TIP.add(
+      return minTip.add(
         bn(executeAmount)
           .sub(minValue)
-          .mul(MAX_TIP.sub(MIN_TIP))
+          .mul(maxTip.sub(minTip))
           .div(maxValue.sub(minValue))
       );
     }

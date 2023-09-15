@@ -192,7 +192,7 @@ describe("[ERC20] Random", async () => {
             amount.sub(surplus)
           )
         ).add(incentivizationSurplus),
-        maxPriorityFeePerGas: await memswap.REQUIRED_PRIORITY_FEE(),
+        maxPriorityFeePerGas: await memswap.requiredPriorityFee(),
       }
     );
     if (nextBlockTime > intent.endTime) {
@@ -370,7 +370,7 @@ describe("[ERC20] Random", async () => {
             amount.add(surplus)
           )
         ).add(incentivizationSurplus),
-        maxPriorityFeePerGas: await memswap.REQUIRED_PRIORITY_FEE(),
+        maxPriorityFeePerGas: await memswap.requiredPriorityFee(),
       }
     );
     if (nextBlockTime > intent.endTime) {
