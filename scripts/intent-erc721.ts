@@ -36,7 +36,7 @@ const main = async () => {
     USDC: USDC[chainId],
   };
 
-  const buyToken = "0x9fa184c43b00da59b06f2296d509fbb465fb362e";
+  const buyToken = "0x18c7a6ad9901b53cc65055a358172f104f044fc0";
   const sellToken = CURRENCIES.ETH_IN;
 
   // Create intent
@@ -59,8 +59,8 @@ const main = async () => {
     isIncentivized: false,
     isCriteriaOrder: true,
     tokenIdOrCriteria: "0",
-    amount: "1",
-    endAmount: parseUnits("0.01", 18).toString(),
+    amount: "3",
+    endAmount: parseUnits("0.4", 18).toString(),
     startAmountBps: 0,
     expectedAmountBps: 0,
     // Mock value to pass type checks

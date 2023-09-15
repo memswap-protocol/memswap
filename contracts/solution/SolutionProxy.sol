@@ -240,7 +240,7 @@ contract SolutionProxy is ISolutionERC20, ISolutionERC721 {
 
     function callback(
         MemswapERC721.Intent memory intent,
-        MemswapERC721.TokenDetails[] memory tokenDetails,
+        MemswapERC721.TokenDetails[] memory,
         bytes memory data
     ) external override restrictCaller(memswapERC721) {
         Call[] memory calls = abi.decode(data, (Call[]));
@@ -253,19 +253,7 @@ contract SolutionProxy is ISolutionERC20, ISolutionERC721 {
             }
         }
 
-        uint256 amountToFill = tokenDetails.length;
         if (intent.isBuy) {
-            // Push outputs to maker
-            unchecked {
-                for (uint256 i; i < amountToFill; i++) {
-                    IERC721(intent.buyToken).transferFrom(
-                        owner,
-                        intent.maker,
-                        tokenDetails[i].tokenId
-                    );
-                }
-            }
-
             uint256 amountLeft;
 
             // Take profits in sell token

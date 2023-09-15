@@ -4,7 +4,7 @@
   "dependencies": {
     "@bull-board/express": "^5.8.0",
     "@flashbots/ethers-provider-bundle": "^0.6.2",
-    "@georgeroman/evm-tx-simulator": "^0.0.26",
+    "@georgeroman/evm-tx-simulator": "^0.0.28",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
     "@nomiclabs/hardhat-ethers": "^2.2.3",
     "@nomiclabs/hardhat-etherscan": "^3.1.7",

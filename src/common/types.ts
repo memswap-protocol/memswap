@@ -52,6 +52,7 @@ export type SolutionERC20 = {
   calls: Call[];
   fillAmount: string;
   executeAmount: string;
+  value: string;
   // Data needed for off-chain purposes
   gasConsumed: string;
   executeTokenToEthRate: string;
@@ -72,10 +73,15 @@ export type TokenDetails = {
 };
 
 export type SolutionERC721 = {
-  // On-chain data
-  data: string;
+  // Data needed for on-chain purposes
+  calls: Call[];
   fillTokenDetails: TokenDetails[];
-  // Off-chain data
-  // ERC721 solutions are not self-contained like ERC20 (might depend on multiple pre-transactions)
-  txs: TxData[];
+  executeAmount: string;
+  value: string;
+  // Data needed for off-chain purposes
+  gasConsumed: string;
+  executeTokenToEthRate: string;
+  executeTokenDecimals: number;
+  grossProfitInEth: string;
+  additionalTxs: TxData[];
 };

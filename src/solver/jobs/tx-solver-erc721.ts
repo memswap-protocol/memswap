@@ -20,6 +20,7 @@ import {
   PESSIMISTIC_BLOCK_TIME,
   bn,
   getAuthorizationHash,
+  getIncentivizationTip,
   getIntentHash,
   isIntentFilled,
   isTxIncluded,
@@ -33,6 +34,7 @@ import {
   getFlashbotsProvider,
   relayViaBloxroute,
   relayViaFlashbots,
+  relayViaTransaction,
 } from "../utils";
 
 const COMPONENT = "tx-solver-erc721";
@@ -82,11 +84,11 @@ const worker = new Worker(
 
       const perfTime2 = performance.now();
 
-      // Starting tip is 1 gwei
+      // Starting tip is 1 gwei (which is also the required priority fee for incentivized intents)
       let maxPriorityFeePerGas = parseUnits("1", "gwei");
 
       // TODO: Compute this dynamically
-      const gasLimit = 500000;
+      const gasLimit = 800000;
 
       // Approximations for gas used by memswap logic and gas used by swap logic
       const memswapGas = 150000;
@@ -167,7 +169,11 @@ const worker = new Worker(
           return;
         }
 
-        if (![solver.address, AddressZero].includes(intent.solver)) {
+        if (
+          ![solver.address, AddressZero, MATCHMAKER[config.chainId]].includes(
+            intent.solver
+          )
+        ) {
           logger.info(
             COMPONENT,
             JSON.stringify({
@@ -191,9 +197,6 @@ const worker = new Worker(
 
         const latestBlock = await provider.getBlock("latest");
         const latestTimestamp = latestBlock.timestamp + PESSIMISTIC_BLOCK_TIME;
-        const latestBaseFee = await provider
-          .getBlock("pending")
-          .then((b) => b!.baseFeePerGas!);
 
         const endAmount = bn(intent.endAmount);
         const startAmount = endAmount.sub(
@@ -246,47 +249,78 @@ const worker = new Worker(
           return;
         }
 
-        const grossProfitInETH = bn(solutionDetails.maxSellAmountInEth).sub(
+        const sellTokenDecimals = await solutions.uniswap
+          .getToken(intent.sellToken, provider)
+          .then((t) => t.decimals);
+        const grossProfitInEth = bn(solutionDetails.maxSellAmountInEth).sub(
           maxAmountIn
         );
 
-        const gasFee = latestBaseFee.add(maxPriorityFeePerGas).mul(gasConsumed);
-        const netProfitInETH = grossProfitInETH.sub(gasFee);
+        solution = {
+          calls: solutionDetails.calls,
+          fillTokenDetails: solutionDetails.tokenIds.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
+          executeAmount: maxAmountIn.toString(),
+          executeTokenToEthRate: solutionDetails.sellTokenToEthRate,
+          executeTokenDecimals: sellTokenDecimals,
+          grossProfitInEth: grossProfitInEth.toString(),
+          gasConsumed,
+          value: intent.isIncentivized
+            ? getIncentivizationTip(
+                intent.isBuy,
+                expectedAmount,
+                intent.expectedAmountBps,
+                maxAmountIn
+              ).toString()
+            : "0",
+          additionalTxs: solutionDetails.txs,
+        };
+      }
 
-        logger.info(
+      const latestBaseFee = await provider
+        .getBlock("pending")
+        .then((b) => b!.baseFeePerGas!);
+      const gasFee = latestBaseFee
+        .add(maxPriorityFeePerGas)
+        .mul(solution.gasConsumed);
+      const netProfitInEth = bn(solution.grossProfitInEth)
+        .sub(gasFee)
+        .sub(solution.value);
+
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          msg: "Profit breakdown",
+          solution,
+          netProfitInETH: netProfitInEth.toString(),
+          gasFee: gasFee.toString(),
+        })
+      );
+
+      if (config.chainId === 1 && netProfitInEth.lte(0)) {
+        logger.error(
           COMPONENT,
           JSON.stringify({
-            msg: "Profit breakdown",
-            solutionDetails,
-            maxAmountIn: maxAmountIn.toString(),
-            grossProfitInETH: grossProfitInETH.toString(),
-            netProfitInETH: netProfitInETH.toString(),
-            gasConsumed,
-            gasFee: gasFee.toString(),
+            msg: "Insufficient solver profit",
+            intentHash,
+            approvalTxOrTxHash,
           })
         );
+        return;
+      }
 
-        if (config.chainId === 1 && netProfitInETH.lte(0)) {
-          logger.error(
-            COMPONENT,
-            JSON.stringify({
-              msg: "Insufficient solver profit",
-              intentHash,
-              approvalTxOrTxHash,
-            })
-          );
-          return;
-        }
-
-        if (netProfitInETH.gt(0)) {
+      if (netProfitInEth.gt(0)) {
+        if (!intent.isIncentivized) {
           // Assume other solvers compete for the same intent and so increase the
           // tip to the block builder as much as possible while we're profitable.
           // This will also result in the bundles being included faster.
           const minTipIncrement = parseUnits("0.01", "gwei");
-          const gasPerTipIncrement = minTipIncrement.mul(gasConsumed);
+          const gasPerTipIncrement = minTipIncrement.mul(solution.gasConsumed);
 
           // Deduct from the 40% of the profit
-          const minTipUnits = netProfitInETH
+          const minTipUnits = netProfitInEth
             .mul(4000)
             .div(10000)
             .div(gasPerTipIncrement);
@@ -295,7 +329,9 @@ const worker = new Worker(
           );
 
           // Give 50% of the profit back to the user
-          maxAmountIn = maxAmountIn.sub(netProfitInETH.mul(5000).div(10000));
+          solution.executeAmount = bn(solution.executeAmount)
+            .sub(netProfitInEth.mul(5000).div(10000))
+            .toString();
 
           // The rest of 10% from the profit is kept
 
@@ -313,18 +349,6 @@ const worker = new Worker(
             })
           );
         }
-
-        solution = {
-          txs: solutionDetails.txs,
-          data: defaultAbiCoder.encode(
-            ["(address to, bytes data, uint256 value)[]"],
-            [solutionDetails.calls]
-          ),
-          fillTokenDetails: solutionDetails.tokenIds.map((tokenId) => ({
-            tokenId,
-            criteriaProof: [],
-          })),
-        };
       }
 
       const perfTime3 = performance.now();
@@ -392,11 +416,18 @@ const worker = new Worker(
 
         let nonce = await provider.getTransactionCount(solver.address);
 
+        const encodedSolution = {
+          data: defaultAbiCoder.encode(
+            ["(address to, bytes data, uint256 value)[]"],
+            [solution.calls]
+          ),
+          fillTokenDetails: solution.fillTokenDetails,
+        };
         const solverTxs = [
-          ...solution.txs,
+          ...solution.additionalTxs,
           {
             to: SOLUTION_PROXY[config.chainId],
-            value: 0,
+            value: solution.value,
             data: new Interface([
               `
                 function ${method}(
@@ -454,12 +485,12 @@ const worker = new Worker(
               method === "solveWithSignatureAuthorizationCheckERC721"
                 ? [
                     intent,
-                    solution,
+                    encodedSolution,
                     authorization,
                     authorization?.signature!,
                     [],
                   ]
-                : [intent, solution, []]
+                : [intent, encodedSolution, []]
             ),
           },
         ];
@@ -489,6 +520,15 @@ const worker = new Worker(
       const includeApprovalTx =
         approvalTxHash && !(await isTxIncluded(approvalTxHash, provider));
 
+      // If specified and the conditions allow it, use direct transactions rather than relays
+      let useRelay = true;
+      if (
+        !includeApprovalTx &&
+        Boolean(Number(process.env.RELAY_DIRECTLY_WHEN_POSSIBLE))
+      ) {
+        useRelay = false;
+      }
+
       const relayMethod = config.bloxrouteAuth
         ? relayViaBloxroute
         : relayViaFlashbots;
@@ -498,23 +538,39 @@ const worker = new Worker(
       if (intent.solver !== MATCHMAKER[config.chainId]) {
         // Solve directly
 
-        // If the approval transaction is still pending, include it in the bundle
         const fillerTxs = await getFillerTxs(intent);
-        const txs = includeApprovalTx ? [approvalTx!, ...fillerTxs] : fillerTxs;
+        useRelay = useRelay || fillerTxs.length > 1;
 
-        const targetBlock =
-          (await provider.getBlock("latest").then((b) => b.number)) + 1;
+        if (useRelay) {
+          // If the approval transaction is still pending, include it in the bundle
+          const txs = includeApprovalTx
+            ? [approvalTx!, ...fillerTxs]
+            : fillerTxs;
 
-        // Relay
-        await relayMethod(
-          intentHash,
-          provider,
-          flashbotsProvider,
-          txs,
-          includeApprovalTx ? [approvalTx!] : [],
-          targetBlock,
-          COMPONENT
-        );
+          const targetBlock =
+            (await provider.getBlock("latest").then((b) => b.number)) + 1;
+
+          // Relay
+          await relayMethod(
+            intentHash,
+            provider,
+            flashbotsProvider,
+            txs,
+            includeApprovalTx ? [approvalTx!] : [],
+            targetBlock,
+            COMPONENT
+          );
+        } else {
+          // At this point, for sure the approval transaction was already included, so we can skip it
+
+          // Relay
+          await relayViaTransaction(
+            intentHash,
+            provider,
+            fillerTxs[0].signedTransaction,
+            COMPONENT
+          );
+        }
       } else {
         // Solve via matchmaker
 
@@ -569,22 +625,36 @@ const worker = new Worker(
             throw new Error("Authorization deadline exceeded");
           }
 
-          // If the approval transaction is still pending, include it in the bundle
           const fillerTxs = await getFillerTxs(intent, authorization);
-          const txs = includeApprovalTx
-            ? [approvalTx!, ...fillerTxs]
-            : fillerTxs;
+          useRelay = useRelay || fillerTxs.length > 1;
 
-          // Relay
-          await relayMethod(
-            intentHash,
-            provider,
-            flashbotsProvider,
-            txs,
-            includeApprovalTx ? [approvalTx!] : [],
-            targetBlock,
-            COMPONENT
-          );
+          if (useRelay) {
+            // If the approval transaction is still pending, include it in the bundle
+            const txs = includeApprovalTx
+              ? [approvalTx!, ...fillerTxs]
+              : fillerTxs;
+
+            // Relay
+            await relayMethod(
+              intentHash,
+              provider,
+              flashbotsProvider,
+              txs,
+              includeApprovalTx ? [approvalTx!] : [],
+              targetBlock,
+              COMPONENT
+            );
+          } else {
+            // At this point, for sure the approval transaction was already included, so we can skip it
+
+            // Relay
+            await relayViaTransaction(
+              intentHash,
+              provider,
+              fillerTxs[0].signedTransaction,
+              COMPONENT
+            );
+          }
         }
       }
 

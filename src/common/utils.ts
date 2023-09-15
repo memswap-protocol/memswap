@@ -3,6 +3,7 @@ import { Provider } from "@ethersproject/abstract-provider";
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
 import { Contract } from "@ethersproject/contracts";
 import { _TypedDataEncoder } from "@ethersproject/hash";
+import { parseUnits } from "@ethersproject/units";
 
 import { MEMSWAP_ERC20, MEMSWAP_ERC721 } from "./addresses";
 import { Authorization, IntentERC20, IntentERC721, Protocol } from "./types";
@@ -187,3 +188,54 @@ export const getEIP712TypesForIntent = (protocol: Protocol) => ({
     },
   ],
 });
+
+export const getIncentivizationTip = (
+  isBuy: boolean,
+  expectedAmount: BigNumberish,
+  expectedAmountBps: number,
+  executeAmount: BigNumberish
+): BigNumber => {
+  const defaultSlippage = 50;
+  const multiplier = 4;
+  const minTip = parseUnits("0.05", "gwei").mul(500000);
+  const maxTip = parseUnits("1.5", "gwei").mul(500000);
+
+  const slippage =
+    expectedAmountBps === 0 ? defaultSlippage : expectedAmountBps;
+
+  const slippageUnit = bn(expectedAmount).mul(slippage).div(10000);
+
+  if (isBuy) {
+    const minValue = bn(expectedAmount).sub(slippageUnit.mul(multiplier));
+    const maxValue = bn(expectedAmount).add(slippageUnit);
+
+    if (bn(executeAmount).gte(maxValue)) {
+      return minTip;
+    } else if (bn(executeAmount).lte(minValue)) {
+      return maxTip;
+    } else {
+      return maxTip.sub(
+        bn(executeAmount)
+          .sub(minValue)
+          .mul(maxTip.sub(minTip))
+          .div(maxValue.sub(minValue))
+      );
+    }
+  } else {
+    const minValue = bn(expectedAmount).sub(slippageUnit);
+    const maxValue = bn(expectedAmount).add(slippageUnit.mul(multiplier));
+
+    if (bn(executeAmount).gte(maxValue)) {
+      return minTip;
+    } else if (bn(executeAmount).lte(minValue)) {
+      return maxTip;
+    } else {
+      return minTip.add(
+        bn(executeAmount)
+          .sub(minValue)
+          .mul(maxTip.sub(minTip))
+          .div(maxValue.sub(minValue))
+      );
+    }
+  }
+};
