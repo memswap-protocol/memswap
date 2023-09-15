@@ -1,7 +1,13 @@
+import { Interface } from "@ethersproject/abi";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import hre, { ethers } from "hardhat";
 
-import { MEMSWAP_ERC20, MEMSWAP_ERC721, SOLVER } from "../src/common/addresses";
+import {
+  MEMSWAP_ERC20,
+  MEMSWAP_ERC721,
+  MEMSWAP_NFT,
+  SOLVER,
+} from "../src/common/addresses";
 
 const deployContract = async (
   deployer: SignerWithAddress,
@@ -32,18 +38,40 @@ const main = async () => {
   // Common
   // await deployContract(deployer, "MEMETH");
 
+  // MemswapNFT
+  // MEMSWAP_NFT[chainId] = await deployContract(deployer, "Memswap", [
+  //   deployer.address,
+  //   "https://test-tokens-metadata.vercel.app/api/erc721/",
+  //   "https://test-tokens-metadata.vercel.app/api/erc721/contract",
+  // ]);
+
   // MemswapERC20
-  // MEMSWAP_ERC20[chainId] = await deployContract(deployer, "MemswapERC20");
+  // MEMSWAP_ERC20[chainId] = await deployContract(deployer, "MemswapERC20", [
+  //   MEMSWAP_NFT[chainId],
+  // ]);
 
   // MemswapERC721
-  // MEMSWAP_ERC721[chainId] = await deployContract(deployer, "MemswapERC721");
+  // MEMSWAP_ERC721[chainId] = await deployContract(deployer, "MemswapERC721", [
+  //   MEMSWAP_NFT[chainId],
+  // ]);
 
   // SolutionProxy
-  await deployContract(deployer, "SolutionProxy", [
-    SOLVER[chainId],
-    MEMSWAP_ERC20[chainId],
-    MEMSWAP_ERC721[chainId],
-  ]);
+  // await deployContract(deployer, "SolutionProxy", [
+  //   SOLVER[chainId],
+  //   MEMSWAP_ERC20[chainId],
+  //   MEMSWAP_ERC721[chainId],
+  // ]);
+
+  // Set MemswapERC20 and MemswapERC721 as minters
+  // await deployer.sendTransaction({
+  //   to: MEMSWAP_NFT[chainId],
+  //   data: new Interface([
+  //     "function setIsAllowedToMint(address[] minters, bool[] allowed)",
+  //   ]).encodeFunctionData("setIsAllowedToMint", [
+  //     [MEMSWAP_ERC20[chainId], MEMSWAP_ERC721[chainId]],
+  //     [true, true],
+  //   ]),
+  // });
 };
 
 main()

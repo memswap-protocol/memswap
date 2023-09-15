@@ -28,6 +28,7 @@ describe("[ERC20] Misc", async () => {
   let carol: SignerWithAddress;
 
   let memswap: Contract;
+  let nft: Contract;
 
   let solutionProxy: Contract;
   let token0: Contract;
@@ -38,9 +39,12 @@ describe("[ERC20] Misc", async () => {
 
     [deployer, alice, bob, carol] = await ethers.getSigners();
 
+    nft = await ethers
+      .getContractFactory("Memswap")
+      .then((factory) => factory.deploy(deployer.address, "", ""));
     memswap = await ethers
       .getContractFactory("MemswapERC20")
-      .then((factory) => factory.deploy());
+      .then((factory) => factory.deploy(nft.address));
 
     solutionProxy = await ethers
       .getContractFactory("MockSolutionProxy")
@@ -51,6 +55,9 @@ describe("[ERC20] Misc", async () => {
     token1 = await ethers
       .getContractFactory("MockERC20")
       .then((factory) => factory.deploy());
+
+    // Allowed the Memswap contract to mint
+    await nft.connect(deployer).setIsAllowedToMint([memswap.address], [true]);
 
     // Send some ETH to solution proxy contract for the tests where `tokenOut` is ETH
     await deployer.sendTransaction({

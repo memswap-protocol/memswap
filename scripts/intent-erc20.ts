@@ -59,8 +59,8 @@ const main = async () => {
     isIncentivized: true,
     amount: parseUnits("10000", 6).toString(),
     endAmount: parseUnits("0.005", 18).toString(),
-    startAmountBps: 0,
-    expectedAmountBps: 0,
+    startAmountBps: 50,
+    expectedAmountBps: 200,
     // Mock value to pass type checks
     signature: "0x",
   };

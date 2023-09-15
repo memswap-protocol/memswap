@@ -566,6 +566,7 @@ const worker = new Worker(
           // Relay
           await relayViaTransaction(
             intentHash,
+            intent.isIncentivized,
             provider,
             fillerTxs[0].signedTransaction,
             COMPONENT
@@ -650,6 +651,7 @@ const worker = new Worker(
             // Relay
             await relayViaTransaction(
               intentHash,
+              intent.isIncentivized,
               provider,
               fillerTxs[0].signedTransaction,
               COMPONENT

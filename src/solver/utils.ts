@@ -37,6 +37,7 @@ getFlashbotsProvider();
 
 export const relayViaTransaction = async (
   intentHash: string,
+  isIncentivized: boolean,
   provider: JsonRpcProvider,
   tx: string,
   logComponent: string
@@ -56,7 +57,9 @@ export const relayViaTransaction = async (
       provider
     );
   } catch {
-    logger.error(
+    // For some reason, incentivized intents fail simulation very often
+
+    logger[isIncentivized ? "info" : "error"](
       logComponent,
       JSON.stringify({
         msg: "Simulation failed",
@@ -65,7 +68,9 @@ export const relayViaTransaction = async (
       })
     );
 
-    throw new Error("Simulation failed");
+    if (!isIncentivized) {
+      throw new Error("Simulation failed");
+    }
   }
 
   logger.info(
