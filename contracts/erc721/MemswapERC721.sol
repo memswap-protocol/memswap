@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -9,11 +10,12 @@ import {EIP712} from "../common/EIP712.sol";
 import {PermitExecutor} from "../common/PermitExecutor.sol";
 import {SignatureVerification} from "../common/SignatureVerification.sol";
 
-import {ISolution} from "./interfaces/ISolution.sol";
+import {ISolutionERC721} from "./interfaces/ISolutionERC721.sol";
 
 contract MemswapERC721 is
-    ReentrancyGuard,
+    Ownable,
     PermitExecutor,
+    ReentrancyGuard,
     SignatureVerification
 {
     // --- Structs and enums ---
@@ -45,6 +47,7 @@ contract MemswapERC721 is
         uint32 endTime;
         bool isPartiallyFillable;
         bool isSmartOrder;
+        bool isIncentivized;
         bool isCriteriaOrder;
         uint256 tokenIdOrCriteria;
         uint128 amount;
@@ -92,6 +95,7 @@ contract MemswapERC721 is
 
     // --- Events ---
 
+    event IncentivizationParametersUpdated();
     event IntentCancelled(bytes32 indexed intentHash);
     event IntentPrevalidated(bytes32 indexed intentHash);
     event IntentSolved(
@@ -120,8 +124,10 @@ contract MemswapERC721 is
     error IntentIsNotStarted();
     error InvalidCriteriaProof();
     error InvalidFillAmount();
+    error InvalidPriorityFee();
     error InvalidSolution();
     error InvalidStartAndEndTimes();
+    error InvalidTip();
     error InvalidTokenId();
     error MerkleTreeTooLarge();
     error Unauthorized();
@@ -136,6 +142,13 @@ contract MemswapERC721 is
     mapping(bytes32 => bytes32) public intentPrivateData;
     mapping(bytes32 => IntentStatus) public intentStatus;
     mapping(bytes32 => Authorization) public authorization;
+
+    // Relevant for incentivized intents
+    uint16 public defaultSlippage;
+    uint16 public multiplier;
+    uint64 public requiredPriorityFee;
+    uint64 public minTip;
+    uint64 public maxTip;
 
     // --- Constructor ---
 
@@ -168,6 +181,7 @@ contract MemswapERC721 is
                 "uint256 nonce,",
                 "bool isPartiallyFillable,",
                 "bool isSmartOrder,",
+                "bool isIncentivized,",
                 "bool isCriteriaOrder,",
                 "uint256 tokenIdOrCriteria,",
                 "uint128 amount,",
@@ -177,11 +191,35 @@ contract MemswapERC721 is
                 ")"
             )
         );
+
+        defaultSlippage = 50;
+        multiplier = 4;
+        requiredPriorityFee = 1 gwei;
+        minTip = 0.05 gwei * 500000;
+        maxTip = 1.5 gwei * 500000;
     }
 
     // Fallback
 
     receive() external payable {}
+
+    // Owner methods
+
+    function updateIncentivizationParameters(
+        uint16 newDefaultSlippage,
+        uint16 newMultiplier,
+        uint64 newRequiredPriorityFee,
+        uint64 newMinTip,
+        uint64 newMaxTip
+    ) external onlyOwner {
+        defaultSlippage = newDefaultSlippage;
+        multiplier = newMultiplier;
+        requiredPriorityFee = newRequiredPriorityFee;
+        minTip = newMinTip;
+        maxTip = newMaxTip;
+
+        emit IncentivizationParametersUpdated();
+    }
 
     // Public methods
 
@@ -485,6 +523,7 @@ contract MemswapERC721 is
                 abi.encode(
                     intent.isPartiallyFillable,
                     intent.isSmartOrder,
+                    intent.isIncentivized,
                     intent.isCriteriaOrder,
                     intent.tokenIdOrCriteria,
                     intent.amount,
@@ -655,7 +694,7 @@ contract MemswapERC721 is
         uint128 makerBuyBalanceDiff,
         uint128 makerSellBalanceDiff,
         uint128 sourceBalanceDiff
-    ) internal {
+    ) internal returns (uint256 requiredTip) {
         bytes32 intentHash = getIntentHash(intent);
 
         uint128 amountToFill = uint128(tokenDetailsToFill.length);
@@ -753,6 +792,47 @@ contract MemswapERC721 is
                 }
             }
 
+            if (intent.isIncentivized) {
+                uint256 priorityFee = tx.gasprice - block.basefee;
+                if (priorityFee != requiredPriorityFee) {
+                    revert InvalidPriorityFee();
+                }
+
+                uint16 slippage = intent.expectedAmountBps;
+                if (slippage == 0) {
+                    slippage = defaultSlippage;
+                }
+
+                uint128 slippageUnit = (slippage * expectedAmount) / 10000;
+                uint128 minValue = expectedAmount - slippageUnit * multiplier;
+                uint128 maxValue = expectedAmount + slippageUnit;
+
+                if (executeAmount >= maxValue) {
+                    requiredTip = minTip;
+                } else if (executeAmount <= minValue) {
+                    requiredTip = maxTip;
+                } else {
+                    requiredTip =
+                        maxTip -
+                        ((executeAmount - minValue) * (maxTip - minTip)) /
+                        (maxValue - minValue);
+                }
+
+                uint256 balance = address(this).balance;
+                if (balance < requiredTip) {
+                    revert InvalidTip();
+                } else {
+                    block.coinbase.transfer(requiredTip);
+                }
+
+                uint256 leftover = address(this).balance;
+                if (leftover > 0) {
+                    ISolutionERC721(msg.sender).refund{
+                        value: address(this).balance
+                    }();
+                }
+            }
+
             emit IntentSolved(
                 intentHash,
                 intent.isBuy,
@@ -834,6 +914,47 @@ contract MemswapERC721 is
                 }
             }
 
+            if (intent.isIncentivized) {
+                uint256 priorityFee = tx.gasprice - block.basefee;
+                if (priorityFee != requiredPriorityFee) {
+                    revert InvalidPriorityFee();
+                }
+
+                uint16 slippage = intent.expectedAmountBps;
+                if (slippage == 0) {
+                    slippage = defaultSlippage;
+                }
+
+                uint128 slippageUnit = (slippage * expectedAmount) / 10000;
+                uint128 minValue = expectedAmount - slippageUnit;
+                uint128 maxValue = expectedAmount + slippageUnit * multiplier;
+
+                if (executeAmount >= maxValue) {
+                    requiredTip = minTip;
+                } else if (executeAmount <= minValue) {
+                    requiredTip = maxTip;
+                } else {
+                    requiredTip =
+                        minTip +
+                        ((executeAmount - minValue) * (maxTip - minTip)) /
+                        (maxValue - minValue);
+                }
+
+                uint256 balance = address(this).balance;
+                if (balance < requiredTip) {
+                    revert InvalidTip();
+                } else {
+                    block.coinbase.transfer(requiredTip);
+                }
+
+                uint256 leftover = address(this).balance;
+                if (leftover > 0) {
+                    ISolutionERC721(msg.sender).refund{
+                        value: address(this).balance
+                    }();
+                }
+            }
+
             emit IntentSolved(
                 intentHash,
                 intent.isBuy,
@@ -859,6 +980,8 @@ contract MemswapERC721 is
         Solution calldata solution,
         uint128 amountToCheck
     ) internal {
+        uint256 coinbaseBalanceBefore = block.coinbase.balance;
+
         // Determine the token for which the amount is variable
         // - isBuy = true -> sellToken (exact output, variable input)
         // - isBuy = false -> buyToken (exact input, variable output)
@@ -887,7 +1010,7 @@ contract MemswapERC721 is
         );
 
         // Solve
-        ISolution(msg.sender).callback(
+        ISolutionERC721(msg.sender).callback(
             intent,
             actualTokenDetailsToFill,
             solution.data
@@ -908,7 +1031,7 @@ contract MemswapERC721 is
         );
 
         // Post-process
-        _postProcess(
+        uint256 requiredTip = _postProcess(
             intent,
             actualTokenDetailsToFill,
             amountToCheck,
@@ -916,6 +1039,14 @@ contract MemswapERC721 is
             makerSellBalanceBefore - makerSellBalanceAfter,
             sourceBalanceAfter - sourceBalanceBefore
         );
+
+        uint256 coinbaseBalanceAfter = block.coinbase.balance;
+        if (
+            intent.isIncentivized &&
+            coinbaseBalanceAfter - coinbaseBalanceBefore != requiredTip
+        ) {
+            revert InvalidTip();
+        }
     }
 
     /**
@@ -1124,23 +1255,23 @@ contract MemswapERC721 is
     function _lookupBulkOrderTypehash(
         uint256 treeHeight
     ) internal pure override returns (bytes32 typeHash) {
-        // keccak256("BatchIntent(Intent[2]...[2] tree)Intent(bool isBuy,address buyToken,address sellToken,address maker,address solver,address source,uint16 feeBps,uint16 surplusBps,uint32 startTime,uint32 endTime,uint256 nonce,bool isPartiallyFillable,bool isSmartOrder,bool isCriteriaOrder,uint256 tokenIdOrCriteria,uint128 amount,uint128 endAmount,uint16 startAmountBps,uint16 expectedAmountBps)")
+        // keccak256("BatchIntent(Intent[2]...[2] tree)Intent(bool isBuy,address buyToken,address sellToken,address maker,address solver,address source,uint16 feeBps,uint16 surplusBps,uint32 startTime,uint32 endTime,uint256 nonce,bool isPartiallyFillable,bool isSmartOrder,bool isIncentivized,bool isCriteriaOrder,uint256 tokenIdOrCriteria,uint128 amount,uint128 endAmount,uint16 startAmountBps,uint16 expectedAmountBps)")
         if (treeHeight == 1) {
-            typeHash = 0xd816b95a11d40d32035f81a04cfdf1c5ec0824d5bd737f56f07c9b7ba1f48cf0;
+            typeHash = 0xe2f9470ce56204b03b7f6a5da488bc405af34f9420fea7d23b9caa0e9f13b34b;
         } else if (treeHeight == 2) {
-            typeHash = 0x635255fbff32fdc0de1ea086ac3b980a482aab837c959678ddc747aff917d8f2;
+            typeHash = 0x38f007c7b676c4e3c06780a2eb36358363d4dbba803a413335dac32c672faf5c;
         } else if (treeHeight == 3) {
-            typeHash = 0x2495330cc098a21759208e1e2a52928af2da4da2eb91602510d7f802799f0545;
+            typeHash = 0xaebed864141699427ffecf19db72b18a6519621259be5ad00bc0cd844551e7fb;
         } else if (treeHeight == 4) {
-            typeHash = 0x44d6b9ee9078785878dc4a7e6861911c727e4ecd700ce89285c3e34dfe17447d;
+            typeHash = 0xb4f25ef2f5b34b8c0b2db30279b8b106d127c64b562153796fd3b9b826e08094;
         } else if (treeHeight == 5) {
-            typeHash = 0xb751c63860c7d6d023c60ce1c5778a2241f3617f27f16a9c1d8a8818348f509a;
+            typeHash = 0xed14a836400793f5936eecd4130e39ee9d8d69c4815012477a72d0d8ccacb560;
         } else if (treeHeight == 6) {
-            typeHash = 0x5acb5ce19e40ef6bf66a9a0a3dbe00e7f2be0fad966ead55c775eeacad8b851f;
+            typeHash = 0xd51da1ce6fb4cad122d966c4939bfbe48df609c2321c0aa5ad45f30d93c5bce4;
         } else if (treeHeight == 7) {
-            typeHash = 0x9496383c5e1cf9357fa1195c016a7b3d5a8cb55d01f96143ca7f348e3a19dc4e;
+            typeHash = 0x7f233ad630dc1877c45a371e9b3c2e9b0bf2d2a42d50f3ce4f6f548f50a4ce7b;
         } else if (treeHeight == 8) {
-            typeHash = 0xd8b574aec11b6732fd05f0e0c1b3bd24084c1d0078d9c9f6aebbdaffff96f88c;
+            typeHash = 0x075e03a4af0aeb0971b0a23187d89b336494d815e4007aed2a282b2ff023dea8;
         } else {
             revert MerkleTreeTooLarge();
         }

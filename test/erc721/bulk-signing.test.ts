@@ -68,6 +68,7 @@ describe("[ERC721] Bulk-signing", async () => {
         nonce: 0,
         isPartiallyFillable: true,
         isSmartOrder: false,
+        isIncentivized: false,
         isCriteriaOrder: true,
         tokenIdOrCriteria: 0,
         amount: 1,

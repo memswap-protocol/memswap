@@ -6,15 +6,11 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import {
-  Intent,
-  getIncentivizationTip,
-  getIntentHash,
-  signIntent,
-} from "./utils";
+import { Intent, getIntentHash, signIntent } from "./utils";
 import {
   bn,
   getCurrentTimestamp,
+  getIncentivizationTip,
   getRandomBoolean,
   getRandomFloat,
   getRandomInteger,

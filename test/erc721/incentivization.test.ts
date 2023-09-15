@@ -9,7 +9,7 @@ import hre, { ethers } from "hardhat";
 import { Intent, signIntent } from "./utils";
 import { getCurrentTimestamp, getIncentivizationTip } from "../utils";
 
-describe("[ERC20] Incentivization", async () => {
+describe("[ERC721] Incentivization", async () => {
   let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
@@ -24,17 +24,17 @@ describe("[ERC20] Incentivization", async () => {
     [deployer, alice, bob] = await ethers.getSigners();
 
     memswap = await ethers
-      .getContractFactory("MemswapERC20")
+      .getContractFactory("MemswapERC721")
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC20")
+      .getContractFactory("MockSolutionProxyERC721")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
       .then((factory) => factory.deploy());
     token1 = await ethers
-      .getContractFactory("MockERC20")
+      .getContractFactory("MockERC721")
       .then((factory) => factory.deploy());
 
     // Send some ETH to solution proxy contract for the tests where `tokenOut` is ETH
@@ -49,9 +49,9 @@ describe("[ERC20] Incentivization", async () => {
 
     // Generate intent
     const intent: Intent = {
-      isBuy: false,
-      buyToken: token0.address,
-      sellToken: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       solver: AddressZero,
       source: AddressZero,
@@ -63,16 +63,21 @@ describe("[ERC20] Incentivization", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       isIncentivized: true,
-      amount: ethers.utils.parseEther("0.5"),
+      isCriteriaOrder: true,
+      tokenIdOrCriteria: 0,
+      amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
+      signature: "0x",
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token1.connect(alice).mint(intent.amount);
-    await token1.connect(alice).approve(memswap.address, intent.amount);
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+
+    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
     // The priority fee cannot be lower than required
     {
@@ -87,7 +92,10 @@ describe("[ERC20] Incentivization", async () => {
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
-            fillAmount: intent.amount,
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
           [],
           {
@@ -111,7 +119,10 @@ describe("[ERC20] Incentivization", async () => {
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
-            fillAmount: intent.amount,
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
           },
           [],
           {
@@ -127,7 +138,10 @@ describe("[ERC20] Incentivization", async () => {
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
-        fillAmount: intent.amount,
+        fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+          tokenId,
+          criteriaProof: [],
+        })),
       },
       [],
       {
@@ -148,9 +162,9 @@ describe("[ERC20] Incentivization", async () => {
 
     // Generate intent
     const intent: Intent = {
-      isBuy: false,
-      buyToken: token0.address,
-      sellToken: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       solver: AddressZero,
       source: AddressZero,
@@ -162,16 +176,21 @@ describe("[ERC20] Incentivization", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       isIncentivized: true,
-      amount: ethers.utils.parseEther("0.5"),
+      isCriteriaOrder: true,
+      tokenIdOrCriteria: 0,
+      amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
+      signature: "0x",
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token1.connect(alice).mint(intent.amount);
-    await token1.connect(alice).approve(memswap.address, intent.amount);
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+
+    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
     // Enable out-of-band payments to the builder
     await solutionProxy.connect(bob).setPayBuilderOnRefund(true);
@@ -182,7 +201,10 @@ describe("[ERC20] Incentivization", async () => {
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
-          fillAmount: intent.amount,
+          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
         },
         [],
         {
@@ -204,9 +226,9 @@ describe("[ERC20] Incentivization", async () => {
 
     // Generate intent
     const intent: Intent = {
-      isBuy: false,
-      buyToken: token0.address,
-      sellToken: token1.address,
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
       maker: alice.address,
       solver: AddressZero,
       source: AddressZero,
@@ -218,16 +240,21 @@ describe("[ERC20] Incentivization", async () => {
       isPartiallyFillable: true,
       isSmartOrder: false,
       isIncentivized: true,
-      amount: ethers.utils.parseEther("0.5"),
+      isCriteriaOrder: true,
+      tokenIdOrCriteria: 0,
+      amount: 2,
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
       expectedAmountBps: 0,
+      signature: "0x",
     };
     intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
-    await token1.connect(alice).mint(intent.amount);
-    await token1.connect(alice).approve(memswap.address, intent.amount);
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+
+    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
     // The solution will fail if the tip the builder was too low
     await expect(
@@ -235,7 +262,10 @@ describe("[ERC20] Incentivization", async () => {
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
-          fillAmount: intent.amount,
+          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
         },
         [],
         {

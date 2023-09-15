@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {MemswapERC721} from "../MemswapERC721.sol";
 import {PermitExecutor} from "../../common/PermitExecutor.sol";
 
-import {ISolution} from "../interfaces/ISolution.sol";
+import {ISolutionERC721} from "../interfaces/ISolutionERC721.sol";
 
 interface IMintableERC20 is IERC20 {
     function mint(uint256 amount) external;
@@ -18,11 +18,18 @@ interface IMintableERC721 is IERC721 {
     function mint(uint256 tokenId) external;
 }
 
-contract MockSolutionProxyERC721 is ISolution {
+contract MockSolutionProxyERC721 is ISolutionERC721 {
     address public memswap;
+    bool public payBuilderOnRefund;
+
+    event Refunded(uint256 amount);
 
     constructor(address memswapAddress) {
         memswap = memswapAddress;
+    }
+
+    function setPayBuilderOnRefund(bool _payBuilderOnRefund) external {
+        payBuilderOnRefund = _payBuilderOnRefund;
     }
 
     receive() external payable {}
@@ -31,20 +38,22 @@ contract MockSolutionProxyERC721 is ISolution {
         MemswapERC721.Intent calldata intent,
         MemswapERC721.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
-    ) external {
-        MemswapERC721(payable(memswap)).solve(intent, solution, permits);
+    ) external payable {
+        MemswapERC721(payable(memswap)).solve{value: msg.value}(
+            intent,
+            solution,
+            permits
+        );
     }
 
     function solveWithOnChainAuthorizationCheck(
         MemswapERC721.Intent calldata intent,
         MemswapERC721.Solution calldata solution,
         PermitExecutor.Permit[] calldata permits
-    ) external {
-        MemswapERC721(payable(memswap)).solveWithOnChainAuthorizationCheck(
-            intent,
-            solution,
-            permits
-        );
+    ) external payable {
+        MemswapERC721(payable(memswap)).solveWithOnChainAuthorizationCheck{
+            value: msg.value
+        }(intent, solution, permits);
     }
 
     function solveWithSignatureAuthorizationCheck(
@@ -53,14 +62,18 @@ contract MockSolutionProxyERC721 is ISolution {
         MemswapERC721.Authorization calldata auth,
         bytes calldata authSignature,
         PermitExecutor.Permit[] calldata permits
-    ) external {
-        MemswapERC721(payable(memswap)).solveWithSignatureAuthorizationCheck(
-            intent,
-            solution,
-            auth,
-            authSignature,
-            permits
-        );
+    ) external payable {
+        MemswapERC721(payable(memswap)).solveWithSignatureAuthorizationCheck{
+            value: msg.value
+        }(intent, solution, auth, authSignature, permits);
+    }
+
+    function refund() external payable {
+        if (payBuilderOnRefund) {
+            block.coinbase.transfer(msg.value);
+        }
+
+        emit Refunded(msg.value);
     }
 
     function callback(

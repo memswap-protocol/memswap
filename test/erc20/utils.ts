@@ -178,59 +178,6 @@ export const INTENT_EIP712_TYPES = {
   ],
 };
 
-export const getIncentivizationTip = async (
-  memswap: Contract,
-  isBuy: boolean,
-  expectedAmount: BigNumberish,
-  expectedAmountBps: number,
-  executeAmount: BigNumberish
-): Promise<BigNumber> => {
-  const slippage =
-    expectedAmountBps === 0
-      ? await memswap.defaultSlippage()
-      : expectedAmountBps;
-
-  const multiplier = await memswap.multiplier();
-  const minTip = await memswap.minTip();
-  const maxTip = await memswap.maxTip();
-
-  const slippageUnit = bn(expectedAmount).mul(slippage).div(10000);
-
-  if (isBuy) {
-    const minValue = bn(expectedAmount).sub(slippageUnit.mul(multiplier));
-    const maxValue = bn(expectedAmount).add(slippageUnit);
-
-    if (bn(executeAmount).gte(maxValue)) {
-      return minTip;
-    } else if (bn(executeAmount).lte(minValue)) {
-      return maxTip;
-    } else {
-      return maxTip.sub(
-        bn(executeAmount)
-          .sub(minValue)
-          .mul(maxTip.sub(minTip))
-          .div(maxValue.sub(minValue))
-      );
-    }
-  } else {
-    const minValue = bn(expectedAmount).sub(slippageUnit);
-    const maxValue = bn(expectedAmount).add(slippageUnit.mul(multiplier));
-
-    if (bn(executeAmount).gte(maxValue)) {
-      return minTip;
-    } else if (bn(executeAmount).lte(minValue)) {
-      return maxTip;
-    } else {
-      return minTip.add(
-        bn(executeAmount)
-          .sub(minValue)
-          .mul(maxTip.sub(minTip))
-          .div(maxValue.sub(minValue))
-      );
-    }
-  }
-};
-
 // Bulk-signing utilities
 
 export const bulkSign = async (

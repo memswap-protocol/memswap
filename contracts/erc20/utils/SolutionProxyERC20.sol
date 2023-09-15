@@ -89,7 +89,7 @@ contract SolutionProxyERC20 is ISolutionERC20 {
 
     // --- Overrides ---
 
-    function refund() external payable {
+    function refund() external payable override {
         makeCall(Call(owner, "", address(this).balance));
     }
 

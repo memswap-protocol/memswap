@@ -7,9 +7,9 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {MemswapERC721} from "../MemswapERC721.sol";
 import {PermitExecutor} from "../../common/PermitExecutor.sol";
 
-import {ISolution} from "../interfaces/ISolution.sol";
+import {ISolutionERC721} from "../interfaces/ISolutionERC721.sol";
 
-contract SolutionProxyERC721 is ISolution {
+contract SolutionProxyERC721 is ISolutionERC721 {
     // --- Structs ---
 
     struct Call {
@@ -86,6 +86,12 @@ contract SolutionProxyERC721 is ISolution {
             authSignature,
             permits
         );
+    }
+
+    // --- Overrides ---
+
+    function refund() external payable override {
+        makeCall(Call(owner, "", address(this).balance));
     }
 
     function callback(
