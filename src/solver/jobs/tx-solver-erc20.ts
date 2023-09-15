@@ -10,9 +10,9 @@ import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
 import {
-  SOLUTION_PROXY_ERC20,
   MATCHMAKER,
   MEMETH,
+  SOLUTION_PROXY,
   WETH9,
 } from "../../common/addresses";
 import { logger } from "../../common/logger";
@@ -448,13 +448,13 @@ const worker = new Worker(
         let method: string;
         if (intent.solver === MATCHMAKER[config.chainId] && authorization) {
           // For relaying
-          method = "solveWithSignatureAuthorizationCheck";
+          method = "solveWithSignatureAuthorizationCheckERC20";
         } else if (intent.solver === MATCHMAKER[config.chainId]) {
           // For matchmaker submission
-          method = "solveWithOnChainAuthorizationCheck";
+          method = "solveWithOnChainAuthorizationCheckERC20";
         } else {
           // For relaying
-          method = "solve";
+          method = "solveERC20";
         }
 
         const encodedSolution = {
@@ -467,7 +467,7 @@ const worker = new Worker(
         return {
           signedTransaction: await solver.signTransaction({
             from: solver.address,
-            to: SOLUTION_PROXY_ERC20[config.chainId],
+            to: SOLUTION_PROXY[config.chainId],
             value: 0,
             data: new Interface([
               `
@@ -485,6 +485,7 @@ const worker = new Worker(
                     uint32 endTime,
                     bool isPartiallyFillable,
                     bool isSmartOrder,
+                    bool isIncentivized,
                     uint128 amount,
                     uint128 endAmount,
                     uint16 startAmountBps,
@@ -517,7 +518,7 @@ const worker = new Worker(
               `,
             ]).encodeFunctionData(
               method,
-              method === "solveWithSignatureAuthorizationCheck"
+              method === "solveWithSignatureAuthorizationCheckERC20"
                 ? [
                     intent,
                     encodedSolution,

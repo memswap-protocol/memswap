@@ -6,7 +6,7 @@ import { Contract } from "@ethersproject/contracts";
 import { Wallet } from "@ethersproject/wallet";
 import axios from "axios";
 
-import { MEMETH, SOLUTION_PROXY_ERC721 } from "../../common/addresses";
+import { MEMETH, SOLUTION_PROXY } from "../../common/addresses";
 import { IntentERC721, TxData } from "../../common/types";
 import { bn } from "../../common/utils";
 import { config } from "../config";
@@ -78,14 +78,14 @@ export const solve = async (
   let approvalTxData: TxData | undefined;
   const isApproved = await contract.isApprovedForAll(
     solver.address,
-    SOLUTION_PROXY_ERC721[config.chainId]
+    SOLUTION_PROXY[config.chainId]
   );
   if (!isApproved) {
     approvalTxData = {
       from: solver.address,
       to: intent.buyToken,
       data: contract.interface.encodeFunctionData("setApprovalForAll", [
-        SOLUTION_PROXY_ERC721[config.chainId],
+        SOLUTION_PROXY[config.chainId],
         true,
       ]),
       gasLimit: 100000,

@@ -34,17 +34,16 @@ const main = async () => {
 
   // MemswapERC20
   // MEMSWAP_ERC20[chainId] = await deployContract(deployer, "MemswapERC20");
-  // await deployContract(deployer, "SolutionProxyERC20", [
-  //   SOLVER[chainId],
-  //   MEMSWAP_ERC20[chainId],
-  // ]);
 
   // MemswapERC721
   // MEMSWAP_ERC721[chainId] = await deployContract(deployer, "MemswapERC721");
-  // await deployContract(deployer, "SolutionProxyERC721", [
-  //   SOLVER[chainId],
-  //   MEMSWAP_ERC721[chainId],
-  // ]);
+
+  // SolutionProxy
+  await deployContract(deployer, "SolutionProxy", [
+    SOLVER[chainId],
+    MEMSWAP_ERC20[chainId],
+    MEMSWAP_ERC721[chainId],
+  ]);
 };
 
 main()

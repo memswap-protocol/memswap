@@ -9,17 +9,12 @@ import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
-import {
-  SOLUTION_PROXY_ERC721,
-  MATCHMAKER,
-  MEMETH,
-} from "../../common/addresses";
+import { MATCHMAKER, MEMETH, SOLUTION_PROXY } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import {
   Authorization,
   IntentERC721,
   SolutionERC721,
-  TxData,
 } from "../../common/types";
 import {
   PESSIMISTIC_BLOCK_TIME,
@@ -38,7 +33,6 @@ import {
   getFlashbotsProvider,
   relayViaBloxroute,
   relayViaFlashbots,
-  relayViaTransaction,
 } from "../utils";
 
 const COMPONENT = "tx-solver-erc721";
@@ -387,13 +381,13 @@ const worker = new Worker(
         let method: string;
         if (intent.solver === MATCHMAKER[config.chainId] && authorization) {
           // For relaying
-          method = "solveWithSignatureAuthorizationCheck";
+          method = "solveWithSignatureAuthorizationCheckERC721";
         } else if (intent.solver === MATCHMAKER[config.chainId]) {
           // For matchmaker submission
-          method = "solveWithOnChainAuthorizationCheck";
+          method = "solveWithOnChainAuthorizationCheckERC721";
         } else {
           // For relaying
-          method = "solve";
+          method = "solveERC721";
         }
 
         let nonce = await provider.getTransactionCount(solver.address);
@@ -401,7 +395,7 @@ const worker = new Worker(
         const solverTxs = [
           ...solution.txs,
           {
-            to: SOLUTION_PROXY_ERC721[config.chainId],
+            to: SOLUTION_PROXY[config.chainId],
             value: 0,
             data: new Interface([
               `
@@ -419,6 +413,7 @@ const worker = new Worker(
                     uint32 endTime,
                     bool isPartiallyFillable,
                     bool isSmartOrder,
+                    bool isIncentivized,
                     bool isCriteriaOrder,
                     uint256 tokenIdOrCriteria,
                     uint128 amount,
@@ -456,7 +451,7 @@ const worker = new Worker(
               `,
             ]).encodeFunctionData(
               method,
-              method === "solveWithSignatureAuthorizationCheck"
+              method === "solveWithSignatureAuthorizationCheckERC721"
                 ? [
                     intent,
                     solution,

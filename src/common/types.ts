@@ -1,9 +1,29 @@
 import { Call } from "../solver/types";
 
+// Common
+
+export type TxData = {
+  from: string;
+  to: string;
+  data: string;
+  gasLimit?: number;
+};
+
 export enum Protocol {
   ERC20,
   ERC721,
 }
+
+export type Authorization = {
+  intentHash: string;
+  solver: string;
+  fillAmountToCheck: string;
+  executeAmountToCheck: string;
+  blockDeadline: number;
+  signature?: string;
+};
+
+// ERC20
 
 export type IntentERC20 = {
   isBuy: boolean;
@@ -19,16 +39,12 @@ export type IntentERC20 = {
   nonce: string;
   isPartiallyFillable: boolean;
   isSmartOrder: boolean;
+  isIncentivized: boolean;
   amount: string;
   endAmount: string;
   startAmountBps: number;
   expectedAmountBps: number;
   signature: string;
-};
-
-export type IntentERC721 = IntentERC20 & {
-  isCriteriaOrder: boolean;
-  tokenIdOrCriteria: string;
 };
 
 export type SolutionERC20 = {
@@ -43,6 +59,13 @@ export type SolutionERC20 = {
   grossProfitInEth: string;
 };
 
+// ERC721
+
+export type IntentERC721 = IntentERC20 & {
+  isCriteriaOrder: boolean;
+  tokenIdOrCriteria: string;
+};
+
 export type TokenDetails = {
   tokenId: string;
   criteriaProof: string[];
@@ -55,20 +78,4 @@ export type SolutionERC721 = {
   // Off-chain data
   // ERC721 solutions are not self-contained like ERC20 (might depend on multiple pre-transactions)
   txs: TxData[];
-};
-
-export type Authorization = {
-  intentHash: string;
-  solver: string;
-  fillAmountToCheck: string;
-  executeAmountToCheck: string;
-  blockDeadline: number;
-  signature?: string;
-};
-
-export type TxData = {
-  from: string;
-  to: string;
-  data: string;
-  gasLimit?: number;
 };

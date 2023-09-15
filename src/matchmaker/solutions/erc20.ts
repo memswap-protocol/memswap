@@ -174,6 +174,7 @@ export const process = async (
                 uint32 endTime,
                 bool isPartiallyFillable,
                 bool isSmartOrder,
+                bool isIncentivized,
                 uint128 amount,
                 uint128 endAmount,
                 uint16 startAmountBps,

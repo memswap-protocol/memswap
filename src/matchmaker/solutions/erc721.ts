@@ -190,6 +190,7 @@ export const process = async (
                 uint32 endTime,
                 bool isPartiallyFillable,
                 bool isSmartOrder,
+                bool isIncentivized,
                 bool isCriteriaOrder,
                 uint256 tokenIdOrCriteria,
                 uint128 amount,

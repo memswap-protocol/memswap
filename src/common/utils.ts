@@ -153,6 +153,10 @@ export const getEIP712TypesForIntent = (protocol: Protocol) => ({
       name: "isSmartOrder",
       type: "bool",
     },
+    {
+      name: "isIncentivized",
+      type: "bool",
+    },
     ...(protocol === Protocol.ERC721
       ? [
           {
