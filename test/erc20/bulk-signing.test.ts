@@ -32,7 +32,7 @@ describe("[ERC20] Bulk-signing", async () => {
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC20")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -110,7 +110,7 @@ describe("[ERC20] Bulk-signing", async () => {
     );
 
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),

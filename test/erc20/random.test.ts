@@ -40,7 +40,7 @@ describe("[ERC20] Random", async () => {
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC20")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -171,7 +171,7 @@ describe("[ERC20] Random", async () => {
     const incentivizationSurplus = ethers.utils.parseEther(
       getRandomFloat(0, 0.1)
     );
-    const solve = solutionProxy.connect(bob).solve(
+    const solve = solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [surplus]),
@@ -349,7 +349,7 @@ describe("[ERC20] Random", async () => {
     const incentivizationSurplus = ethers.utils.parseEther(
       getRandomFloat(0, 0.1)
     );
-    const solve = solutionProxy.connect(bob).solve(
+    const solve = solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [surplus]),

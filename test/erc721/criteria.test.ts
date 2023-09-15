@@ -37,7 +37,7 @@ describe("[ERC721] Criteria", async () => {
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC721")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -87,7 +87,7 @@ describe("[ERC721] Criteria", async () => {
 
     // When the intent has no criteria, a single token id can be used for filling
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC721(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -103,7 +103,7 @@ describe("[ERC721] Criteria", async () => {
     ).to.be.revertedWith("InvalidTokenId");
 
     // Succeeds when the fill token id matches `tokenIdOrCriteria`
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC721(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -152,7 +152,7 @@ describe("[ERC721] Criteria", async () => {
 
     // When the criteria is `0`, any token id can be used for filling
     const randomTokenId = getRandomInteger(1, 100000);
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC721(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -215,7 +215,7 @@ describe("[ERC721] Criteria", async () => {
         ? criteriaTokenIds[getRandomInteger(0, criteriaTokenIds.length - 1)]
         : getRandomInteger(1, 100000);
       if (criteriaTokenIds.includes(randomTokenId)) {
-        await solutionProxy.connect(bob).solve(
+        await solutionProxy.connect(bob).solveERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -230,7 +230,7 @@ describe("[ERC721] Criteria", async () => {
         );
       } else {
         await expect(
-          solutionProxy.connect(bob).solve(
+          solutionProxy.connect(bob).solveERC721(
             intent,
             {
               data: defaultAbiCoder.encode(["uint128"], [0]),

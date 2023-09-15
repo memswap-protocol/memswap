@@ -32,7 +32,7 @@ describe("[ERC721] Misc", async () => {
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC721")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -100,7 +100,7 @@ describe("[ERC721] Misc", async () => {
       .withArgs(getIntentHash(intent));
 
     // Once prevalidated, solving can be done without a maker signature
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC721(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -159,7 +159,7 @@ describe("[ERC721] Misc", async () => {
 
     // Once cancelled, intent cannot be solved
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC721(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -216,7 +216,7 @@ describe("[ERC721] Misc", async () => {
     // (the signature check will fail since the intent hash will be computed on latest nonce
     // value, and not on the nonce value the intent was signed with)
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC721(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -266,7 +266,7 @@ describe("[ERC721] Misc", async () => {
 
     // If not permit was passed, the solution transaction will revert
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC721(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -292,7 +292,7 @@ describe("[ERC721] Misc", async () => {
     };
     const permitSignature = await signPermit2(alice, PERMIT2[chainId], permit);
 
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC721(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),

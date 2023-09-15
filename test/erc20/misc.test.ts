@@ -43,7 +43,7 @@ describe("[ERC20] Misc", async () => {
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC20")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -107,7 +107,7 @@ describe("[ERC20] Misc", async () => {
       .withArgs(getIntentHash(intent));
 
     // Once prevalidated, solving can be done without a maker signature
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -159,7 +159,7 @@ describe("[ERC20] Misc", async () => {
 
     // Once cancelled, intent cannot be solved
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -209,7 +209,7 @@ describe("[ERC20] Misc", async () => {
     // (the signature check will fail since the intent hash will be computed on latest nonce
     // value, and not on the nonce value the intent was signed with)
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -252,7 +252,7 @@ describe("[ERC20] Misc", async () => {
 
     // If not permit was passed, the solution transaction will revert
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -275,7 +275,7 @@ describe("[ERC20] Misc", async () => {
     };
     const permitSignature = await signPermit2(alice, PERMIT2[chainId], permit);
 
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -328,7 +328,7 @@ describe("[ERC20] Misc", async () => {
 
     // If not permit was passed, the solution transaction will revert
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -355,7 +355,7 @@ describe("[ERC20] Misc", async () => {
     (permit as any).r = permitSignature.r;
     (permit as any).s = permitSignature.s;
 
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -431,7 +431,7 @@ describe("[ERC20] Misc", async () => {
 
     // Intent cannot be solved without first revealing the private data
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -451,7 +451,7 @@ describe("[ERC20] Misc", async () => {
     intent.signature = "0x" + "00".repeat(12) + intent.signature.slice(26);
 
     // Once the private data is revealed we can successfully solve
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -541,7 +541,7 @@ describe("[ERC20] Misc", async () => {
         : bn(0);
 
     // Solve
-    const solve = solutionProxy.connect(bob).solve(
+    const solve = solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [surplus]),
@@ -657,7 +657,7 @@ describe("[ERC20] Misc", async () => {
         : bn(0);
 
     // Solve
-    const solve = solutionProxy.connect(bob).solve(
+    const solve = solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [surplus]),

@@ -28,7 +28,7 @@ describe("[ERC20] Incentivization", async () => {
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC20")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -83,7 +83,7 @@ describe("[ERC20] Incentivization", async () => {
 
       const requiredPriorityFee = await memswap.requiredPriorityFee();
       await expect(
-        solutionProxy.connect(bob).solve(
+        solutionProxy.connect(bob).solveERC20(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -107,7 +107,7 @@ describe("[ERC20] Incentivization", async () => {
 
       const requiredPriorityFee = await memswap.requiredPriorityFee();
       await expect(
-        solutionProxy.connect(bob).solve(
+        solutionProxy.connect(bob).solveERC20(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -123,7 +123,7 @@ describe("[ERC20] Incentivization", async () => {
     }
 
     // The priority fee should match the required value
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -178,7 +178,7 @@ describe("[ERC20] Incentivization", async () => {
 
     // The solution will fail if the tip the builder was too high
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -231,7 +231,7 @@ describe("[ERC20] Incentivization", async () => {
 
     // The solution will fail if the tip the builder was too low
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),

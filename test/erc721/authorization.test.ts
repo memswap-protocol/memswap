@@ -35,7 +35,7 @@ describe("[ERC721] Authorization", async () => {
       .then((factory) => factory.deploy());
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC721")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -93,7 +93,7 @@ describe("[ERC721] Authorization", async () => {
 
     // Without authorization, cannot fill an intent of a different matchmaker
     await expect(
-      solutionProxy.connect(carol).solve(
+      solutionProxy.connect(carol).solveERC721(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -106,7 +106,7 @@ describe("[ERC721] Authorization", async () => {
       )
     ).to.be.revertedWith("Unauthorized");
     await expect(
-      solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+      solutionProxy.connect(carol).solveWithOnChainAuthorizationCheckERC721(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -157,7 +157,7 @@ describe("[ERC721] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheckERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -190,7 +190,7 @@ describe("[ERC721] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheckERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -223,7 +223,7 @@ describe("[ERC721] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheckERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -254,7 +254,7 @@ describe("[ERC721] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheckERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -333,7 +333,7 @@ describe("[ERC721] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheckERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -364,7 +364,7 @@ describe("[ERC721] Authorization", async () => {
         .authorize([intent], [authorization], solutionProxy.address);
 
       await expect(
-        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheck(
+        solutionProxy.connect(carol).solveWithOnChainAuthorizationCheckERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -448,7 +448,7 @@ describe("[ERC721] Authorization", async () => {
       );
 
       await expect(
-        solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
+        solutionProxy.connect(carol).solveWithSignatureAuthorizationCheckERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -482,7 +482,7 @@ describe("[ERC721] Authorization", async () => {
       );
 
       await expect(
-        solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
+        solutionProxy.connect(carol).solveWithSignatureAuthorizationCheckERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -516,7 +516,7 @@ describe("[ERC721] Authorization", async () => {
       );
 
       await expect(
-        solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
+        solutionProxy.connect(carol).solveWithSignatureAuthorizationCheckERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -596,7 +596,7 @@ describe("[ERC721] Authorization", async () => {
       );
 
       await expect(
-        solutionProxy.connect(carol).solveWithSignatureAuthorizationCheck(
+        solutionProxy.connect(carol).solveWithSignatureAuthorizationCheckERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
