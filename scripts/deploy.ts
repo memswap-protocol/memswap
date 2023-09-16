@@ -39,7 +39,7 @@ const main = async () => {
   // await deployContract(deployer, "MEMETH");
 
   // MemswapNFT
-  // MEMSWAP_NFT[chainId] = await deployContract(deployer, "Memswap", [
+  // MEMSWAP_NFT[chainId] = await deployContract(deployer, "MemswapAlphaNFT", [
   //   deployer.address,
   //   "https://test-tokens-metadata.vercel.app/api/erc721/",
   //   "https://test-tokens-metadata.vercel.app/api/erc721/contract",
