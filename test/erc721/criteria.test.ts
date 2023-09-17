@@ -12,7 +12,6 @@ import {
   signIntent,
 } from "./utils";
 import {
-  bn,
   getCurrentTimestamp,
   getRandomBoolean,
   getRandomInteger,
@@ -24,6 +23,7 @@ describe("[ERC721] Criteria", async () => {
   let bob: SignerWithAddress;
 
   let memswap: Contract;
+  let nft: Contract;
 
   let solutionProxy: Contract;
   let token0: Contract;
@@ -32,12 +32,15 @@ describe("[ERC721] Criteria", async () => {
   beforeEach(async () => {
     [deployer, alice, bob] = await ethers.getSigners();
 
+    nft = await ethers
+      .getContractFactory("MemswapAlphaNFT")
+      .then((factory) => factory.deploy(deployer.address, "", ""));
     memswap = await ethers
       .getContractFactory("MemswapERC721")
-      .then((factory) => factory.deploy());
+      .then((factory) => factory.deploy(nft.address));
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC721")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -45,6 +48,9 @@ describe("[ERC721] Criteria", async () => {
     token1 = await ethers
       .getContractFactory("MockERC721")
       .then((factory) => factory.deploy());
+
+    // Allowed the Memswap contract to mint
+    await nft.connect(deployer).setIsAllowedToMint([memswap.address], [true]);
 
     // Send some ETH to solution proxy contract for the tests where `tokenOut` is ETH
     await deployer.sendTransaction({
@@ -71,6 +77,7 @@ describe("[ERC721] Criteria", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
+      isIncentivized: false,
       isCriteriaOrder: false,
       tokenIdOrCriteria: 999,
       amount: 2,
@@ -86,7 +93,7 @@ describe("[ERC721] Criteria", async () => {
 
     // When the intent has no criteria, a single token id can be used for filling
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC721(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -102,7 +109,7 @@ describe("[ERC721] Criteria", async () => {
     ).to.be.revertedWith("InvalidTokenId");
 
     // Succeeds when the fill token id matches `tokenIdOrCriteria`
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC721(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -135,6 +142,7 @@ describe("[ERC721] Criteria", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
+      isIncentivized: false,
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 4,
@@ -150,7 +158,7 @@ describe("[ERC721] Criteria", async () => {
 
     // When the criteria is `0`, any token id can be used for filling
     const randomTokenId = getRandomInteger(1, 100000);
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC721(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -195,6 +203,7 @@ describe("[ERC721] Criteria", async () => {
         nonce: 0,
         isPartiallyFillable: true,
         isSmartOrder: false,
+        isIncentivized: false,
         isCriteriaOrder: true,
         tokenIdOrCriteria: criteria,
         amount: 1,
@@ -212,7 +221,7 @@ describe("[ERC721] Criteria", async () => {
         ? criteriaTokenIds[getRandomInteger(0, criteriaTokenIds.length - 1)]
         : getRandomInteger(1, 100000);
       if (criteriaTokenIds.includes(randomTokenId)) {
-        await solutionProxy.connect(bob).solve(
+        await solutionProxy.connect(bob).solveERC721(
           intent,
           {
             data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -227,7 +236,7 @@ describe("[ERC721] Criteria", async () => {
         );
       } else {
         await expect(
-          solutionProxy.connect(bob).solve(
+          solutionProxy.connect(bob).solveERC721(
             intent,
             {
               data: defaultAbiCoder.encode(["uint128"], [0]),

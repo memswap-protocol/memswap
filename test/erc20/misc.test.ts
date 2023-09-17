@@ -28,6 +28,7 @@ describe("[ERC20] Misc", async () => {
   let carol: SignerWithAddress;
 
   let memswap: Contract;
+  let nft: Contract;
 
   let solutionProxy: Contract;
   let token0: Contract;
@@ -38,12 +39,15 @@ describe("[ERC20] Misc", async () => {
 
     [deployer, alice, bob, carol] = await ethers.getSigners();
 
+    nft = await ethers
+      .getContractFactory("MemswapAlphaNFT")
+      .then((factory) => factory.deploy(deployer.address, "", ""));
     memswap = await ethers
       .getContractFactory("MemswapERC20")
-      .then((factory) => factory.deploy());
+      .then((factory) => factory.deploy(nft.address));
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC20")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -51,6 +55,9 @@ describe("[ERC20] Misc", async () => {
     token1 = await ethers
       .getContractFactory("MockERC20")
       .then((factory) => factory.deploy());
+
+    // Allowed the Memswap contract to mint
+    await nft.connect(deployer).setIsAllowedToMint([memswap.address], [true]);
 
     // Send some ETH to solution proxy contract for the tests where `tokenOut` is ETH
     await deployer.sendTransaction({
@@ -77,6 +84,7 @@ describe("[ERC20] Misc", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
+      isIncentivized: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -106,7 +114,7 @@ describe("[ERC20] Misc", async () => {
       .withArgs(getIntentHash(intent));
 
     // Once prevalidated, solving can be done without a maker signature
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -134,6 +142,7 @@ describe("[ERC20] Misc", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
+      isIncentivized: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -157,7 +166,7 @@ describe("[ERC20] Misc", async () => {
 
     // Once cancelled, intent cannot be solved
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -186,6 +195,7 @@ describe("[ERC20] Misc", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
+      isIncentivized: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -206,7 +216,7 @@ describe("[ERC20] Misc", async () => {
     // (the signature check will fail since the intent hash will be computed on latest nonce
     // value, and not on the nonce value the intent was signed with)
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -235,6 +245,7 @@ describe("[ERC20] Misc", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
+      isIncentivized: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -248,7 +259,7 @@ describe("[ERC20] Misc", async () => {
 
     // If not permit was passed, the solution transaction will revert
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -271,7 +282,7 @@ describe("[ERC20] Misc", async () => {
     };
     const permitSignature = await signPermit2(alice, PERMIT2[chainId], permit);
 
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -311,6 +322,7 @@ describe("[ERC20] Misc", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
+      isIncentivized: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -323,7 +335,7 @@ describe("[ERC20] Misc", async () => {
 
     // If not permit was passed, the solution transaction will revert
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -350,7 +362,7 @@ describe("[ERC20] Misc", async () => {
     (permit as any).r = permitSignature.r;
     (permit as any).s = permitSignature.s;
 
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -404,6 +416,7 @@ describe("[ERC20] Misc", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
+      isIncentivized: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -425,7 +438,7 @@ describe("[ERC20] Misc", async () => {
 
     // Intent cannot be solved without first revealing the private data
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -445,7 +458,7 @@ describe("[ERC20] Misc", async () => {
     intent.signature = "0x" + "00".repeat(12) + intent.signature.slice(26);
 
     // Once the private data is revealed we can successfully solve
-    await solutionProxy.connect(bob).solve(
+    await solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [0]),
@@ -473,6 +486,7 @@ describe("[ERC20] Misc", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
+      isIncentivized: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -534,7 +548,7 @@ describe("[ERC20] Misc", async () => {
         : bn(0);
 
     // Solve
-    const solve = solutionProxy.connect(bob).solve(
+    const solve = solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [surplus]),
@@ -587,6 +601,7 @@ describe("[ERC20] Misc", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
+      isIncentivized: false,
       amount: ethers.utils.parseEther("0.5"),
       endAmount: ethers.utils.parseEther("0.3"),
       startAmountBps: 0,
@@ -649,7 +664,7 @@ describe("[ERC20] Misc", async () => {
         : bn(0);
 
     // Solve
-    const solve = solutionProxy.connect(bob).solve(
+    const solve = solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [surplus]),

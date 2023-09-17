@@ -37,6 +37,7 @@ getFlashbotsProvider();
 
 export const relayViaTransaction = async (
   intentHash: string,
+  isIncentivized: boolean,
   provider: JsonRpcProvider,
   tx: string,
   logComponent: string
@@ -50,12 +51,15 @@ export const relayViaTransaction = async (
         data: parsedTx.data,
         value: parsedTx.value,
         gas: parsedTx.gasLimit,
-        gasPrice: parsedTx.maxFeePerGas!,
+        maxFeePerGas: parsedTx.maxFeePerGas!,
+        maxPriorityFeePerGas: parsedTx.maxPriorityFeePerGas!,
       },
       provider
     );
   } catch {
-    logger.error(
+    // For some reason, incentivized intents fail simulation very often
+
+    logger[isIncentivized ? "info" : "error"](
       logComponent,
       JSON.stringify({
         msg: "Simulation failed",
@@ -64,7 +68,9 @@ export const relayViaTransaction = async (
       })
     );
 
-    throw new Error("Simulation failed");
+    if (!isIncentivized) {
+      throw new Error("Simulation failed");
+    }
   }
 
   logger.info(
@@ -102,7 +108,7 @@ export const relayViaFlashbots = async (
   const simulationResult: { error?: string; results: [{ error?: string }] } =
     (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
   if (simulationResult.error || simulationResult.results.some((r) => r.error)) {
-    if (JSON.stringify(simulationResult.error).includes("nonce too high")) {
+    if (JSON.stringify(simulationResult.error)?.includes("nonce too high")) {
       // Retry with all user transactions removed - assuming the
       // error is coming from their inclusion in previous blocks
       const mappedUserTxs = userTxs.map((tx) => tx.signedTransaction);
@@ -211,7 +217,7 @@ export const relayViaBloxroute = async (
   const simulationResult: { error?: string; results: [{ error?: string }] } =
     (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
   if (simulationResult.error || simulationResult.results.some((r) => r.error)) {
-    if (JSON.stringify(simulationResult.error).includes("nonce too high")) {
+    if (JSON.stringify(simulationResult.error)?.includes("nonce too high")) {
       // Retry with all user transactions removed - assuming the
       // error is coming from their inclusion in previous blocks
       const mappedUserTxs = userTxs.map((tx) => tx.signedTransaction);

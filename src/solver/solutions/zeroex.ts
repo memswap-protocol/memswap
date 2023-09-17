@@ -56,7 +56,7 @@ export const solve = async (
           {
             to: swapData.to,
             data: swapData.data,
-            value: inETH ? fillAmount : "0",
+            value: inETH ? sellAmount.toString() : "0",
           },
         ],
         maxSellAmount: sellAmount.toString(),

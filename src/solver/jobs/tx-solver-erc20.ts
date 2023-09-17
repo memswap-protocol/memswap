@@ -10,9 +10,9 @@ import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
 import {
-  SOLUTION_PROXY_ERC20,
   MATCHMAKER,
   MEMETH,
+  SOLUTION_PROXY,
   WETH9,
 } from "../../common/addresses";
 import { logger } from "../../common/logger";
@@ -21,6 +21,7 @@ import {
   PESSIMISTIC_BLOCK_TIME,
   bn,
   getAuthorizationHash,
+  getIncentivizationTip,
   getIntentHash,
   isIntentFilled,
   isTxIncluded,
@@ -84,11 +85,11 @@ const worker = new Worker(
 
       const perfTime2 = performance.now();
 
-      // Starting tip is 1 gwei
+      // Starting tip is 1 gwei (which is also the required priority fee for incentivized intents)
       let maxPriorityFeePerGas = parseUnits("1", "gwei");
 
       // TODO: Compute this dynamically
-      const gasLimit = 600000;
+      const gasLimit = 800000;
 
       // Approximations for gas used by memswap logic and gas used by swap logic
       const memswapGas = 150000;
@@ -183,6 +184,9 @@ const worker = new Worker(
           const startAmount = endAmount.add(
             endAmount.mul(intent.startAmountBps).div(10000)
           );
+          const expectedAmount = endAmount.add(
+            endAmount.mul(intent.expectedAmountBps).div(10000)
+          );
 
           let minAmountOut = startAmount.sub(
             startAmount
@@ -234,6 +238,14 @@ const worker = new Worker(
             executeTokenDecimals: buyTokenDecimals,
             grossProfitInEth: grossProfitInEth.toString(),
             gasConsumed,
+            value: intent.isIncentivized
+              ? getIncentivizationTip(
+                  intent.isBuy,
+                  expectedAmount,
+                  intent.expectedAmountBps,
+                  minAmountOut
+                ).toString()
+              : "0",
           };
         } else {
           const endAmount = bn(intent.endAmount);
@@ -306,6 +318,14 @@ const worker = new Worker(
             executeTokenDecimals: sellTokenDecimals,
             grossProfitInEth: grossProfitInEth.toString(),
             gasConsumed,
+            value: intent.isIncentivized
+              ? getIncentivizationTip(
+                  intent.isBuy,
+                  expectedAmount,
+                  intent.expectedAmountBps,
+                  maxAmountIn
+                ).toString()
+              : "0",
           };
         }
       }
@@ -316,17 +336,16 @@ const worker = new Worker(
       const gasFee = latestBaseFee
         .add(maxPriorityFeePerGas)
         .mul(solution.gasConsumed);
-      const netProfitInEth = bn(solution.grossProfitInEth).sub(gasFee);
+      const netProfitInEth = bn(solution.grossProfitInEth)
+        .sub(gasFee)
+        .sub(solution.value);
 
       logger.info(
         COMPONENT,
         JSON.stringify({
           msg: "Profit breakdown",
           solution,
-          executeAmount: solution.executeAmount,
-          grossProfitInEth: solution.grossProfitInEth,
           netProfitInEth: netProfitInEth.toString(),
-          gasConsumed: solution.gasConsumed,
           gasFee: gasFee.toString(),
         })
       );
@@ -344,57 +363,59 @@ const worker = new Worker(
       }
 
       if (netProfitInEth.gt(0)) {
-        // Assume other solvers compete for the same intent and so increase the
-        // tip to the block builder as much as possible while we're profitable.
-        // This will also result in the bundles being included faster.
-        const minTipIncrement = parseUnits("0.01", "gwei");
-        const gasPerTipIncrement = minTipIncrement.mul(solution.gasConsumed);
+        if (!intent.isIncentivized) {
+          // Assume other solvers compete for the same intent and so increase the
+          // tip to the block builder as much as possible while we're profitable.
+          // This will also result in the bundles being included faster.
+          const minTipIncrement = parseUnits("0.01", "gwei");
+          const gasPerTipIncrement = minTipIncrement.mul(solution.gasConsumed);
 
-        // Deduct from the 40% of the profit
-        const minTipUnits = netProfitInEth
-          .mul(4000)
-          .div(10000)
-          .div(gasPerTipIncrement);
-        maxPriorityFeePerGas = maxPriorityFeePerGas.add(
-          minTipIncrement.mul(minTipUnits)
-        );
+          // Deduct from the 40% of the profit
+          const minTipUnits = netProfitInEth
+            .mul(4000)
+            .div(10000)
+            .div(gasPerTipIncrement);
+          maxPriorityFeePerGas = maxPriorityFeePerGas.add(
+            minTipIncrement.mul(minTipUnits)
+          );
 
-        // Give 50% of the profit back to the user
-        const sharedProfit = netProfitInEth
-          .mul(5000)
-          .div(10000)
-          .mul(
-            parseUnits(
-              solution.executeTokenToEthRate,
-              solution.executeTokenDecimals
+          // Give 50% of the profit back to the user
+          const sharedProfit = netProfitInEth
+            .mul(5000)
+            .div(10000)
+            .mul(
+              parseUnits(
+                solution.executeTokenToEthRate,
+                solution.executeTokenDecimals
+              )
             )
-          )
-          .div(parseEther("1"));
-        if (intent.isBuy) {
-          solution.executeAmount = bn(solution.executeAmount)
-            .sub(sharedProfit)
-            .toString();
-        } else {
-          solution.executeAmount = bn(solution.executeAmount)
-            .add(sharedProfit)
-            .toString();
+            .div(parseEther("1"));
+          if (intent.isBuy) {
+            solution.executeAmount = bn(solution.executeAmount)
+              .sub(sharedProfit)
+              .toString();
+          } else {
+            solution.executeAmount = bn(solution.executeAmount)
+              .add(sharedProfit)
+              .toString();
+          }
+
+          // The rest of 10% from the profit is kept
+
+          logger.info(
+            COMPONENT,
+            JSON.stringify({
+              msg: "Tip increment",
+              intentHash,
+              gasPerTipIncrement: gasPerTipIncrement.toString(),
+              minTipUnits: minTipUnits.toString(),
+              oldMaxPriorityFeePerGas: maxPriorityFeePerGas
+                .sub(minTipIncrement.mul(minTipUnits))
+                .toString(),
+              newMaxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
+            })
+          );
         }
-
-        // The rest of 10% from the profit is kept
-
-        logger.info(
-          COMPONENT,
-          JSON.stringify({
-            msg: "Tip increment",
-            intentHash,
-            gasPerTipIncrement: gasPerTipIncrement.toString(),
-            minTipUnits: minTipUnits.toString(),
-            oldMaxPriorityFeePerGas: maxPriorityFeePerGas
-              .sub(minTipIncrement.mul(minTipUnits))
-              .toString(),
-            newMaxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
-          })
-        );
       }
 
       const perfTime3 = performance.now();
@@ -448,13 +469,13 @@ const worker = new Worker(
         let method: string;
         if (intent.solver === MATCHMAKER[config.chainId] && authorization) {
           // For relaying
-          method = "solveWithSignatureAuthorizationCheck";
+          method = "solveWithSignatureAuthorizationCheckERC20";
         } else if (intent.solver === MATCHMAKER[config.chainId]) {
           // For matchmaker submission
-          method = "solveWithOnChainAuthorizationCheck";
+          method = "solveWithOnChainAuthorizationCheckERC20";
         } else {
           // For relaying
-          method = "solve";
+          method = "solveERC20";
         }
 
         const encodedSolution = {
@@ -467,8 +488,8 @@ const worker = new Worker(
         return {
           signedTransaction: await solver.signTransaction({
             from: solver.address,
-            to: SOLUTION_PROXY_ERC20[config.chainId],
-            value: 0,
+            to: SOLUTION_PROXY[config.chainId],
+            value: solution.value,
             data: new Interface([
               `
                 function ${method}(
@@ -485,6 +506,7 @@ const worker = new Worker(
                     uint32 endTime,
                     bool isPartiallyFillable,
                     bool isSmartOrder,
+                    bool isIncentivized,
                     uint128 amount,
                     uint128 endAmount,
                     uint16 startAmountBps,
@@ -517,7 +539,7 @@ const worker = new Worker(
               `,
             ]).encodeFunctionData(
               method,
-              method === "solveWithSignatureAuthorizationCheck"
+              method === "solveWithSignatureAuthorizationCheckERC20"
                 ? [
                     intent,
                     encodedSolution,
@@ -584,6 +606,7 @@ const worker = new Worker(
           // Relay
           await relayViaTransaction(
             intentHash,
+            intent.isIncentivized,
             provider,
             fillerTx.signedTransaction,
             COMPONENT
@@ -664,6 +687,7 @@ const worker = new Worker(
             // Relay
             await relayViaTransaction(
               intentHash,
+              intent.isIncentivized,
               provider,
               fillerTx.signedTransaction,
               COMPONENT

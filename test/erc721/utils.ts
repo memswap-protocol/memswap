@@ -25,6 +25,7 @@ export type Intent = {
   nonce: BigNumberish;
   isPartiallyFillable: boolean;
   isSmartOrder: boolean;
+  isIncentivized: boolean;
   isCriteriaOrder: boolean;
   tokenIdOrCriteria: BigNumberish;
   amount: BigNumberish;
@@ -155,6 +156,10 @@ export const INTENT_EIP712_TYPES = {
       type: "bool",
     },
     {
+      name: "isIncentivized",
+      type: "bool",
+    },
+    {
       name: "isCriteriaOrder",
       type: "bool",
     },
@@ -242,6 +247,7 @@ const getBulkSignatureDataWithProofs = (
     nonce: 0,
     isPartiallyFillable: false,
     isSmartOrder: false,
+    isIncentivized: false,
     isCriteriaOrder: false,
     tokenIdOrCriteria: 0,
     amount: 0,

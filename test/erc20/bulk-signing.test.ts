@@ -17,6 +17,7 @@ describe("[ERC20] Bulk-signing", async () => {
   let bob: SignerWithAddress;
 
   let memswap: Contract;
+  let nft: Contract;
 
   let solutionProxy: Contract;
   let token0: Contract;
@@ -27,12 +28,15 @@ describe("[ERC20] Bulk-signing", async () => {
 
     [deployer, alice, bob] = await ethers.getSigners();
 
+    nft = await ethers
+      .getContractFactory("MemswapAlphaNFT")
+      .then((factory) => factory.deploy(deployer.address, "", ""));
     memswap = await ethers
       .getContractFactory("MemswapERC20")
-      .then((factory) => factory.deploy());
+      .then((factory) => factory.deploy(nft.address));
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC20")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -40,6 +44,9 @@ describe("[ERC20] Bulk-signing", async () => {
     token1 = await ethers
       .getContractFactory("MockERC20")
       .then((factory) => factory.deploy());
+
+    // Allowed the Memswap contract to mint
+    await nft.connect(deployer).setIsAllowedToMint([memswap.address], [true]);
 
     // Send some ETH to solution proxy contract for the tests where `tokenOut` is ETH
     await deployer.sendTransaction({
@@ -68,6 +75,7 @@ describe("[ERC20] Bulk-signing", async () => {
         nonce: 0,
         isPartiallyFillable: true,
         isSmartOrder: false,
+        isIncentivized: false,
         amount: ethers.utils.parseEther("0.5"),
         endAmount: ethers.utils.parseEther("0.3"),
         startAmountBps: 0,
@@ -109,7 +117,7 @@ describe("[ERC20] Bulk-signing", async () => {
     );
 
     await expect(
-      solutionProxy.connect(bob).solve(
+      solutionProxy.connect(bob).solveERC20(
         intent,
         {
           data: defaultAbiCoder.encode(["uint128"], [0]),

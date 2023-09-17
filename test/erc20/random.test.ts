@@ -10,6 +10,7 @@ import { Intent, getIntentHash, signIntent } from "./utils";
 import {
   bn,
   getCurrentTimestamp,
+  getIncentivizationTip,
   getRandomBoolean,
   getRandomFloat,
   getRandomInteger,
@@ -23,6 +24,7 @@ describe("[ERC20] Random", async () => {
 
   let memswap: Contract;
   let memeth: Contract;
+  let nft: Contract;
 
   let solutionProxy: Contract;
   let token0: Contract;
@@ -31,15 +33,18 @@ describe("[ERC20] Random", async () => {
   beforeEach(async () => {
     [deployer, alice, bob, carol] = await ethers.getSigners();
 
-    memswap = await ethers
-      .getContractFactory("MemswapERC20")
-      .then((factory) => factory.deploy());
     memeth = await ethers
       .getContractFactory("MEMETH")
       .then((factory) => factory.deploy());
+    nft = await ethers
+      .getContractFactory("MemswapAlphaNFT")
+      .then((factory) => factory.deploy(deployer.address, "", ""));
+    memswap = await ethers
+      .getContractFactory("MemswapERC20")
+      .then((factory) => factory.deploy(nft.address));
 
     solutionProxy = await ethers
-      .getContractFactory("MockSolutionProxyERC20")
+      .getContractFactory("MockSolutionProxy")
       .then((factory) => factory.deploy(memswap.address));
     token0 = await ethers
       .getContractFactory("MockERC20")
@@ -48,6 +53,9 @@ describe("[ERC20] Random", async () => {
       .getContractFactory("MockERC20")
       .then((factory) => factory.deploy());
 
+    // Allowed the Memswap contract to mint
+    await nft.connect(deployer).setIsAllowedToMint([memswap.address], [true]);
+
     // Send some ETH to solution proxy contract for the tests where `tokenOut` is ETH
     await deployer.sendTransaction({
       to: solutionProxy.address,
@@ -55,7 +63,7 @@ describe("[ERC20] Random", async () => {
     });
   });
 
-  const solveBuyWithRandomValues = async () => {
+  const solveBuyWithRandomValues = async (isIncentivized: boolean) => {
     const currentTime = await getCurrentTimestamp();
 
     // Generate an intent with random values
@@ -73,6 +81,7 @@ describe("[ERC20] Random", async () => {
       nonce: 0,
       isPartiallyFillable: getRandomBoolean(),
       isSmartOrder: false,
+      isIncentivized,
       amount: ethers.utils.parseEther(getRandomFloat(0.01, 1)),
       endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
@@ -166,29 +175,53 @@ describe("[ERC20] Random", async () => {
         : bn(0);
 
     // Solve
-    const solve = solutionProxy.connect(bob).solve(
+    const incentivizationSurplus = ethers.utils.parseEther(
+      getRandomFloat(0, 0.1)
+    );
+    const solve = solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [surplus]),
         fillAmount,
       },
-      []
+      [],
+      {
+        value: (
+          await getIncentivizationTip(
+            memswap,
+            intent.isBuy,
+            expectedAmount,
+            intent.expectedAmountBps,
+            amount.sub(surplus)
+          )
+        ).add(incentivizationSurplus),
+        maxPriorityFeePerGas: await memswap.requiredPriorityFee(),
+      }
     );
     if (nextBlockTime > intent.endTime) {
       await expect(solve).to.be.revertedWith("IntentIsExpired");
     } else {
-      await expect(solve)
-        .to.emit(memswap, "IntentSolved")
-        .withArgs(
-          getIntentHash(intent),
-          intent.isBuy,
-          intent.buyToken,
-          intent.sellToken,
-          intent.maker,
-          solutionProxy.address,
-          fillAmount,
-          amount.sub(surplus)
-        );
+      const intentSolvedArgs = [
+        getIntentHash(intent),
+        intent.isBuy,
+        intent.buyToken,
+        intent.sellToken,
+        intent.maker,
+        solutionProxy.address,
+        fillAmount,
+        amount.sub(surplus),
+      ];
+      if (isIncentivized) {
+        await expect(solve)
+          .to.emit(memswap, "IntentSolved")
+          .withArgs(...intentSolvedArgs)
+          .to.emit(solutionProxy, "Refunded")
+          .withArgs(incentivizationSurplus);
+      } else {
+        await expect(solve)
+          .to.emit(memswap, "IntentSolved")
+          .withArgs(...intentSolvedArgs);
+      }
     }
 
     // Get balances after the execution
@@ -210,7 +243,7 @@ describe("[ERC20] Random", async () => {
     );
   };
 
-  const solveSellWithRandomValues = async () => {
+  const solveSellWithRandomValues = async (isIncentivized: boolean) => {
     const currentTime = await getCurrentTimestamp();
 
     // Generate an intent with random values
@@ -228,6 +261,7 @@ describe("[ERC20] Random", async () => {
       nonce: 0,
       isPartiallyFillable: getRandomBoolean(),
       isSmartOrder: false,
+      isIncentivized,
       amount: ethers.utils.parseEther(getRandomFloat(0.01, 1)),
       endAmount: ethers.utils.parseEther(getRandomFloat(0.01, 0.4)),
       startAmountBps: getRandomInteger(800, 1000),
@@ -319,29 +353,53 @@ describe("[ERC20] Random", async () => {
         : bn(0);
 
     // Solve
-    const solve = solutionProxy.connect(bob).solve(
+    const incentivizationSurplus = ethers.utils.parseEther(
+      getRandomFloat(0, 0.1)
+    );
+    const solve = solutionProxy.connect(bob).solveERC20(
       intent,
       {
         data: defaultAbiCoder.encode(["uint128"], [surplus]),
         fillAmount,
       },
-      []
+      [],
+      {
+        value: (
+          await getIncentivizationTip(
+            memswap,
+            intent.isBuy,
+            expectedAmount,
+            intent.expectedAmountBps,
+            amount.add(surplus)
+          )
+        ).add(incentivizationSurplus),
+        maxPriorityFeePerGas: await memswap.requiredPriorityFee(),
+      }
     );
     if (nextBlockTime > intent.endTime) {
       await expect(solve).to.be.revertedWith("IntentIsExpired");
     } else {
-      await expect(solve)
-        .to.emit(memswap, "IntentSolved")
-        .withArgs(
-          getIntentHash(intent),
-          intent.isBuy,
-          intent.buyToken,
-          intent.sellToken,
-          intent.maker,
-          solutionProxy.address,
-          amount.add(surplus),
-          fillAmount
-        );
+      const intentSolvedArgs = [
+        getIntentHash(intent),
+        intent.isBuy,
+        intent.buyToken,
+        intent.sellToken,
+        intent.maker,
+        solutionProxy.address,
+        amount.add(surplus),
+        fillAmount,
+      ];
+      if (isIncentivized) {
+        await expect(solve)
+          .to.emit(memswap, "IntentSolved")
+          .withArgs(...intentSolvedArgs)
+          .to.emit(solutionProxy, "Refunded")
+          .withArgs(incentivizationSurplus);
+      } else {
+        await expect(solve)
+          .to.emit(memswap, "IntentSolved")
+          .withArgs(...intentSolvedArgs);
+      }
     }
 
     // Get balances after the execution
@@ -365,9 +423,17 @@ describe("[ERC20] Random", async () => {
 
   const RUNS = 50;
   for (let i = 0; i < RUNS; i++) {
-    it(`Solve buy random values (run ${i})`, solveBuyWithRandomValues);
+    const isIncentivized = getRandomBoolean();
+    it(`Solve ${
+      isIncentivized ? "incentivized " : ""
+    }buy random values (run ${i})`, () =>
+      solveBuyWithRandomValues(isIncentivized));
   }
   for (let i = 0; i < RUNS; i++) {
-    it(`Solve sell random values (run ${i})`, solveSellWithRandomValues);
+    const isIncentivized = getRandomBoolean();
+    it(`Solve ${
+      isIncentivized ? "incentivized " : ""
+    }sell random values (run ${i})`, () =>
+      solveSellWithRandomValues(isIncentivized));
   }
 });

@@ -41,7 +41,7 @@ const main = async () => {
 
   // Create intent
   const intent: IntentERC20 = {
-    isBuy: false,
+    isBuy: true,
     buyToken,
     sellToken,
     maker: maker.address,
@@ -56,10 +56,11 @@ const main = async () => {
     nonce: "0",
     isPartiallyFillable: false,
     isSmartOrder: false,
-    amount: parseUnits("0.001", 18).toString(),
-    endAmount: parseUnits("10000", 6).toString(),
-    startAmountBps: 0,
-    expectedAmountBps: 0,
+    isIncentivized: true,
+    amount: parseUnits("10000", 6).toString(),
+    endAmount: parseUnits("0.005", 18).toString(),
+    startAmountBps: 50,
+    expectedAmountBps: 200,
     // Mock value to pass type checks
     signature: "0x",
   };
@@ -107,6 +108,7 @@ const main = async () => {
           "uint32",
           "bool",
           "bool",
+          "bool",
           "uint128",
           "uint128",
           "uint16",
@@ -126,6 +128,7 @@ const main = async () => {
           intent.endTime,
           intent.isPartiallyFillable,
           intent.isSmartOrder,
+          intent.isIncentivized,
           intent.amount,
           intent.endAmount,
           intent.startAmountBps,

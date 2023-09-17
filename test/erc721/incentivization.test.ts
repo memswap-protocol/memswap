@@ -1,17 +1,15 @@
 import { defaultAbiCoder } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
+import { parseUnits } from "@ethersproject/units";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre, { ethers } from "hardhat";
 
-import { Intent, getIntentHash, signIntent } from "./utils";
-import { PermitKind, getCurrentTimestamp, signPermit2 } from "../utils";
-import { PERMIT2 } from "../../src/common/addresses";
+import { Intent, signIntent } from "./utils";
+import { getCurrentTimestamp, getIncentivizationTip } from "../utils";
 
-describe("[ERC721] Misc", async () => {
-  let chainId: number;
-
+describe("[ERC721] Incentivization", async () => {
   let deployer: SignerWithAddress;
   let alice: SignerWithAddress;
   let bob: SignerWithAddress;
@@ -24,8 +22,6 @@ describe("[ERC721] Misc", async () => {
   let token1: Contract;
 
   beforeEach(async () => {
-    chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
-
     [deployer, alice, bob] = await ethers.getSigners();
 
     nft = await ethers
@@ -55,7 +51,7 @@ describe("[ERC721] Misc", async () => {
     });
   });
 
-  it("Prevalidation", async () => {
+  it("Cannot use anything other than the required priority fee", async () => {
     const currentTime = await getCurrentTimestamp();
 
     // Generate intent
@@ -73,7 +69,7 @@ describe("[ERC721] Misc", async () => {
       nonce: 0,
       isPartiallyFillable: true,
       isSmartOrder: false,
-      isIncentivized: false,
+      isIncentivized: true,
       isCriteriaOrder: true,
       tokenIdOrCriteria: 0,
       amount: 2,
@@ -82,6 +78,7 @@ describe("[ERC721] Misc", async () => {
       expectedAmountBps: 0,
       signature: "0x",
     };
+    intent.signature = await signIntent(alice, memswap.address, intent);
 
     // Mint and approve
     await token0.connect(alice).mint(intent.endAmount);
@@ -89,24 +86,61 @@ describe("[ERC721] Misc", async () => {
 
     const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
 
-    // Only the maker can prevalidate
-    await expect(memswap.connect(bob).prevalidate([intent])).to.be.revertedWith(
-      "InvalidSignature"
-    );
+    // The priority fee cannot be lower than required
+    {
+      const nextBaseFee = parseUnits("10", "gwei");
+      await hre.network.provider.send("hardhat_setNextBlockBaseFeePerGas", [
+        "0x" + nextBaseFee.toNumber().toString(16),
+      ]);
 
-    // Cannot prevalidate smart order intents
-    intent.isSmartOrder = true;
-    await expect(
-      memswap.connect(alice).prevalidate([intent])
-    ).to.be.revertedWith("IntentCannotBePrevalidated");
+      const requiredPriorityFee = await memswap.requiredPriorityFee();
+      await expect(
+        solutionProxy.connect(bob).solveERC721(
+          intent,
+          {
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
+          },
+          [],
+          {
+            maxFeePerGas: nextBaseFee.add(requiredPriorityFee).sub(1),
+            maxPriorityFeePerGas: requiredPriorityFee,
+          }
+        )
+      ).to.be.revertedWith("InvalidPriorityFee");
+    }
 
-    // Prevalidate
-    intent.isSmartOrder = false;
-    await expect(memswap.connect(alice).prevalidate([intent]))
-      .to.emit(memswap, "IntentPrevalidated")
-      .withArgs(getIntentHash(intent));
+    // The priority fee cannot be higher than required
+    {
+      const nextBaseFee = parseUnits("10", "gwei");
+      await hre.network.provider.send("hardhat_setNextBlockBaseFeePerGas", [
+        "0x" + nextBaseFee.toNumber().toString(16),
+      ]);
 
-    // Once prevalidated, solving can be done without a maker signature
+      const requiredPriorityFee = await memswap.requiredPriorityFee();
+      await expect(
+        solutionProxy.connect(bob).solveERC721(
+          intent,
+          {
+            data: defaultAbiCoder.encode(["uint128"], [0]),
+            fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+              tokenId,
+              criteriaProof: [],
+            })),
+          },
+          [],
+          {
+            maxFeePerGas: nextBaseFee.add(requiredPriorityFee).add(1),
+            maxPriorityFeePerGas: requiredPriorityFee.add(1),
+          }
+        )
+      ).to.be.revertedWith("InvalidPriorityFee");
+    }
+
+    // The priority fee should match the required value
     await solutionProxy.connect(bob).solveERC721(
       intent,
       {
@@ -116,211 +150,142 @@ describe("[ERC721] Misc", async () => {
           criteriaProof: [],
         })),
       },
-      []
-    );
-  });
-
-  it("Cancellation", async () => {
-    const currentTime = await getCurrentTimestamp();
-
-    // Generate intent
-    const intent: Intent = {
-      isBuy: true,
-      buyToken: token1.address,
-      sellToken: token0.address,
-      maker: alice.address,
-      solver: AddressZero,
-      source: AddressZero,
-      feeBps: 0,
-      surplusBps: 0,
-      startTime: currentTime,
-      endTime: currentTime + 60,
-      nonce: 0,
-      isPartiallyFillable: true,
-      isSmartOrder: false,
-      isIncentivized: false,
-      isCriteriaOrder: true,
-      tokenIdOrCriteria: 0,
-      amount: 2,
-      endAmount: ethers.utils.parseEther("0.3"),
-      startAmountBps: 0,
-      expectedAmountBps: 0,
-    };
-    intent.signature = await signIntent(alice, memswap.address, intent);
-
-    // Mint and approve
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
-
-    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
-
-    // Only the maker can cancel
-    await expect(memswap.connect(bob).cancel([intent])).to.be.revertedWith(
-      "Unauthorized"
-    );
-
-    // Cancel
-    await expect(memswap.connect(alice).cancel([intent]))
-      .to.emit(memswap, "IntentCancelled")
-      .withArgs(getIntentHash(intent));
-
-    // Once cancelled, intent cannot be solved
-    await expect(
-      solutionProxy.connect(bob).solveERC721(
-        intent,
-        {
-          data: defaultAbiCoder.encode(["uint128"], [0]),
-          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
-            tokenId,
-            criteriaProof: [],
-          })),
-        },
-        []
-      )
-    ).to.be.revertedWith("IntentIsCancelled");
-  });
-
-  it("Increment nonce", async () => {
-    const currentTime = await getCurrentTimestamp();
-
-    // Generate intent
-    const intent: Intent = {
-      isBuy: true,
-      buyToken: token1.address,
-      sellToken: token0.address,
-      maker: alice.address,
-      solver: AddressZero,
-      source: AddressZero,
-      feeBps: 0,
-      surplusBps: 0,
-      startTime: currentTime,
-      endTime: currentTime + 60,
-      nonce: 0,
-      isPartiallyFillable: true,
-      isSmartOrder: false,
-      isIncentivized: false,
-      isCriteriaOrder: true,
-      tokenIdOrCriteria: 0,
-      amount: 2,
-      endAmount: ethers.utils.parseEther("0.3"),
-      startAmountBps: 0,
-      expectedAmountBps: 0,
-    };
-    intent.signature = await signIntent(alice, memswap.address, intent);
-
-    // Mint and approve
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(memswap.address, intent.endAmount);
-
-    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
-
-    // Increment nonce
-    await expect(memswap.connect(alice).incrementNonce())
-      .to.emit(memswap, "NonceIncremented")
-      .withArgs(alice.address, 1);
-
-    // Once the nonce was incremented, intents signed on old nonces cannot be solved anymore
-    // (the signature check will fail since the intent hash will be computed on latest nonce
-    // value, and not on the nonce value the intent was signed with)
-    await expect(
-      solutionProxy.connect(bob).solveERC721(
-        intent,
-        {
-          data: defaultAbiCoder.encode(["uint128"], [0]),
-          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
-            tokenId,
-            criteriaProof: [],
-          })),
-        },
-        []
-      )
-    ).to.be.revertedWith("InvalidSignature");
-  });
-
-  it("Permit2 permit", async () => {
-    const currentTime = await getCurrentTimestamp();
-
-    // Generate intent
-    const intent: Intent = {
-      isBuy: true,
-      buyToken: token1.address,
-      sellToken: token0.address,
-      maker: alice.address,
-      solver: AddressZero,
-      source: AddressZero,
-      feeBps: 0,
-      surplusBps: 0,
-      startTime: currentTime,
-      endTime: currentTime + 60,
-      nonce: 0,
-      isPartiallyFillable: true,
-      isSmartOrder: false,
-      isIncentivized: false,
-      isCriteriaOrder: true,
-      tokenIdOrCriteria: 0,
-      amount: 2,
-      endAmount: ethers.utils.parseEther("0.3"),
-      startAmountBps: 0,
-      expectedAmountBps: 0,
-    };
-    intent.signature = await signIntent(alice, memswap.address, intent);
-
-    // Mint and approve Permit2
-    await token0.connect(alice).mint(intent.endAmount);
-    await token0.connect(alice).approve(PERMIT2[chainId], intent.endAmount);
-
-    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
-
-    // If not permit was passed, the solution transaction will revert
-    await expect(
-      solutionProxy.connect(bob).solveERC721(
-        intent,
-        {
-          data: defaultAbiCoder.encode(["uint128"], [0]),
-          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
-            tokenId,
-            criteriaProof: [],
-          })),
-        },
-        []
-      )
-    ).to.be.reverted;
-
-    // Build and sign permit
-    const permit = {
-      details: {
-        token: intent.sellToken,
-        amount: intent.endAmount,
-        expiration: currentTime + 3600,
-        nonce: 0,
-      },
-      spender: memswap.address,
-      sigDeadline: currentTime + 3600,
-    };
-    const permitSignature = await signPermit2(alice, PERMIT2[chainId], permit);
-
-    await solutionProxy.connect(bob).solveERC721(
-      intent,
+      [],
       {
-        data: defaultAbiCoder.encode(["uint128"], [0]),
-        fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
-          tokenId,
-          criteriaProof: [],
-        })),
-      },
-      [
-        {
-          kind: PermitKind.PERMIT2,
-          data: defaultAbiCoder.encode(
-            [
-              "address",
-              "((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline)",
-              "bytes",
-            ],
-            [alice.address, permit, permitSignature]
-          ),
-        },
-      ]
+        value: await getIncentivizationTip(
+          memswap,
+          intent.isBuy,
+          intent.endAmount,
+          intent.expectedAmountBps,
+          intent.endAmount
+        ),
+        maxPriorityFeePerGas: await memswap.requiredPriorityFee(),
+      }
     );
+  });
+
+  it("Cannot pay builder out-of-band", async () => {
+    const currentTime = await getCurrentTimestamp();
+
+    // Generate intent
+    const intent: Intent = {
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
+      maker: alice.address,
+      solver: AddressZero,
+      source: AddressZero,
+      feeBps: 0,
+      surplusBps: 0,
+      startTime: currentTime,
+      endTime: currentTime + 60,
+      nonce: 0,
+      isPartiallyFillable: true,
+      isSmartOrder: false,
+      isIncentivized: true,
+      isCriteriaOrder: true,
+      tokenIdOrCriteria: 0,
+      amount: 2,
+      endAmount: ethers.utils.parseEther("0.3"),
+      startAmountBps: 0,
+      expectedAmountBps: 0,
+      signature: "0x",
+    };
+    intent.signature = await signIntent(alice, memswap.address, intent);
+
+    // Mint and approve
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+
+    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
+
+    // Enable out-of-band payments to the builder
+    await solutionProxy.connect(bob).setPayBuilderOnRefund(true);
+
+    // The solution will fail if the tip the builder was too high
+    await expect(
+      solutionProxy.connect(bob).solveERC721(
+        intent,
+        {
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
+        },
+        [],
+        {
+          value: await getIncentivizationTip(
+            memswap,
+            intent.isBuy,
+            intent.endAmount,
+            intent.expectedAmountBps,
+            intent.endAmount
+          ).then((tip) => tip.add(1)),
+          maxPriorityFeePerGas: await memswap.requiredPriorityFee(),
+        }
+      )
+    ).to.be.revertedWith("InvalidTip");
+  });
+
+  it("Insufficient tip", async () => {
+    const currentTime = await getCurrentTimestamp();
+
+    // Generate intent
+    const intent: Intent = {
+      isBuy: true,
+      buyToken: token1.address,
+      sellToken: token0.address,
+      maker: alice.address,
+      solver: AddressZero,
+      source: AddressZero,
+      feeBps: 0,
+      surplusBps: 0,
+      startTime: currentTime,
+      endTime: currentTime + 60,
+      nonce: 0,
+      isPartiallyFillable: true,
+      isSmartOrder: false,
+      isIncentivized: true,
+      isCriteriaOrder: true,
+      tokenIdOrCriteria: 0,
+      amount: 2,
+      endAmount: ethers.utils.parseEther("0.3"),
+      startAmountBps: 0,
+      expectedAmountBps: 0,
+      signature: "0x",
+    };
+    intent.signature = await signIntent(alice, memswap.address, intent);
+
+    // Mint and approve
+    await token0.connect(alice).mint(intent.endAmount);
+    await token0.connect(alice).approve(memswap.address, intent.endAmount);
+
+    const tokenIdsToFill = [...Array(Number(intent.amount)).keys()];
+
+    // The solution will fail if the tip the builder was too low
+    await expect(
+      solutionProxy.connect(bob).solveERC721(
+        intent,
+        {
+          data: defaultAbiCoder.encode(["uint128"], [0]),
+          fillTokenDetails: tokenIdsToFill.map((tokenId) => ({
+            tokenId,
+            criteriaProof: [],
+          })),
+        },
+        [],
+        {
+          value: await getIncentivizationTip(
+            memswap,
+            intent.isBuy,
+            intent.endAmount,
+            intent.expectedAmountBps,
+            intent.endAmount
+          ).then((tip) => tip.sub(1)),
+          maxPriorityFeePerGas: await memswap.requiredPriorityFee(),
+        }
+      )
+    ).to.be.revertedWith("InvalidTip");
   });
 });

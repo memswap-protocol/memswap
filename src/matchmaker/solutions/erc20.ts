@@ -174,6 +174,7 @@ export const process = async (
                 uint32 endTime,
                 bool isPartiallyFillable,
                 bool isSmartOrder,
+                bool isIncentivized,
                 uint128 amount,
                 uint128 endAmount,
                 uint16 startAmountBps,
@@ -203,7 +204,8 @@ export const process = async (
         ]),
         value: 0,
         gas: parsedSolutionTx.gasLimit,
-        gasPrice: (parsedSolutionTx.gasPrice ?? parsedSolutionTx.maxFeePerGas)!,
+        maxFeePerGas: parsedSolutionTx.maxFeePerGas!,
+        maxPriorityFeePerGas: parsedSolutionTx.maxPriorityFeePerGas!,
       },
       // Submission transactions
       ...txs.map((tx) => {
@@ -214,7 +216,8 @@ export const process = async (
           data: parsedTx.data!,
           value: parsedTx.value,
           gas: parsedTx.gasLimit,
-          gasPrice: (parsedTx.gasPrice ?? parsedTx.maxFeePerGas)!,
+          maxFeePerGas: parsedTx.maxFeePerGas!,
+          maxPriorityFeePerGas: parsedTx.maxPriorityFeePerGas!,
         };
       }),
     ];
