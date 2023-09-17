@@ -91,7 +91,7 @@ const worker = new Worker(
       const gasLimit = 800000;
 
       // Approximations for gas used by memswap logic and gas used by swap logic
-      const memswapGas = 250000;
+      const memswapGas = 150000;
       const defaultGas = 200000;
 
       let solution: SolutionERC721;
