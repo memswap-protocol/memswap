@@ -527,6 +527,14 @@ contract MemswapERC20 is
 
     // Internal methods
 
+    /**
+     * @dev Run pre-processing checks before the solution for an intent gets executed
+     *
+     * @param intent Intent to check
+     * @param amountToFill Amount filled
+     *
+     * @return actualAmountToFill The amount to fill, adjusted to the amount available for the intent
+     */
     function _preProcess(
         Intent memory intent,
         uint128 amountToFill
@@ -632,6 +640,18 @@ contract MemswapERC20 is
         }
     }
 
+    /**
+     * @dev Run post-process checks after the solution for an intent was executed
+     *
+     * @param intent Intent to check
+     * @param amountToFill Amount filled
+     * @param amountToCheck Amount received to check the solution against
+     * @param makerBuyBalanceDiff Difference in buy token balance resulted from executing the solution
+     * @param makerSellBalanceDiff Difference in sell token balance resulted from executing the solution
+     * @param sourceBalanceDiff Difference in the balance of the source resulted from executing the solution
+     *
+     * @return requiredTip Tip for the block builder, dependent on the executed amount (only relevant for incentivized intents)
+     */
     function _postProcess(
         Intent memory intent,
         uint128 amountToFill,
