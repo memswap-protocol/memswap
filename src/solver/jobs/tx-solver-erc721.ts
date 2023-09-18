@@ -2,7 +2,7 @@ import { Interface, defaultAbiCoder } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { parse, serialize } from "@ethersproject/transactions";
-import { parseUnits } from "@ethersproject/units";
+import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import { FlashbotsBundleRawTransaction } from "@flashbots/ethers-provider-bundle";
 import axios from "axios";
@@ -230,7 +230,7 @@ const worker = new Worker(
           .mul(
             parseUnits(solutionDetails.sellTokenToEthRate, sellToken.decimals)
           )
-          .div("1000000000000000000");
+          .div(parseEther("1"));
 
         if (bn(maxSellAmountInSellToken).gt(maxAmountIn)) {
           logger.error(
@@ -249,9 +249,14 @@ const worker = new Worker(
         const sellTokenDecimals = await solutions.uniswap
           .getToken(intent.sellToken, provider)
           .then((t) => t.decimals);
-        const grossProfitInEth = maxAmountIn.sub(
-          solutionDetails.maxSellAmountInEth
+        const grossProfitInSellToken = maxAmountIn.sub(
+          maxSellAmountInSellToken
         );
+        const grossProfitInEth = grossProfitInSellToken
+          .mul(parseEther("1"))
+          .div(
+            parseUnits(solutionDetails.sellTokenToEthRate, sellTokenDecimals)
+          );
 
         solution = {
           calls: solutionDetails.calls,
