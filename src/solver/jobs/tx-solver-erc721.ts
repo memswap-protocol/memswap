@@ -252,8 +252,8 @@ const worker = new Worker(
         const sellTokenDecimals = await solutions.uniswap
           .getToken(intent.sellToken, provider)
           .then((t) => t.decimals);
-        const grossProfitInEth = bn(solutionDetails.maxSellAmountInEth).sub(
-          maxAmountIn
+        const grossProfitInEth = maxAmountIn.sub(
+          solutionDetails.maxSellAmountInEth
         );
 
         solution = {
