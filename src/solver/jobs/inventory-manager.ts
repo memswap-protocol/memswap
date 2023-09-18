@@ -51,16 +51,16 @@ const worker = new Worker(
 
       const balanceInToken = await contract.balanceOf(solver.address);
       const balanceInEth = bn(balanceInToken)
-        .mul(parseUnits(ethPrice, token.decimals))
-        .div(parseEther("1"));
+        .mul(parseEther("1"))
+        .div(parseUnits(ethPrice, token.decimals));
 
       // Must have at least 0.01 ETH worth of tokens
       if (balanceInEth.gte(parseEther("0.01"))) {
         const latestBaseFee = await provider
           .getBlock("pending")
           .then((b) => b.baseFeePerGas!);
-        // Gas price should be lower than 20 gwei
-        if (latestBaseFee <= parseUnits("20", "gwei")) {
+        // Gas price should be lower than 25 gwei
+        if (latestBaseFee <= parseUnits("25", "gwei")) {
           logger.info(
             COMPONENT,
             JSON.stringify({
