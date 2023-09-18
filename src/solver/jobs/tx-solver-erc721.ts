@@ -115,19 +115,6 @@ const worker = new Worker(
           return;
         }
 
-        if (intent.sellToken !== MEMETH[config.chainId]) {
-          logger.info(
-            COMPONENT,
-            JSON.stringify({
-              msg: "Non-ETH intents are not yet supported",
-              intent,
-              intentHash,
-              approvalTxOrTxHash,
-            })
-          );
-          return;
-        }
-
         if (!(intent.isCriteriaOrder && intent.tokenIdOrCriteria === "0")) {
           logger.info(
             COMPONENT,
@@ -235,12 +222,22 @@ const worker = new Worker(
           .add(solutionDetails.gasUsed ?? defaultGas)
           .toString();
 
-        if (bn(solutionDetails.maxSellAmountInEth).gt(maxAmountIn)) {
+        const sellToken = await solutions.uniswap.getToken(
+          intent.sellToken,
+          provider
+        );
+        const maxSellAmountInSellToken = bn(solutionDetails.maxSellAmountInEth)
+          .mul(
+            parseUnits(solutionDetails.sellTokenToEthRate, sellToken.decimals)
+          )
+          .div("1000000000000000000");
+
+        if (bn(maxSellAmountInSellToken).gt(maxAmountIn)) {
           logger.error(
             COMPONENT,
             JSON.stringify({
               msg: "Solution not good enough",
-              solutionAmountIn: solutionDetails.maxSellAmountInEth,
+              solutionAmountIn: maxSellAmountInSellToken,
               maxAmountIn: maxAmountIn.toString(),
               intentHash,
               approvalTxOrTxHash,
