@@ -42,21 +42,37 @@ export const solve = async (
 
   // When solving Blur orders, we must use multi-tx filling
   const onlyPathResult = await axios
-    .post(`${reservoirBaseUrl}/execute/buy/v7`, {
-      ...requestOptions,
-      onlyPath: true,
-    })
+    .post(
+      `${reservoirBaseUrl}/execute/buy/v7`,
+      {
+        ...requestOptions,
+        onlyPath: true,
+      },
+      {
+        headers: {
+          "X-Api-Key": config.reservoirApiKey,
+        },
+      }
+    )
     .then((r) => r.data);
   if (onlyPathResult.path.some((item: any) => item.source === "blur.io")) {
     useMultiTxs = true;
   }
 
   const result = await axios
-    .post(`${reservoirBaseUrl}/execute/buy/v7`, {
-      ...requestOptions,
-      taker: useMultiTxs ? solver.address : intent.maker,
-      relayer: useMultiTxs ? undefined : solver.address,
-    })
+    .post(
+      `${reservoirBaseUrl}/execute/buy/v7`,
+      {
+        ...requestOptions,
+        taker: useMultiTxs ? solver.address : intent.maker,
+        relayer: useMultiTxs ? undefined : solver.address,
+      },
+      {
+        headers: {
+          "X-Api-Key": config.reservoirApiKey,
+        },
+      }
+    )
     .then((r) => r.data);
   if (useMultiTxs) {
     // Handle the Blur auth step
