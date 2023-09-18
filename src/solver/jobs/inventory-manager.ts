@@ -132,5 +132,6 @@ export const addToQueue = async (address: string) =>
         every: 3600 * 1000,
         limit: 1,
       },
+      jobId: address,
     }
   );
