@@ -6,11 +6,25 @@ import { Contract } from "@ethersproject/contracts";
 import { Wallet } from "@ethersproject/wallet";
 import axios from "axios";
 
-import { MEMETH, MEMSWAP_ERC721, SOLUTION_PROXY } from "../../common/addresses";
+import { MEMETH, SOLUTION_PROXY } from "../../common/addresses";
 import { IntentERC721, TxData } from "../../common/types";
 import { bn } from "../../common/utils";
 import { config } from "../config";
 import { Call, SolutionDetailsERC721 } from "../types";
+
+const getReservoirBaseUrl = () =>
+  config.chainId === 1
+    ? "https://api.reservoir.tools"
+    : "https://api-goerli.reservoir.tools";
+
+export const getEthConversion = async (token: string) =>
+  token === MEMETH[config.chainId]
+    ? "1"
+    : await axios
+        .get(
+          `${getReservoirBaseUrl()}/currencies/conversion/v1?from=${AddressZero}&to=${token}`
+        )
+        .then((response) => response.data.conversion);
 
 export const solve = async (
   intent: IntentERC721,
@@ -19,11 +33,6 @@ export const solve = async (
 ): Promise<SolutionDetailsERC721> => {
   const solver = new Wallet(config.solverPk);
   const quantity = Number(fillAmount);
-
-  const reservoirBaseUrl =
-    config.chainId === 1
-      ? "https://api.reservoir.tools"
-      : "https://api-goerli.reservoir.tools";
 
   const requestOptions = {
     items: [
@@ -43,7 +52,7 @@ export const solve = async (
   // When solving Blur orders, we must use multi-tx filling
   const onlyPathResult = await axios
     .post(
-      `${reservoirBaseUrl}/execute/buy/v7`,
+      `${getReservoirBaseUrl()}/execute/buy/v7`,
       {
         ...requestOptions,
         onlyPath: true,
@@ -61,7 +70,7 @@ export const solve = async (
 
   const result = await axios
     .post(
-      `${reservoirBaseUrl}/execute/buy/v7`,
+      `${getReservoirBaseUrl()}/execute/buy/v7`,
       {
         ...requestOptions,
         taker: useMultiTxs ? solver.address : intent.maker,
@@ -84,7 +93,9 @@ export const solve = async (
         const messageSignature = await solver.signMessage(message);
 
         await axios.post(
-          `${reservoirBaseUrl}${item.data.post.endpoint}?signature=${messageSignature}`,
+          `${getReservoirBaseUrl()}${
+            item.data.post.endpoint
+          }?signature=${messageSignature}`,
           item.data.post.body
         );
 
@@ -196,14 +207,7 @@ export const solve = async (
       txs,
       tokenIds,
       maxSellAmountInEth: price.toString(),
-      sellTokenToEthRate:
-        intent.sellToken === MEMETH[config.chainId]
-          ? "1"
-          : await axios
-              .get(
-                `${reservoirBaseUrl}/currencies/conversion/v1?from=${AddressZero}&to=${intent.sellToken}`
-              )
-              .then((response) => response.data.conversion),
+      sellTokenToEthRate: await getEthConversion(intent.sellToken),
       gasUsed,
     },
   };

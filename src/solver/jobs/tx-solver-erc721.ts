@@ -9,7 +9,7 @@ import axios from "axios";
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "crypto";
 
-import { MATCHMAKER, MEMETH, SOLUTION_PROXY } from "../../common/addresses";
+import { MATCHMAKER, SOLUTION_PROXY } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import {
   Authorization,
@@ -27,6 +27,7 @@ import {
   now,
 } from "../../common/utils";
 import { config } from "../config";
+import * as jobs from "../jobs";
 import { redis } from "../redis";
 import * as solutions from "../solutions";
 import { BuySolutionDataERC721 } from "../types";
@@ -661,6 +662,10 @@ const worker = new Worker(
           }
         }
       }
+
+      await jobs.inventoryManager.addToQueue(
+        intent.isBuy ? intent.sellToken : intent.buyToken
+      );
 
       const perfTime6 = performance.now();
 

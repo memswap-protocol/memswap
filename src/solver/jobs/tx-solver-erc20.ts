@@ -28,6 +28,7 @@ import {
   now,
 } from "../../common/utils";
 import { config } from "../config";
+import * as jobs from "../jobs";
 import { redis } from "../redis";
 import * as solutions from "../solutions";
 import { BuySolutionDataERC20, SellSolutionDataERC20 } from "../types";
@@ -695,6 +696,10 @@ const worker = new Worker(
           }
         }
       }
+
+      await jobs.inventoryManager.addToQueue(
+        intent.isBuy ? intent.sellToken : intent.buyToken
+      );
 
       const perfTime6 = performance.now();
 

@@ -8,7 +8,7 @@ import { bn } from "../../common/utils";
 import { config } from "../config";
 import { SolutionDetailsERC20 } from "../types";
 
-const ZEROEX_ETH = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+export const ZEROEX_ETH = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 
 export const solve = async (
   intent: IntentERC20,

@@ -28,6 +28,7 @@ const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath("/admin/bullmq");
 createBullBoard({
   queues: [
+    new BullMQAdapter(jobs.inventoryManager.queue),
     new BullMQAdapter(jobs.txListener.queue),
     new BullMQAdapter(jobs.txSolverERC20.queue),
     new BullMQAdapter(jobs.txSolverERC721.queue),
