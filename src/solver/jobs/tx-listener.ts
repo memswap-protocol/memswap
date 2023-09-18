@@ -230,8 +230,7 @@ const worker = new Worker(
           result.intents[0]
         );
       } else if (
-        // TODO: Fix 4byte value
-        tx.input.startsWith("0x4adb41f5") &&
+        tx.input.startsWith("0xd6882bc9") &&
         tx.to?.toLowerCase() === MEMSWAP_ERC721[config.chainId]
       ) {
         const iface = new Interface([
