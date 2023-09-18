@@ -130,7 +130,6 @@ export const addToQueue = async (address: string) =>
       repeat: {
         // Every hour
         every: 3600 * 1000,
-        limit: 1,
       },
       jobId: address,
     }
