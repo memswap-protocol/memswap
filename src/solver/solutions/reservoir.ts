@@ -165,7 +165,7 @@ export const solve = async (
         to: intent.buyToken,
         data: contract.interface.encodeFunctionData("transferFrom", [
           solver.address,
-          MEMSWAP_ERC721[config.chainId],
+          intent.maker,
           tokenId,
         ]),
         value: "0",
