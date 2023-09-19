@@ -88,7 +88,6 @@ const worker = new Worker(
                   buyToken: solutions.zeroex.ZEROEX_ETH,
                   sellToken: address,
                   sellAmount: balanceInToken.toString(),
-                  takerAddress: solver.address,
                 },
                 headers: {
                   "0x-Api-Key": config.zeroExApiKey,
