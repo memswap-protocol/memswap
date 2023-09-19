@@ -109,6 +109,7 @@ const worker = new Worker(
             await solver.sendTransaction({
               to: swapData.to,
               data: swapData.data,
+              // Explicit gas limit to avoid "out-of-gas" errors
               gasLimit: 700000,
             });
           }
