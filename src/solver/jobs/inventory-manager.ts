@@ -125,15 +125,17 @@ worker.on("error", (error) => {
   logger.error(COMPONENT, JSON.stringify({ msg: "Worker errored", error }));
 });
 
-export const addToQueue = async (address: string) =>
+export const addToQueue = async (address: string, force?: boolean) =>
   queue.add(
     randomUUID(),
     { address },
     {
-      repeat: {
-        // Every hour
-        every: 3600 * 1000,
-      },
-      jobId: address,
+      repeat: force
+        ? undefined
+        : {
+            // Every hour
+            every: 3600 * 1000,
+          },
+      jobId: force ? undefined : address,
     }
   );

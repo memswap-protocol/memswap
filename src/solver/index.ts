@@ -61,6 +61,14 @@ app.post("/tx-listener", async (req, res) => {
   return res.json({ message: "Success" });
 });
 
+app.post("/inventory-manager", async (req, res) => {
+  const address = req.body.address as string;
+
+  await jobs.inventoryManager.addToQueue(address, true);
+
+  return res.json({ message: "Success" });
+});
+
 // ERC20
 
 app.post("/erc20/intents", async (req, res) => {
