@@ -39,39 +39,39 @@ const main = async () => {
   // await deployContract(deployer, "MEMETH");
 
   // MemswapNFT
-  MEMSWAP_NFT[chainId] = await deployContract(deployer, "MemswapAlphaNFT", [
-    deployer.address,
-    "https://test-tokens-metadata.vercel.app/api/memswap-alpha/",
-    "https://test-tokens-metadata.vercel.app/api/memswap-alpha/contract",
-  ]);
+  // MEMSWAP_NFT[chainId] = await deployContract(deployer, "MemswapAlphaNFT", [
+  //   deployer.address,
+  //   "https://test-tokens-metadata.vercel.app/api/memswap-alpha/",
+  //   "https://test-tokens-metadata.vercel.app/api/memswap-alpha/contract",
+  // ]);
 
   // MemswapERC20
-  MEMSWAP_ERC20[chainId] = await deployContract(deployer, "MemswapERC20", [
-    MEMSWAP_NFT[chainId],
-  ]);
+  // MEMSWAP_ERC20[chainId] = await deployContract(deployer, "MemswapERC20", [
+  //   MEMSWAP_NFT[chainId],
+  // ]);
 
   // MemswapERC721
-  MEMSWAP_ERC721[chainId] = await deployContract(deployer, "MemswapERC721", [
-    MEMSWAP_NFT[chainId],
-  ]);
+  // MEMSWAP_ERC721[chainId] = await deployContract(deployer, "MemswapERC721", [
+  //   MEMSWAP_NFT[chainId],
+  // ]);
 
   // SolutionProxy
-  await deployContract(deployer, "SolutionProxy", [
-    SOLVER[chainId],
-    MEMSWAP_ERC20[chainId],
-    MEMSWAP_ERC721[chainId],
-  ]);
+  // await deployContract(deployer, "SolutionProxy", [
+  //   SOLVER[chainId],
+  //   MEMSWAP_ERC20[chainId],
+  //   MEMSWAP_ERC721[chainId],
+  // ]);
 
   // Set MemswapERC20 and MemswapERC721 as minters
-  await deployer.sendTransaction({
-    to: MEMSWAP_NFT[chainId],
-    data: new Interface([
-      "function setIsAllowedToMint(address[] minters, bool[] allowed)",
-    ]).encodeFunctionData("setIsAllowedToMint", [
-      [MEMSWAP_ERC20[chainId], MEMSWAP_ERC721[chainId]],
-      [true, true],
-    ]),
-  });
+  // await deployer.sendTransaction({
+  //   to: MEMSWAP_NFT[chainId],
+  //   data: new Interface([
+  //     "function setIsAllowedToMint(address[] minters, bool[] allowed)",
+  //   ]).encodeFunctionData("setIsAllowedToMint", [
+  //     [MEMSWAP_ERC20[chainId], MEMSWAP_ERC721[chainId]],
+  //     [true, true],
+  //   ]),
+  // });
 };
 
 main()
