@@ -3,11 +3,11 @@ type ChainIdToAddress = { [chainId: number]: string };
 // Protocol
 export const MEMSWAP_ERC20: ChainIdToAddress = {
   1: "0xe493c1a47f63d93db966b827a496d2431395e030",
-  5: "0x8adda31fe63696ac64ded7d0ea208102b1358c44",
+  5: "0xbc1287f5af439c7d6dcfa0bdcbb30d81725ffda0",
 };
 export const MEMSWAP_ERC721: ChainIdToAddress = {
   1: "0x6afc65c964267bd4c10a488df5810d32a6c35b6e",
-  5: "0x19a1b89a83b2729c5c3920e5719b01f80af49621",
+  5: "0x3a62977f4d0a26ce6feb66e180e3eabd631dbf32",
 };
 export const MEMETH: ChainIdToAddress = {
   1: "0x8adda31fe63696ac64ded7d0ea208102b1358c44",
@@ -15,7 +15,7 @@ export const MEMETH: ChainIdToAddress = {
 };
 export const MEMSWAP_NFT: ChainIdToAddress = {
   1: "0x78c1d7aba94f51185f6afb9ef13535c3629b6dc5",
-  5: "0xeae2f5b8e7085fb766f7f270955abef018d61fdb",
+  5: "0x27ee048b431d00d8f9ffc3fe3b8e657efeb58538",
 };
 
 // Solver
@@ -25,7 +25,7 @@ export const SOLVER: ChainIdToAddress = {
 };
 export const SOLUTION_PROXY: ChainIdToAddress = {
   1: "0x297f09d8cc7b7fd0c0a0be704dad7a3b327e3bce",
-  5: "0x58c90b5dbc69963fb0cabee1163747fdbb7a8b18",
+  5: "0x357dfbec07a628e934bdb3642056fd72f10a7902",
 };
 
 // Matchmaker
