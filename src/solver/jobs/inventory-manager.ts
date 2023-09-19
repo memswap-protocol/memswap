@@ -36,7 +36,7 @@ const worker = new Worker(
 
     try {
       const provider = new JsonRpcProvider(config.jsonUrl);
-      const solver = new Wallet(config.solverPk);
+      const solver = new Wallet(config.solverPk).connect(provider);
 
       const contract = new Contract(
         address,
@@ -101,10 +101,12 @@ const worker = new Worker(
               swapData.allowanceTarget
             );
             if (allowance.lt(balanceInToken)) {
-              await contract.approve(swapData.allowanceTarget, MaxUint256);
+              await contract
+                .connect(solver)
+                .approve(swapData.allowanceTarget, MaxUint256);
             }
 
-            await solver.connect(provider).sendTransaction({
+            await solver.sendTransaction({
               to: swapData.to,
               data: swapData.data,
             });
