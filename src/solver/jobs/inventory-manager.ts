@@ -137,12 +137,7 @@ export const addToQueue = async (address: string, force?: boolean) =>
     randomUUID(),
     { address },
     {
-      repeat: force
-        ? undefined
-        : {
-            // Every hour
-            every: 3600 * 1000,
-          },
+      delay: force ? undefined : 3600 * 1000,
       jobId: force ? undefined : address,
     }
   );
