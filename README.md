@@ -8,4 +8,4 @@ Repository structure:
 - [`test`](./test): contract tests
 - [`common`](./src/common): logic shared between the solver and the matchmaker
 - [`matchmaker`](./src/matchmaker): reference matchmaker implementation
-- [`searcher`](./src/searcher): reference searcher implementation
+- [`solver`](./src/solver): reference solver implementation
