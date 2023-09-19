@@ -106,12 +106,15 @@ const worker = new Worker(
               await tx.wait();
             }
 
-            await solver.sendTransaction({
+            const txData = {
               to: swapData.to,
               data: swapData.data,
               // Explicit gas limit to avoid "out-of-gas" errors
               gasLimit: 700000,
-            });
+            };
+
+            await solver.estimateGas(txData);
+            await solver.sendTransaction(txData);
           }
         }
       }
