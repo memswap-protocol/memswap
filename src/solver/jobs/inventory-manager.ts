@@ -1,5 +1,5 @@
 import { Interface } from "@ethersproject/abi";
-import { MaxUint256 } from "@ethersproject/constants";
+import { AddressZero, MaxUint256 } from "@ethersproject/constants";
 import { Contract } from "@ethersproject/contracts";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { parseEther, parseUnits } from "@ethersproject/units";
@@ -30,6 +30,9 @@ const worker = new Worker(
   COMPONENT,
   async (job) => {
     const { address } = job.data as { address: string };
+    if (address === AddressZero) {
+      return;
+    }
 
     try {
       const provider = new JsonRpcProvider(config.jsonUrl);
