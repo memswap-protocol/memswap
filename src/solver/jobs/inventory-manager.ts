@@ -100,14 +100,16 @@ const worker = new Worker(
               swapData.allowanceTarget
             );
             if (allowance.lt(balanceInToken)) {
-              await contract
+              const tx = await contract
                 .connect(solver)
                 .approve(swapData.allowanceTarget, MaxUint256);
+              await tx.wait();
             }
 
             await solver.sendTransaction({
               to: swapData.to,
               data: swapData.data,
+              gasLimit: 700000,
             });
           }
         }
