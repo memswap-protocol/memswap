@@ -45,10 +45,14 @@ app.get("/lives", (_, res) => {
 // ERC20
 
 app.post("/erc20/intents/private", async (req, res) => {
-  const { approvalTxOrTxHash, intent } = req.body as {
+  let { approvalTxOrTxHash, intent } = req.body as {
     approvalTxOrTxHash?: string;
     intent: IntentERC20;
   };
+
+  if (approvalTxOrTxHash && !approvalTxOrTxHash.startsWith("0x")) {
+    approvalTxOrTxHash = "0x" + approvalTxOrTxHash;
+  }
 
   if (!config.knownSolversERC20.length) {
     return res.status(400).json({ error: "No known solvers" });
@@ -119,10 +123,14 @@ app.post("/erc20/solutions", async (req, res) => {
 // ERC721
 
 app.post("/erc721/intents/private", async (req, res) => {
-  const { approvalTxOrTxHash, intent } = req.body as {
+  let { approvalTxOrTxHash, intent } = req.body as {
     approvalTxOrTxHash?: string;
     intent: IntentERC721;
   };
+
+  if (approvalTxOrTxHash && !approvalTxOrTxHash.startsWith("0x")) {
+    approvalTxOrTxHash = "0x" + approvalTxOrTxHash;
+  }
 
   if (!config.knownSolversERC721.length) {
     return res.status(400).json({ error: "No known solvers" });
