@@ -4,7 +4,7 @@ Memswap is a fully decentralized intent-based swap protocol that leverages the p
 
 Repository structure:
 
-- [`contracts`](./contracts): core contracts
+h- [`contracts`](./contracts): core contracts (ALPHA - UNAUDITED)
 - [`test`](./test): contract tests
 - [`common`](./src/common): logic shared between the solver and the matchmaker
 - [`matchmaker`](./src/matchmaker): reference matchmaker implementation
