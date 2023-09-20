@@ -21,8 +21,8 @@ export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
   defaultJobOptions: {
     attempts: 5,
-    removeOnComplete: 0,
-    removeOnFail: 0,
+    removeOnComplete: true,
+    removeOnFail: true,
   },
 });
 
