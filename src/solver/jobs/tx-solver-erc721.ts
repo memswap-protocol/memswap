@@ -374,6 +374,7 @@ const worker = new Worker(
               accessList: tx.accessList,
               maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
               maxFeePerGas: tx.maxFeePerGas,
+              gasPrice: tx.gasPrice,
             },
             {
               v: tx.v!,
