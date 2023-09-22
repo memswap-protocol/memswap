@@ -455,11 +455,11 @@ const worker = new Worker(
         approvalTxHash = parse(approvalTxOrTxHash).hash!;
       }
 
-      // Just in case, set to 30% more than the pending block's base fee
+      // Just in case, set to 12.5% more than the pending block's base fee
       const estimatedBaseFee = await provider
         .getBlock("pending")
         .then((b) =>
-          b!.baseFeePerGas!.add(b!.baseFeePerGas!.mul(3000).div(10000))
+          b!.baseFeePerGas!.add(b!.baseFeePerGas!.mul(1250).div(10000))
         );
 
       const perfTime4 = performance.now();
