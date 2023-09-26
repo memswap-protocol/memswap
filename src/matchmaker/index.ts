@@ -1,6 +1,7 @@
 import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
+import axios from "axios";
 import express from "express";
 import cors from "cors";
 
@@ -26,8 +27,8 @@ const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath("/admin/bullmq");
 createBullBoard({
   queues: [
-    new BullMQAdapter(jobs.signatureReleaseERC20.queue),
-    new BullMQAdapter(jobs.signatureReleaseERC721.queue),
+    new BullMQAdapter(jobs.submissionERC20.queue),
+    new BullMQAdapter(jobs.submissionERC721.queue),
   ],
   serverAdapter: serverAdapter,
 });
@@ -58,15 +59,12 @@ app.post("/erc20/intents/private", async (req, res) => {
     return res.status(400).json({ error: "No known solvers" });
   }
 
-  // Send to a single solver
-  await jobs.signatureReleaseERC20.submitDirectlyToSolver(
-    config.knownSolversERC20.slice(0, 1).map((s) => {
-      const [address, baseUrl] = s.split(" ");
-      return { address, baseUrl };
-    }),
+  // Forward to a single solver
+  const [solver] = config.knownSolversERC20.slice(0, 1);
+  await axios.post(`${solver.split(" ")[0]}/erc20/intents`, {
     intent,
-    approvalTxOrTxHash
-  );
+    approvalTxOrTxHash,
+  });
 
   return res.json({ message: "Success" });
 });
@@ -81,14 +79,14 @@ app.post("/erc20/intents/public", async (req, res) => {
     return res.status(400).json({ error: "No known solvers" });
   }
 
-  // Send to all solvers
-  await jobs.signatureReleaseERC20.submitDirectlyToSolver(
-    config.knownSolversERC20.map((s) => {
-      const [address, baseUrl] = s.split(" ");
-      return { address, baseUrl };
-    }),
-    intent,
-    approvalTxOrTxHash
+  // Forward to all solvers
+  await Promise.all(
+    config.knownSolversERC20.map(async (solver) =>
+      axios.post(`${solver.split(" ")[0]}/erc20/intents`, {
+        intent,
+        approvalTxOrTxHash,
+      })
+    )
   );
 
   // TODO: Relay via bloxroute
@@ -97,18 +95,16 @@ app.post("/erc20/intents/public", async (req, res) => {
 });
 
 app.post("/erc20/solutions", async (req, res) => {
-  const { uuid, baseUrl, intent, txs } = req.body as {
-    uuid: string;
-    baseUrl: string;
+  const { intent, txs } = req.body as {
     intent: IntentERC20;
     txs: string[];
   };
 
-  if (!uuid || !baseUrl || !intent || !txs?.length) {
+  if (!intent || !txs?.length) {
     return res.status(400).json({ message: "Invalid parameters" });
   }
 
-  const result = await solutions.erc20.process(uuid, baseUrl, intent, txs);
+  const result = await solutions.erc20.process(intent, txs);
   if (result.status === "error") {
     return res.status(400).json({ error: result.error });
   } else if (result.status === "success") {
@@ -136,15 +132,12 @@ app.post("/erc721/intents/private", async (req, res) => {
     return res.status(400).json({ error: "No known solvers" });
   }
 
-  // Send to a single solver
-  await jobs.signatureReleaseERC721.submitDirectlyToSolver(
-    config.knownSolversERC721.slice(0, 1).map((s) => {
-      const [address, baseUrl] = s.split(" ");
-      return { address, baseUrl };
-    }),
+  // Forward to a single solver
+  const [solver] = config.knownSolversERC721.slice(0, 1);
+  await axios.post(`${solver.split(" ")[0]}/erc721/intents`, {
     intent,
-    approvalTxOrTxHash
-  );
+    approvalTxOrTxHash,
+  });
 
   return res.json({ message: "Success" });
 });
@@ -159,14 +152,14 @@ app.post("/erc721/intents/public", async (req, res) => {
     return res.status(400).json({ error: "No known solvers" });
   }
 
-  // Send to all solvers
-  await jobs.signatureReleaseERC721.submitDirectlyToSolver(
-    config.knownSolversERC721.map((s) => {
-      const [address, baseUrl] = s.split(" ");
-      return { address, baseUrl };
-    }),
-    intent,
-    approvalTxOrTxHash
+  // Forward to all solvers
+  await Promise.all(
+    config.knownSolversERC721.map(async (solver) =>
+      axios.post(`${solver.split(" ")[0]}/erc721/intents`, {
+        intent,
+        approvalTxOrTxHash,
+      })
+    )
   );
 
   // TODO: Relay via bloxroute
@@ -175,18 +168,16 @@ app.post("/erc721/intents/public", async (req, res) => {
 });
 
 app.post("/erc721/solutions", async (req, res) => {
-  const { uuid, baseUrl, intent, txs } = req.body as {
-    uuid: string;
-    baseUrl: string;
+  const { intent, txs } = req.body as {
     intent: IntentERC721;
     txs: string[];
   };
 
-  if (!uuid || !baseUrl || !intent || !txs?.length) {
+  if (!intent || !txs?.length) {
     return res.status(400).json({ message: "Invalid parameters" });
   }
 
-  const result = await solutions.erc721.process(uuid, baseUrl, intent, txs);
+  const result = await solutions.erc721.process(intent, txs);
   if (result.status === "error") {
     return res.status(400).json({ error: result.error });
   } else if (result.status === "success") {

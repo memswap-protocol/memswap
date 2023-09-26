@@ -10,6 +10,7 @@ import { randomUUID } from "crypto";
 
 import { MEMETH } from "../../common/addresses";
 import { logger } from "../../common/logger";
+import { getEthConversion } from "../../common/reservoir";
 import { bn } from "../../common/utils";
 import { config } from "../config";
 import { redis } from "../redis";
@@ -50,7 +51,7 @@ const worker = new Worker(
       );
 
       const token = await solutions.uniswap.getToken(address, provider);
-      const ethPrice = await solutions.reservoir.getEthConversion(address);
+      const ethPrice = await getEthConversion(address);
 
       const balanceInToken = await contract.balanceOf(solver.address);
       const balanceInEth = bn(balanceInToken)

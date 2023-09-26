@@ -16,11 +16,16 @@ import {
   WETH9,
 } from "../../common/addresses";
 import { logger } from "../../common/logger";
-import { Authorization, IntentERC20, SolutionERC20 } from "../../common/types";
+import {
+  getFlashbotsProvider,
+  relayViaBloxroute,
+  relayViaFlashbots,
+  relayViaTransaction,
+} from "../../common/tx";
+import { IntentERC20, SolutionERC20 } from "../../common/types";
 import {
   PESSIMISTIC_BLOCK_TIME,
   bn,
-  getAuthorizationHash,
   getIncentivizationTip,
   getIntentHash,
   isIntentFilled,
@@ -32,12 +37,6 @@ import * as jobs from "../jobs";
 import { redis } from "../redis";
 import * as solutions from "../solutions";
 import { BuySolutionDataERC20, SellSolutionDataERC20 } from "../types";
-import {
-  getFlashbotsProvider,
-  relayViaBloxroute,
-  relayViaFlashbots,
-  relayViaTransaction,
-} from "../utils";
 
 const COMPONENT = "tx-solver-erc20";
 
@@ -53,13 +52,10 @@ export const queue = new Queue(COMPONENT, {
 const worker = new Worker(
   COMPONENT,
   async (job) => {
-    const { intent, approvalTxOrTxHash, existingSolution, authorization } =
-      job.data as {
-        intent: IntentERC20;
-        approvalTxOrTxHash?: string;
-        existingSolution?: SolutionERC20;
-        authorization?: Authorization;
-      };
+    const { intent, approvalTxOrTxHash } = job.data as {
+      intent: IntentERC20;
+      approvalTxOrTxHash?: string;
+    };
 
     try {
       const perfTime1 = performance.now();
@@ -67,7 +63,7 @@ const worker = new Worker(
       const provider = new JsonRpcProvider(config.jsonUrl);
       const flashbotsProvider = await getFlashbotsProvider();
 
-      const perfTime12 = performance.now();
+      const perfTime2 = performance.now();
 
       const solver = new Wallet(config.solverPk);
       const intentHash = getIntentHash(intent);
@@ -84,7 +80,7 @@ const worker = new Worker(
         return;
       }
 
-      const perfTime2 = performance.now();
+      const perfTime3 = performance.now();
 
       // Starting tip is 1 gwei (which is also the required priority fee for incentivized intents)
       let maxPriorityFeePerGas = parseUnits("1", "gwei");
@@ -92,243 +88,234 @@ const worker = new Worker(
       // TODO: Compute this dynamically
       const gasLimit = 800000;
 
-      // Approximations for gas used by memswap logic and gas used by swap logic
+      // Approximations for gas used by memswap logic, swap logic and matchmaker authorization logic
       const memswapGas = 150000;
       const defaultGas = 200000;
+      const matchmakerGas = 60000;
 
-      let solution: SolutionERC20;
-      if (existingSolution) {
-        // Reuse existing solution
-
-        solution = existingSolution;
-      } else {
-        // Check and generate solution
-
-        if (
-          (intent.sellToken === MEMETH[config.chainId] &&
-            intent.buyToken === WETH9[config.chainId]) ||
-          (intent.sellToken === WETH9[config.chainId] &&
-            intent.buyToken === AddressZero)
-        ) {
-          logger.info(
-            COMPONENT,
-            JSON.stringify({
-              msg: "Attempted to wrap/unwrap WETH",
-              intentHash,
-              approvalTxOrTxHash,
-            })
-          );
-          return;
-        }
-
-        if (intent.startTime > now()) {
-          logger.info(
-            COMPONENT,
-            JSON.stringify({
-              msg: "Not started",
-              now: now(),
-              startTime: intent.startTime,
-              intentHash,
-              approvalTxOrTxHash,
-            })
-          );
-          return;
-        }
-
-        if (intent.endTime <= now()) {
-          logger.info(
-            COMPONENT,
-            JSON.stringify({
-              msg: "Expired",
-              now: now(),
-              endTime: intent.endTime,
-              intentHash,
-              approvalTxOrTxHash,
-            })
-          );
-          return;
-        }
-
-        if (
-          ![solver.address, AddressZero, MATCHMAKER[config.chainId]].includes(
-            intent.solver
-          )
-        ) {
-          logger.info(
-            COMPONENT,
-            JSON.stringify({
-              msg: "Unsupported solver",
-              solver: intent.solver,
-              intentHash,
-              approvalTxOrTxHash,
-            })
-          );
-          return;
-        }
-
+      if (
+        (intent.sellToken === MEMETH[config.chainId] &&
+          intent.buyToken === WETH9[config.chainId]) ||
+        (intent.sellToken === WETH9[config.chainId] &&
+          intent.buyToken === AddressZero)
+      ) {
         logger.info(
           COMPONENT,
           JSON.stringify({
-            msg: "Generating solution",
+            msg: "Attempted to wrap/unwrap WETH",
             intentHash,
             approvalTxOrTxHash,
           })
         );
+        return;
+      }
 
-        const latestBlock = await provider.getBlock("latest");
-        const latestTimestamp = latestBlock.timestamp + PESSIMISTIC_BLOCK_TIME;
+      if (intent.startTime > now()) {
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            msg: "Not started",
+            now: now(),
+            startTime: intent.startTime,
+            intentHash,
+            approvalTxOrTxHash,
+          })
+        );
+        return;
+      }
 
-        if (!intent.isBuy) {
-          // Sell
+      if (intent.endTime <= now()) {
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            msg: "Expired",
+            now: now(),
+            endTime: intent.endTime,
+            intentHash,
+            approvalTxOrTxHash,
+          })
+        );
+        return;
+      }
 
-          const endAmount = bn(intent.endAmount);
-          const startAmount = endAmount.add(
-            endAmount.mul(intent.startAmountBps).div(10000)
+      if (
+        ![solver.address, AddressZero, MATCHMAKER[config.chainId]].includes(
+          intent.solver
+        )
+      ) {
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            msg: "Unsupported solver",
+            solver: intent.solver,
+            intentHash,
+            approvalTxOrTxHash,
+          })
+        );
+        return;
+      }
+
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          msg: "Generating solution",
+          intentHash,
+          approvalTxOrTxHash,
+        })
+      );
+
+      const latestBlock = await provider.getBlock("latest");
+      const latestTimestamp = latestBlock.timestamp + PESSIMISTIC_BLOCK_TIME;
+
+      let solution: SolutionERC20;
+      if (!intent.isBuy) {
+        // Sell
+
+        const endAmount = bn(intent.endAmount);
+        const startAmount = endAmount.add(
+          endAmount.mul(intent.startAmountBps).div(10000)
+        );
+        const expectedAmount = endAmount.add(
+          endAmount.mul(intent.expectedAmountBps).div(10000)
+        );
+
+        let minAmountOut = startAmount.sub(
+          startAmount
+            .sub(endAmount)
+            .mul(latestTimestamp - intent.startTime)
+            .div(intent.endTime - intent.startTime)
+        );
+
+        const { data: solutionDetails } = (await solutions.zeroex.solve(
+          intent,
+          intent.amount
+        )) as { data: SellSolutionDataERC20 };
+
+        const gasConsumed = bn(memswapGas)
+          .add(solutionDetails.gasUsed ?? defaultGas)
+          .toString();
+
+        if (bn(solutionDetails.minBuyAmount).lt(minAmountOut)) {
+          logger.error(
+            COMPONENT,
+            JSON.stringify({
+              msg: "Solution not good enough",
+              solutionAmountOut: solutionDetails.minBuyAmount,
+              minAmountOut: minAmountOut.toString(),
+              intentHash,
+              approvalTxOrTxHash,
+            })
           );
-          const expectedAmount = endAmount.add(
-            endAmount.mul(intent.expectedAmountBps).div(10000)
-          );
-
-          let minAmountOut = startAmount.sub(
-            startAmount
-              .sub(endAmount)
-              .mul(latestTimestamp - intent.startTime)
-              .div(intent.endTime - intent.startTime)
-          );
-
-          const { data: solutionDetails } = (await solutions.zeroex.solve(
-            intent,
-            intent.amount
-          )) as { data: SellSolutionDataERC20 };
-
-          const gasConsumed = bn(memswapGas)
-            .add(solutionDetails.gasUsed ?? defaultGas)
-            .toString();
-
-          if (bn(solutionDetails.minBuyAmount).lt(minAmountOut)) {
-            logger.error(
-              COMPONENT,
-              JSON.stringify({
-                msg: "Solution not good enough",
-                solutionAmountOut: solutionDetails.minBuyAmount,
-                minAmountOut: minAmountOut.toString(),
-                intentHash,
-                approvalTxOrTxHash,
-              })
-            );
-            return;
-          }
-
-          const buyTokenDecimals = await solutions.uniswap
-            .getToken(intent.buyToken, provider)
-            .then((t) => t.decimals);
-          const grossProfitInBuyToken = bn(solutionDetails.minBuyAmount).sub(
-            minAmountOut
-          );
-          const grossProfitInEth = grossProfitInBuyToken
-            .mul(parseEther("1"))
-            .div(
-              parseUnits(solutionDetails.buyTokenToEthRate, buyTokenDecimals)
-            );
-
-          solution = {
-            fillAmount: intent.amount,
-            executeAmount: minAmountOut.toString(),
-            calls: solutionDetails.calls,
-            executeTokenToEthRate: solutionDetails.buyTokenToEthRate,
-            executeTokenDecimals: buyTokenDecimals,
-            grossProfitInEth: grossProfitInEth.toString(),
-            gasConsumed,
-            value: intent.isIncentivized
-              ? getIncentivizationTip(
-                  intent.isBuy,
-                  expectedAmount,
-                  intent.expectedAmountBps,
-                  minAmountOut
-                ).toString()
-              : "0",
-          };
-        } else {
-          const endAmount = bn(intent.endAmount);
-          const startAmount = endAmount.sub(
-            endAmount.mul(intent.startAmountBps).div(10000)
-          );
-          const expectedAmount = endAmount.sub(
-            endAmount.mul(intent.expectedAmountBps).div(10000)
-          );
-
-          let maxAmountIn = startAmount.add(
-            bn(endAmount)
-              .sub(startAmount)
-              .mul(latestTimestamp - intent.startTime)
-              .div(intent.endTime - intent.startTime)
-          );
-
-          // We need to subtract any fees from `maxAmountIn`
-          if (intent.feeBps) {
-            maxAmountIn = maxAmountIn.sub(
-              maxAmountIn.mul(intent.feeBps).div(10000)
-            );
-          }
-          if (intent.surplusBps && maxAmountIn.lt(expectedAmount)) {
-            maxAmountIn = maxAmountIn.sub(
-              expectedAmount.sub(maxAmountIn).mul(intent.surplusBps).div(10000)
-            );
-          }
-
-          const { data: solutionDetails } = (await solutions.zeroex.solve(
-            intent,
-            intent.amount
-          )) as { data: BuySolutionDataERC20 };
-
-          const gasConsumed = bn(memswapGas)
-            .add(solutionDetails.gasUsed ?? defaultGas)
-            .toString();
-
-          if (bn(solutionDetails.maxSellAmount).gt(maxAmountIn)) {
-            logger.error(
-              COMPONENT,
-              JSON.stringify({
-                msg: "Solution not good enough",
-                solutionAmountIn: solutionDetails.maxSellAmount,
-                maxAmountIn: maxAmountIn.toString(),
-                intentHash,
-                approvalTxOrTxHash,
-              })
-            );
-            return;
-          }
-
-          const sellTokenDecimals = await solutions.uniswap
-            .getToken(intent.sellToken, provider)
-            .then((t) => t.decimals);
-          const grossProfitInSellToken = maxAmountIn.sub(
-            solutionDetails.maxSellAmount
-          );
-          const grossProfitInEth = grossProfitInSellToken
-            .mul(parseEther("1"))
-            .div(
-              parseUnits(solutionDetails.sellTokenToEthRate, sellTokenDecimals)
-            );
-
-          solution = {
-            fillAmount: intent.amount,
-            executeAmount: maxAmountIn.toString(),
-            calls: solutionDetails.calls,
-            executeTokenToEthRate: solutionDetails.sellTokenToEthRate,
-            executeTokenDecimals: sellTokenDecimals,
-            grossProfitInEth: grossProfitInEth.toString(),
-            gasConsumed,
-            value: intent.isIncentivized
-              ? getIncentivizationTip(
-                  intent.isBuy,
-                  expectedAmount,
-                  intent.expectedAmountBps,
-                  maxAmountIn
-                ).toString()
-              : "0",
-          };
+          return;
         }
+
+        const buyTokenDecimals = await solutions.uniswap
+          .getToken(intent.buyToken, provider)
+          .then((t) => t.decimals);
+        const grossProfitInBuyToken = bn(solutionDetails.minBuyAmount).sub(
+          minAmountOut
+        );
+        const grossProfitInEth = grossProfitInBuyToken
+          .mul(parseEther("1"))
+          .div(parseUnits(solutionDetails.buyTokenToEthRate, buyTokenDecimals));
+
+        solution = {
+          fillAmount: intent.amount,
+          executeAmount: minAmountOut.toString(),
+          calls: solutionDetails.calls,
+          executeTokenToEthRate: solutionDetails.buyTokenToEthRate,
+          executeTokenDecimals: buyTokenDecimals,
+          grossProfitInEth: grossProfitInEth.toString(),
+          gasConsumed,
+          value: intent.isIncentivized
+            ? getIncentivizationTip(
+                intent.isBuy,
+                expectedAmount,
+                intent.expectedAmountBps,
+                minAmountOut
+              ).toString()
+            : "0",
+        };
+      } else {
+        const endAmount = bn(intent.endAmount);
+        const startAmount = endAmount.sub(
+          endAmount.mul(intent.startAmountBps).div(10000)
+        );
+        const expectedAmount = endAmount.sub(
+          endAmount.mul(intent.expectedAmountBps).div(10000)
+        );
+
+        let maxAmountIn = startAmount.add(
+          bn(endAmount)
+            .sub(startAmount)
+            .mul(latestTimestamp - intent.startTime)
+            .div(intent.endTime - intent.startTime)
+        );
+
+        // We need to subtract any fees from `maxAmountIn`
+        if (intent.feeBps) {
+          maxAmountIn = maxAmountIn.sub(
+            maxAmountIn.mul(intent.feeBps).div(10000)
+          );
+        }
+        if (intent.surplusBps && maxAmountIn.lt(expectedAmount)) {
+          maxAmountIn = maxAmountIn.sub(
+            expectedAmount.sub(maxAmountIn).mul(intent.surplusBps).div(10000)
+          );
+        }
+
+        const { data: solutionDetails } = (await solutions.zeroex.solve(
+          intent,
+          intent.amount
+        )) as { data: BuySolutionDataERC20 };
+
+        const gasConsumed = bn(memswapGas)
+          .add(solutionDetails.gasUsed ?? defaultGas)
+          .toString();
+
+        if (bn(solutionDetails.maxSellAmount).gt(maxAmountIn)) {
+          logger.error(
+            COMPONENT,
+            JSON.stringify({
+              msg: "Solution not good enough",
+              solutionAmountIn: solutionDetails.maxSellAmount,
+              maxAmountIn: maxAmountIn.toString(),
+              intentHash,
+              approvalTxOrTxHash,
+            })
+          );
+          return;
+        }
+
+        const sellTokenDecimals = await solutions.uniswap
+          .getToken(intent.sellToken, provider)
+          .then((t) => t.decimals);
+        const grossProfitInSellToken = maxAmountIn.sub(
+          solutionDetails.maxSellAmount
+        );
+        const grossProfitInEth = grossProfitInSellToken
+          .mul(parseEther("1"))
+          .div(
+            parseUnits(solutionDetails.sellTokenToEthRate, sellTokenDecimals)
+          );
+
+        solution = {
+          fillAmount: intent.amount,
+          executeAmount: maxAmountIn.toString(),
+          calls: solutionDetails.calls,
+          executeTokenToEthRate: solutionDetails.sellTokenToEthRate,
+          executeTokenDecimals: sellTokenDecimals,
+          grossProfitInEth: grossProfitInEth.toString(),
+          gasConsumed,
+          value: intent.isIncentivized
+            ? getIncentivizationTip(
+                intent.isBuy,
+                expectedAmount,
+                intent.expectedAmountBps,
+                maxAmountIn
+              ).toString()
+            : "0",
+        };
       }
 
       const latestBaseFee = await provider
@@ -340,6 +327,23 @@ const worker = new Worker(
       const netProfitInEth = bn(solution.grossProfitInEth)
         .sub(gasFee)
         .sub(solution.value);
+
+      // Compute the amount to pay the matchmaker for covering their gas fees
+      const matchmakerGasFeeInEth = bn(matchmakerGas).mul(
+        latestBaseFee.add(maxPriorityFeePerGas)
+      );
+      let matchmakerGasFeeInToken = matchmakerGasFeeInEth
+        .mul(
+          parseUnits(
+            solution.executeTokenToEthRate,
+            solution.executeTokenDecimals
+          )
+        )
+        .div(parseEther("1"));
+      // Adjust by 3% for safety
+      matchmakerGasFeeInToken = matchmakerGasFeeInToken.add(
+        matchmakerGasFeeInToken.mul(300).div(10000)
+      );
 
       logger.info(
         COMPONENT,
@@ -419,7 +423,7 @@ const worker = new Worker(
         }
       }
 
-      const perfTime3 = performance.now();
+      const perfTime4 = performance.now();
 
       let approvalTx: FlashbotsBundleRawTransaction | undefined;
       let approvalTxHash: string | undefined;
@@ -462,21 +466,33 @@ const worker = new Worker(
           b!.baseFeePerGas!.add(b!.baseFeePerGas!.mul(3000).div(10000))
         );
 
-      const perfTime4 = performance.now();
+      const perfTime5 = performance.now();
 
-      const getFillerTx = async (
-        intent: IntentERC20,
-        authorization?: Authorization
-      ) => {
+      const getFillerTx = async (intent: IntentERC20) => {
         let method: string;
-        if (intent.solver === MATCHMAKER[config.chainId] && authorization) {
-          // For relaying
-          method = "solveWithSignatureAuthorizationCheckERC20";
-        } else if (intent.solver === MATCHMAKER[config.chainId]) {
+        if (intent.solver === MATCHMAKER[config.chainId]) {
           // For matchmaker submission
           method = "solveWithOnChainAuthorizationCheckERC20";
+
+          // Make sure to cover the matchmaker's gas
+          const token = intent.isBuy ? intent.sellToken : intent.buyToken;
+          solution.calls.push({
+            to: MATCHMAKER[config.chainId],
+            data:
+              token === AddressZero
+                ? "0x"
+                : new Interface([
+                    "function transferFrom(address from, address to, uint256 amount)",
+                  ]).encodeFunctionData("transferFrom", [
+                    SOLUTION_PROXY[config.chainId],
+                    MATCHMAKER[config.chainId],
+                    matchmakerGasFeeInToken,
+                  ]),
+            value:
+              token === AddressZero ? matchmakerGasFeeInToken.toString() : "0",
+          });
         } else {
-          // For relaying
+          // For direct submission
           method = "solveERC20";
         }
 
@@ -519,18 +535,6 @@ const worker = new Worker(
                     bytes data,
                     uint128 fillAmount
                   ) solution,
-                  ${
-                    authorization
-                      ? `
-                        (
-                          uint128 fillAmountToCheck,
-                          uint128 executeAmountToCheck,
-                          uint32 blockDeadline
-                        ) auth,
-                        bytes authSignature,
-                      `
-                      : ""
-                  }
                   ${`
                     (
                       uint8 kind,
@@ -539,18 +543,7 @@ const worker = new Worker(
                   `}
                 )
               `,
-            ]).encodeFunctionData(
-              method,
-              method === "solveWithSignatureAuthorizationCheckERC20"
-                ? [
-                    intent,
-                    encodedSolution,
-                    authorization,
-                    authorization!.signature,
-                    [],
-                  ]
-                : [intent, encodedSolution, []]
-            ),
+            ]).encodeFunctionData(method, [intent, encodedSolution, []]),
             type: 2,
             nonce: await provider.getTransactionCount(solver.address),
             gasLimit,
@@ -565,29 +558,29 @@ const worker = new Worker(
       const includeApprovalTx =
         approvalTxHash && !(await isTxIncluded(approvalTxHash, provider));
 
-      // If specified and the conditions allow it, use direct transactions rather than relays
-      let useRelay = true;
-      if (
-        !includeApprovalTx &&
-        Boolean(Number(process.env.RELAY_DIRECTLY_WHEN_POSSIBLE))
-      ) {
-        useRelay = false;
-      }
-
       const relayMethod = config.bloxrouteAuth
         ? relayViaBloxroute
         : relayViaFlashbots;
 
-      const perfTime5 = performance.now();
+      const perfTime6 = performance.now();
+
+      // If the approval transaction is still pending, include it in the bundle
+      const fillerTx = await getFillerTx(intent);
+      const txs = includeApprovalTx ? [approvalTx!, fillerTx] : [fillerTx];
 
       if (intent.solver !== MATCHMAKER[config.chainId]) {
         // Solve directly
 
-        if (useRelay) {
-          // If the approval transaction is still pending, include it in the bundle
-          const fillerTx = await getFillerTx(intent);
-          const txs = includeApprovalTx ? [approvalTx!, fillerTx] : [fillerTx];
+        // If specified and the conditions allow it, use direct transactions rather than bundles
+        let useBundle = true;
+        if (
+          !includeApprovalTx &&
+          Boolean(Number(process.env.RELAY_DIRECTLY_WHEN_POSSIBLE))
+        ) {
+          useBundle = false;
+        }
 
+        if (useBundle) {
           const targetBlock =
             (await provider.getBlock("latest").then((b) => b.number)) + 1;
 
@@ -617,104 +610,28 @@ const worker = new Worker(
       } else {
         // Solve via matchmaker
 
-        if (!authorization) {
-          // We don't have an authorization so first we must request it
-
-          logger.info(
-            COMPONENT,
-            JSON.stringify({
-              msg: "Submitting solution to matchmaker",
-              intentHash,
-              txHash: approvalTxHash,
-            })
-          );
-
-          const fillerTx = await getFillerTx(intent);
-          const txs = includeApprovalTx
-            ? [approvalTx!.signedTransaction, fillerTx.signedTransaction]
-            : [fillerTx.signedTransaction];
-
-          // Generate a random uuid for the request
-          const uuid = randomUUID();
-
-          await redis.set(
-            `solver:${uuid}`,
-            JSON.stringify({ intent, approvalTxOrTxHash, solution }),
-            "EX",
-            PESSIMISTIC_BLOCK_TIME * 4
-          );
-
-          await axios.post(`${config.matchmakerBaseUrl}/erc20/solutions`, {
-            uuid,
-            baseUrl: config.solverBaseUrl,
-            intent,
-            txs,
-          });
-        } else {
-          // We do have an authorization so all we have to do is relay the transaction
-
-          const targetBlock =
-            (await provider.getBlock("latest").then((b) => b.number)) + 1;
-          if (targetBlock > authorization.blockDeadline) {
-            // If the authorization deadline was exceeded we need to request another authorization
-            await job.updateData({
-              ...job.data,
-              authorization: undefined,
-            });
-
-            throw new Error("Authorization deadline exceeded");
-          }
-
-          if (useRelay) {
-            // If the approval transaction is still pending, include it in the bundle
-            const fillerTx = await getFillerTx(intent, authorization);
-            const txs = includeApprovalTx
-              ? [approvalTx!, fillerTx]
-              : [fillerTx];
-
-            // Relay
-            await relayMethod(
-              intentHash,
-              provider,
-              flashbotsProvider,
-              txs,
-              includeApprovalTx ? [approvalTx!] : [],
-              targetBlock,
-              COMPONENT
-            );
-          } else {
-            // At this point, for sure the approval transaction was already included, so we can skip it
-            const fillerTx = await getFillerTx(intent, authorization);
-
-            // Relay
-            await relayViaTransaction(
-              intentHash,
-              intent.isIncentivized,
-              provider,
-              fillerTx.signedTransaction,
-              COMPONENT
-            );
-          }
-        }
+        await axios.post(`${config.matchmakerBaseUrl}/erc20/solutions`, {
+          intent,
+          txs: txs.map((tx) => tx.signedTransaction),
+        });
       }
 
       await jobs.inventoryManager.addToQueue(
         intent.isBuy ? intent.sellToken : intent.buyToken
       );
 
-      const perfTime6 = performance.now();
+      const perfTime7 = performance.now();
 
       logger.info(
         COMPONENT,
         JSON.stringify({
           msg: "Performance measurements for tx-solver",
-          time1: (perfTime2 - perfTime1) / 1000,
-          time12: (perfTime12 - perfTime1) / 1000,
-          time22: (perfTime2 - perfTime12) / 1000,
-          time2: (perfTime3 - perfTime2) / 1000,
-          time3: (perfTime4 - perfTime3) / 1000,
-          time4: (perfTime5 - perfTime4) / 1000,
-          time5: (perfTime6 - perfTime5) / 1000,
+          time12: (perfTime2 - perfTime1) / 1000,
+          time23: (perfTime3 - perfTime2) / 1000,
+          time34: (perfTime4 - perfTime3) / 1000,
+          time45: (perfTime5 - perfTime4) / 1000,
+          time56: (perfTime6 - perfTime5) / 1000,
+          time67: (perfTime7 - perfTime6) / 1000,
         })
       );
     } catch (error: any) {
@@ -747,8 +664,6 @@ export const addToQueue = async (
   intent: IntentERC20,
   options?: {
     approvalTxOrTxHash?: string;
-    existingSolution?: SolutionERC20;
-    authorization?: Authorization;
   },
   delay?: number
 ) =>
@@ -757,15 +672,9 @@ export const addToQueue = async (
     {
       intent,
       approvalTxOrTxHash: options?.approvalTxOrTxHash,
-      existingSolution: options?.existingSolution,
-      authorization: options?.authorization,
     },
     {
       delay: delay ? delay * 1000 : undefined,
-      jobId:
-        getIntentHash(intent) +
-        (options?.authorization
-          ? getAuthorizationHash(options.authorization)
-          : ""),
+      jobId: getIntentHash(intent),
     }
   );

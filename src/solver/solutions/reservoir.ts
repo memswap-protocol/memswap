@@ -7,24 +7,11 @@ import { Wallet } from "@ethersproject/wallet";
 import axios from "axios";
 
 import { MEMETH, SOLUTION_PROXY } from "../../common/addresses";
+import { getEthConversion, getReservoirBaseUrl } from "../../common/reservoir";
 import { IntentERC721, TxData } from "../../common/types";
 import { bn } from "../../common/utils";
 import { config } from "../config";
 import { Call, SolutionDetailsERC721 } from "../types";
-
-const getReservoirBaseUrl = () =>
-  config.chainId === 1
-    ? "https://api.reservoir.tools"
-    : "https://api-goerli.reservoir.tools";
-
-export const getEthConversion = async (token: string) =>
-  token === MEMETH[config.chainId]
-    ? "1"
-    : await axios
-        .get(
-          `${getReservoirBaseUrl()}/currencies/conversion/v1?from=${AddressZero}&to=${token}`
-        )
-        .then((response) => response.data.conversion);
 
 export const solve = async (
   intent: IntentERC721,

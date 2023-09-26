@@ -57,7 +57,7 @@ export const relayViaTransaction = async (
       provider
     );
   } catch {
-    // For some reason, incentivized intents fail simulation very often
+    // For some reason, incentivized intents fail the above simulation very often
 
     logger[isIncentivized ? "info" : "error"](
       logComponent,

@@ -1,8 +1,10 @@
+import { IntentERC20, IntentERC721 } from "../common/types";
+
 export type Solution = {
-  uuid: string;
-  baseUrl: string;
-  intentHash: string;
+  intent: IntentERC20 | IntentERC721;
+  solver: string;
   fillAmountToCheck: string;
   executeAmountToCheck: string;
-  solver: string;
+  userTxs: string[];
+  txs: string[];
 };

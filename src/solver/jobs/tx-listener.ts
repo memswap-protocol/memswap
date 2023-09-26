@@ -20,7 +20,7 @@ import { redis } from "../redis";
 
 const COMPONENT = "tx-listener";
 
-type AlchemyPendingTx = {
+type PendingTx = {
   hash: string;
   input: string;
   to: string | null;
@@ -106,7 +106,7 @@ export const queue = new Queue(COMPONENT, {
 const worker = new Worker(
   COMPONENT,
   async (job) => {
-    const tx = job.data as AlchemyPendingTx;
+    const tx = job.data as PendingTx;
 
     try {
       const intentTypesERC20 = [
@@ -151,8 +151,6 @@ const worker = new Worker(
         "uint16",
         "bytes",
       ];
-
-      // TODO: Add support for ERC721 `post`
 
       // Try to decode any intent appended at the end of the calldata
       let restOfCalldata: string | undefined;
@@ -385,5 +383,4 @@ worker.on("error", (error) => {
   logger.error(COMPONENT, JSON.stringify({ msg: "Worker errored", error }));
 });
 
-export const addToQueue = async (tx: AlchemyPendingTx) =>
-  queue.add(randomUUID(), tx);
+export const addToQueue = async (tx: PendingTx) => queue.add(randomUUID(), tx);

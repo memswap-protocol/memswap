@@ -3,11 +3,11 @@ import { AddressZero } from "@ethersproject/constants";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { parse } from "@ethersproject/transactions";
-import { formatEther } from "@ethersproject/units";
+import { formatEther, parseEther } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import { getCallTraces, getStateChange } from "@georgeroman/evm-tx-simulator";
 
-import { MEMSWAP_ERC20 } from "../../common/addresses";
+import { MATCHMAKER, MEMSWAP_ERC20 } from "../../common/addresses";
 import { logger } from "../../common/logger";
 import { IntentERC20, Protocol } from "../../common/types";
 import {
@@ -21,12 +21,11 @@ import { config } from "../config";
 import * as jobs from "../jobs";
 import { redis } from "../redis";
 import { Solution } from "../types";
+import { getEthConversion } from "../../common/reservoir";
 
 const COMPONENT = "solution-process-erc20";
 
 export const process = async (
-  uuid: string,
-  baseUrl: string,
   intent: IntentERC20,
   txs: string[]
 ): Promise<{
@@ -49,8 +48,6 @@ export const process = async (
       JSON.stringify({
         msg: "Processing solution",
         intentHash,
-        uuid,
-        baseUrl,
         intent,
         txs,
       })
@@ -127,7 +124,7 @@ export const process = async (
 
     // Return early if the submission period is already over (for the current target block)
     const solutionKey = `matchmaker:solutions:${intentHash}:${targetBlockNumber}`;
-    if (await jobs.signatureReleaseERC20.isLocked(solutionKey)) {
+    if (await jobs.submissionERC20.isLocked(solutionKey)) {
       const msg = "Submission period is over";
       logger.info(
         COMPONENT,
@@ -247,55 +244,109 @@ export const process = async (
       };
     }
 
+    const stateChange = getStateChange(solveTrace);
+
+    // Approximation for gas used by matchmaker on-chain authorization transaction
+    const matchmakerGas = 60000;
+    const matchmakerGasFee = bn(matchmakerGas).mul(latestBlock.baseFeePerGas!);
+
     if (intent.isBuy) {
+      const token = intent.sellToken.toLowerCase();
+
       // Compute the amount pulled from the intent maker
-      const stateChange = getStateChange(solveTrace);
       const amountPulled =
         stateChange[intent.maker.toLowerCase()].tokenBalanceState[
-          `erc20:${intent.sellToken.toLowerCase()}`
+          `erc20:${token}`
         ];
+
+      // Ensure the matchmaker is profitable (or at least not losing money)
+      const matchmakerProfit =
+        stateChange[matchmaker.address.toLowerCase()].tokenBalanceState[
+          `erc20:${token}`
+        ];
+      const matchmakerProfitInEth = bn(matchmakerProfit)
+        .mul(parseEther("1"))
+        .div(await getEthConversion(token));
+      if (matchmakerProfitInEth.lt(matchmakerGasFee)) {
+        const msg = "Matchmaker not profitable";
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            msg,
+            intentHash,
+            txsToSimulate,
+          })
+        );
+
+        return {
+          status: "error",
+          error: msg,
+        };
+      }
 
       // Save the solution
       await redis.zadd(
         solutionKey,
         Number(formatEther(amountPulled)),
         JSON.stringify({
-          uuid,
-          baseUrl,
-          intentHash,
-          solver,
+          intent,
           fillAmountToCheck: intent.amount,
           executeAmountToCheck: bn(amountPulled).mul(-1).toString(),
+          userTxs: txs.slice(0, txs.length - 1),
+          txs,
         } as Solution)
       );
     } else {
+      const token = intent.buyToken.toLowerCase();
+      const isEth = token === AddressZero;
+
       // Compute the amount received by the intent maker
-      const stateChange = getStateChange(solveTrace);
-      const isTokenOutETH = intent.buyToken.toLowerCase() === AddressZero;
       const amountReceived =
         stateChange[intent.maker.toLowerCase()].tokenBalanceState[
-          `${
-            isTokenOutETH ? "native" : "erc20"
-          }:${intent.buyToken.toLowerCase()}`
+          `${isEth ? "native" : "erc20"}:${token}`
         ];
+
+      // Ensure the matchmaker is profitable (or at least not losing money)
+      const matchmakerProfit =
+        stateChange[matchmaker.address.toLowerCase()].tokenBalanceState[
+          `${isEth ? "native" : "erc20"}:${token}`
+        ];
+      const matchmakerProfitInEth = bn(matchmakerProfit)
+        .mul(parseEther("1"))
+        .div(await getEthConversion(token));
+      if (matchmakerProfitInEth.lt(matchmakerGasFee)) {
+        const msg = "Matchmaker not profitable";
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            msg,
+            intentHash,
+            txsToSimulate,
+          })
+        );
+
+        return {
+          status: "error",
+          error: msg,
+        };
+      }
 
       // Save the solution
       await redis.zadd(
         solutionKey,
         Number(formatEther(amountReceived)),
         JSON.stringify({
-          uuid,
-          baseUrl,
-          intentHash,
-          solver,
+          intent,
           fillAmountToCheck: intent.amount,
           executeAmountToCheck: amountReceived,
+          userTxs: txs.slice(0, txs.length - 1),
+          txs,
         } as Solution)
       );
     }
 
-    // Put a delayed job to release the signatures
-    await jobs.signatureReleaseERC20.addToQueue(
+    // Put a delayed job to relay the winning solution
+    await jobs.submissionERC20.addToQueue(
       solutionKey,
       targetBlockTimestamp - now()
     );

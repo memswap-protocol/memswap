@@ -25,8 +25,6 @@ import { Solution } from "../types";
 const COMPONENT = "solution-process-erc721";
 
 export const process = async (
-  uuid: string,
-  baseUrl: string,
   intent: IntentERC721,
   txs: string[]
 ): Promise<{
@@ -49,8 +47,6 @@ export const process = async (
       JSON.stringify({
         msg: "Processing solution",
         intentHash,
-        uuid,
-        baseUrl,
         intent,
         txs,
       })
@@ -143,7 +139,7 @@ export const process = async (
 
     // Return early if the submission period is already over (for the current target block)
     const solutionKey = `matchmaker:solutions:${intentHash}:${targetBlockNumber}`;
-    if (await jobs.signatureReleaseERC721.isLocked(solutionKey)) {
+    if (await jobs.submissionERC721.isLocked(solutionKey)) {
       const msg = "Submission period is over";
       logger.info(
         COMPONENT,
@@ -265,9 +261,36 @@ export const process = async (
       };
     }
 
+    const stateChange = getStateChange(solveTrace);
+
+    // Approximation for gas used by matchmaker on-chain authorization transaction
+    const matchmakerGas = 60000;
+    const matchmakerCost = bn(matchmakerGas).mul(latestBlock.baseFeePerGas!);
+
+    // Ensure the matchmaker is profitable (or at least not losing money)
+    const matchmakerProfit =
+      stateChange[intent.maker.toLowerCase()].tokenBalanceState[
+        `native:${AddressZero}`
+      ];
+    if (bn(matchmakerProfit).lt(matchmakerCost)) {
+      const msg = "Matchmaker not profitable";
+      logger.info(
+        COMPONENT,
+        JSON.stringify({
+          msg,
+          intentHash,
+          txsToSimulate,
+        })
+      );
+
+      return {
+        status: "error",
+        error: msg,
+      };
+    }
+
     if (intent.isBuy) {
       // Compute the amount pulled from the intent maker
-      const stateChange = getStateChange(solveTrace);
       const amountPulled =
         stateChange[intent.maker.toLowerCase()].tokenBalanceState[
           `erc20:${intent.sellToken.toLowerCase()}`
@@ -278,18 +301,17 @@ export const process = async (
         solutionKey,
         Number(formatEther(amountPulled)),
         JSON.stringify({
-          uuid,
-          baseUrl,
-          intentHash,
-          solver,
+          intent,
           fillAmountToCheck: intent.amount,
           executeAmountToCheck: bn(amountPulled).mul(-1).toString(),
+          userTxs: txs.slice(0, txs.length - 1),
+          txs,
         } as Solution)
       );
     }
 
-    // Put a delayed job to release the signatures
-    await jobs.signatureReleaseERC721.addToQueue(
+    // Put a delayed job to relay the winning solution
+    await jobs.submissionERC721.addToQueue(
       solutionKey,
       targetBlockTimestamp - now()
     );

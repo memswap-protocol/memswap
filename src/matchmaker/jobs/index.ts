@@ -1,2 +1,2 @@
-export * as signatureReleaseERC20 from "./signature-release-erc20";
-export * as signatureReleaseERC721 from "./signature-release-erc721";
+export * as submissionERC20 from "./submission-erc20";
+export * as submissionERC721 from "./submission-erc721";

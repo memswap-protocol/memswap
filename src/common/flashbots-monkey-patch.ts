@@ -6,7 +6,7 @@ import {
 } from "@flashbots/ethers-provider-bundle";
 import axios from "axios";
 
-import { config } from "../config";
+import { config } from "./config";
 
 // Inspiration:
 // https://github.com/koraykoska/mev-bundle-submitter/blob/47696f4376e9b97cf44d042112c779e279805b1d/monkey-patches.js
