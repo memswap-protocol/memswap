@@ -3,15 +3,17 @@ import { AddressZero } from "@ethersproject/constants";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { parse } from "@ethersproject/transactions";
-import { formatEther } from "@ethersproject/units";
+import { formatEther, parseEther } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import { getCallTraces, getStateChange } from "@georgeroman/evm-tx-simulator";
 
 import { MEMSWAP_ERC721 } from "../../common/addresses";
 import { logger } from "../../common/logger";
+import { getEthConversion } from "../../common/reservoir";
 import { IntentERC721, Protocol } from "../../common/types";
 import {
   AVERAGE_BLOCK_TIME,
+  MATCHMAKER_AUTHORIZATION_GAS,
   bn,
   getEIP712TypesForIntent,
   isIntentFilled,
@@ -124,16 +126,11 @@ export const process = async (
 
     const perfTime3 = performance.now();
 
-    // Determine the target block for the solution
     const latestBlock = await provider.getBlock("latest");
-    let targetBlockNumber = latestBlock.number + 1;
-    let targetBlockTimestamp = latestBlock.timestamp + AVERAGE_BLOCK_TIME;
-    if (targetBlockTimestamp - now() < 6) {
-      // If there is less than 6 seconds until the next block inclusion
-      // then the solution will have to wait until the block after that
-      targetBlockNumber += 1;
-      targetBlockTimestamp += AVERAGE_BLOCK_TIME;
-    }
+    // The inclusion target is two blocks in the future
+    const targetBlockNumber = latestBlock.number + 2;
+    // The submission period is only open until one block in the future
+    const submissionDeadline = latestBlock.timestamp + AVERAGE_BLOCK_TIME;
 
     const perfTime4 = performance.now();
 
@@ -264,22 +261,29 @@ export const process = async (
     const stateChange = getStateChange(solveTrace);
 
     // Approximation for gas used by matchmaker on-chain authorization transaction
-    const matchmakerGas = 60000;
-    const matchmakerCost = bn(matchmakerGas).mul(latestBlock.baseFeePerGas!);
+    const matchmakerGasFee = bn(MATCHMAKER_AUTHORIZATION_GAS).mul(
+      latestBlock.baseFeePerGas!
+    );
+
+    const token = intent.sellToken.toLowerCase();
 
     // Ensure the matchmaker is profitable (or at least not losing money)
     const matchmakerProfit =
-      stateChange[intent.maker.toLowerCase()].tokenBalanceState[
-        `native:${AddressZero}`
-      ];
-    if (bn(matchmakerProfit).lt(matchmakerCost)) {
+      stateChange[matchmaker.address.toLowerCase()]?.tokenBalanceState[
+        `erc20:${token}`
+      ] ?? "0";
+    const matchmakerProfitInEth = bn(matchmakerProfit)
+      .mul(parseEther("1"))
+      .div(await getEthConversion(token));
+    if (matchmakerProfitInEth.lt(matchmakerGasFee)) {
       const msg = "Matchmaker not profitable";
       logger.info(
         COMPONENT,
         JSON.stringify({
           msg,
           intentHash,
-          txsToSimulate,
+          matchmakerProfitInEth: matchmakerProfitInEth.toString(),
+          matchmakerGasFee: matchmakerGasFee.toString(),
         })
       );
 
@@ -297,23 +301,25 @@ export const process = async (
         ];
 
       // Save the solution
+      const solution: Solution = {
+        intent,
+        fillAmountToCheck: intent.amount,
+        executeAmountToCheck: bn(amountPulled).mul(-1).toString(),
+        userTxs: txs.slice(0, txs.length - 1),
+        txs,
+        solver,
+      };
       await redis.zadd(
         solutionKey,
         Number(formatEther(amountPulled)),
-        JSON.stringify({
-          intent,
-          fillAmountToCheck: intent.amount,
-          executeAmountToCheck: bn(amountPulled).mul(-1).toString(),
-          userTxs: txs.slice(0, txs.length - 1),
-          txs,
-        } as Solution)
+        JSON.stringify(solution)
       );
     }
 
     // Put a delayed job to relay the winning solution
     await jobs.submissionERC721.addToQueue(
       solutionKey,
-      targetBlockTimestamp - now()
+      submissionDeadline - now()
     );
 
     const perfTime8 = performance.now();

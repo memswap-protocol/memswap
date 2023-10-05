@@ -23,6 +23,7 @@ import { IntentERC20, Protocol } from "../src/common/types";
 // Required env variables:
 // - JSON_URL: url for the http provider
 // - MAKER_PK: private key of the maker
+// - MATCHMAKER_BASE_URL: base url of the matchmaker
 
 const main = async () => {
   const provider = new JsonRpcProvider(process.env.JSON_URL!);
@@ -45,7 +46,7 @@ const main = async () => {
     buyToken,
     sellToken,
     maker: maker.address,
-    solver: AddressZero,
+    solver: MATCHMAKER[chainId],
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,
@@ -56,11 +57,11 @@ const main = async () => {
     nonce: "0",
     isPartiallyFillable: false,
     isSmartOrder: false,
-    isIncentivized: true,
-    amount: parseUnits("10000", 6).toString(),
-    endAmount: parseUnits("0.005", 18).toString(),
-    startAmountBps: 50,
-    expectedAmountBps: 200,
+    isIncentivized: false,
+    amount: parseUnits("2", 6).toString(),
+    endAmount: parseUnits("0.01", 18).toString(),
+    startAmountBps: 0,
+    expectedAmountBps: 0,
     // Mock value to pass type checks
     signature: "0x",
   };
@@ -144,33 +145,33 @@ const main = async () => {
   const nextBaseFee = currentBaseFee.add(currentBaseFee.mul(3000).div(10000));
   const maxPriorityFeePerGas = parseUnits("0.02", "gwei");
 
-  const tx = await maker.connect(provider).sendTransaction({
-    to: sellToken,
-    data,
-    value: approveMethod === "depositAndApprove" ? amountToApprove : 0,
-    maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
-    maxPriorityFeePerGas: maxPriorityFeePerGas,
-  });
-
-  console.log(`Approval transaction relayed: ${tx.hash}`);
-
-  // const tx = await maker.connect(provider).signTransaction({
-  //   from: maker.address,
+  // const tx = await maker.connect(provider).sendTransaction({
   //   to: sellToken,
   //   data,
   //   value: approveMethod === "depositAndApprove" ? amountToApprove : 0,
   //   maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
   //   maxPriorityFeePerGas: maxPriorityFeePerGas,
-  //   type: 2,
-  //   nonce: await provider.getTransactionCount(maker.address),
-  //   gasLimit: 100000,
-  //   chainId,
   // });
 
-  // await axios.post(`${process.env.MATCHMAKER_BASE_URL}/intents/private`, {
-  //   intent,
-  //   approvalTxOrTxHash: tx,
-  // });
+  // console.log(`Approval transaction relayed: ${tx.hash}`);
+
+  const tx = await maker.connect(provider).signTransaction({
+    from: maker.address,
+    to: sellToken,
+    data,
+    value: approveMethod === "depositAndApprove" ? amountToApprove : 0,
+    maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
+    maxPriorityFeePerGas: maxPriorityFeePerGas,
+    type: 2,
+    nonce: await provider.getTransactionCount(maker.address),
+    gasLimit: 100000,
+    chainId,
+  });
+
+  await axios.post(`${process.env.MATCHMAKER_BASE_URL}/erc20/intents/private`, {
+    intent,
+    approvalTxOrTxHash: tx,
+  });
 };
 
 main();

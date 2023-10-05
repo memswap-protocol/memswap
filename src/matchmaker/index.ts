@@ -61,7 +61,7 @@ app.post("/erc20/intents/private", async (req, res) => {
 
   // Forward to a single solver
   const [solver] = config.knownSolversERC20.slice(0, 1);
-  await axios.post(`${solver.split(" ")[0]}/erc20/intents`, {
+  await axios.post(`${solver.split(" ")[1]}/erc20/intents`, {
     intent,
     approvalTxOrTxHash,
   });
@@ -82,7 +82,7 @@ app.post("/erc20/intents/public", async (req, res) => {
   // Forward to all solvers
   await Promise.all(
     config.knownSolversERC20.map(async (solver) =>
-      axios.post(`${solver.split(" ")[0]}/erc20/intents`, {
+      axios.post(`${solver.split(" ")[1]}/erc20/intents`, {
         intent,
         approvalTxOrTxHash,
       })
@@ -134,7 +134,7 @@ app.post("/erc721/intents/private", async (req, res) => {
 
   // Forward to a single solver
   const [solver] = config.knownSolversERC721.slice(0, 1);
-  await axios.post(`${solver.split(" ")[0]}/erc721/intents`, {
+  await axios.post(`${solver.split(" ")[1]}/erc721/intents`, {
     intent,
     approvalTxOrTxHash,
   });
@@ -155,7 +155,7 @@ app.post("/erc721/intents/public", async (req, res) => {
   // Forward to all solvers
   await Promise.all(
     config.knownSolversERC721.map(async (solver) =>
-      axios.post(`${solver.split(" ")[0]}/erc721/intents`, {
+      axios.post(`${solver.split(" ")[1]}/erc721/intents`, {
         intent,
         approvalTxOrTxHash,
       })

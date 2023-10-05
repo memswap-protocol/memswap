@@ -13,7 +13,7 @@ import { PESSIMISTIC_BLOCK_TIME, isTxIncluded } from "../common/utils";
 import { config } from "./config";
 
 // Monkey-patch the flashbots bundle provider to support relaying via bloxroute
-import "./monkey-patches/flashbots-bundle-provider";
+import "./flashbots-monkey-patch";
 
 let cachedFlashbotsProvider: FlashbotsBundleProvider | undefined;
 export const getFlashbotsProvider = async () => {

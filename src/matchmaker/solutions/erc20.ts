@@ -7,11 +7,13 @@ import { formatEther, parseEther } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import { getCallTraces, getStateChange } from "@georgeroman/evm-tx-simulator";
 
-import { MATCHMAKER, MEMSWAP_ERC20 } from "../../common/addresses";
+import { MEMSWAP_ERC20 } from "../../common/addresses";
 import { logger } from "../../common/logger";
+import { getEthConversion } from "../../common/reservoir";
 import { IntentERC20, Protocol } from "../../common/types";
 import {
   AVERAGE_BLOCK_TIME,
+  MATCHMAKER_AUTHORIZATION_GAS,
   bn,
   getEIP712TypesForIntent,
   isIntentFilled,
@@ -21,7 +23,6 @@ import { config } from "../config";
 import * as jobs from "../jobs";
 import { redis } from "../redis";
 import { Solution } from "../types";
-import { getEthConversion } from "../../common/reservoir";
 
 const COMPONENT = "solution-process-erc20";
 
@@ -109,16 +110,11 @@ export const process = async (
 
     const perfTime3 = performance.now();
 
-    // Determine the target block for the solution
     const latestBlock = await provider.getBlock("latest");
-    let targetBlockNumber = latestBlock.number + 1;
-    let targetBlockTimestamp = latestBlock.timestamp + AVERAGE_BLOCK_TIME;
-    if (targetBlockTimestamp - now() < 6) {
-      // If there is less than 6 seconds until the next block inclusion
-      // then the solution will have to wait until the block after that
-      targetBlockNumber += 1;
-      targetBlockTimestamp += AVERAGE_BLOCK_TIME;
-    }
+    // The inclusion target is two blocks in the future
+    const targetBlockNumber = latestBlock.number + 2;
+    // The submission period is only open until one block in the future
+    const submissionDeadline = latestBlock.timestamp + AVERAGE_BLOCK_TIME;
 
     const perfTime4 = performance.now();
 
@@ -247,23 +243,24 @@ export const process = async (
     const stateChange = getStateChange(solveTrace);
 
     // Approximation for gas used by matchmaker on-chain authorization transaction
-    const matchmakerGas = 60000;
-    const matchmakerGasFee = bn(matchmakerGas).mul(latestBlock.baseFeePerGas!);
+    const matchmakerGasFee = bn(MATCHMAKER_AUTHORIZATION_GAS).mul(
+      latestBlock.baseFeePerGas!
+    );
 
     if (intent.isBuy) {
       const token = intent.sellToken.toLowerCase();
 
       // Compute the amount pulled from the intent maker
       const amountPulled =
-        stateChange[intent.maker.toLowerCase()].tokenBalanceState[
+        stateChange[intent.maker.toLowerCase()]?.tokenBalanceState[
           `erc20:${token}`
-        ];
+        ] ?? "0";
 
       // Ensure the matchmaker is profitable (or at least not losing money)
       const matchmakerProfit =
-        stateChange[matchmaker.address.toLowerCase()].tokenBalanceState[
+        stateChange[matchmaker.address.toLowerCase()]?.tokenBalanceState[
           `erc20:${token}`
-        ];
+        ] ?? "0";
       const matchmakerProfitInEth = bn(matchmakerProfit)
         .mul(parseEther("1"))
         .div(await getEthConversion(token));
@@ -274,7 +271,8 @@ export const process = async (
           JSON.stringify({
             msg,
             intentHash,
-            txsToSimulate,
+            matchmakerProfitInEth: matchmakerProfitInEth.toString(),
+            matchmakerGasFee: matchmakerGasFee.toString(),
           })
         );
 
@@ -285,16 +283,18 @@ export const process = async (
       }
 
       // Save the solution
+      const solution: Solution = {
+        intent,
+        fillAmountToCheck: intent.amount,
+        executeAmountToCheck: bn(amountPulled).mul(-1).toString(),
+        userTxs: txs.slice(0, txs.length - 1),
+        txs,
+        solver,
+      };
       await redis.zadd(
         solutionKey,
         Number(formatEther(amountPulled)),
-        JSON.stringify({
-          intent,
-          fillAmountToCheck: intent.amount,
-          executeAmountToCheck: bn(amountPulled).mul(-1).toString(),
-          userTxs: txs.slice(0, txs.length - 1),
-          txs,
-        } as Solution)
+        JSON.stringify(solution)
       );
     } else {
       const token = intent.buyToken.toLowerCase();
@@ -302,15 +302,15 @@ export const process = async (
 
       // Compute the amount received by the intent maker
       const amountReceived =
-        stateChange[intent.maker.toLowerCase()].tokenBalanceState[
+        stateChange[intent.maker.toLowerCase()]?.tokenBalanceState[
           `${isEth ? "native" : "erc20"}:${token}`
-        ];
+        ] ?? "0";
 
       // Ensure the matchmaker is profitable (or at least not losing money)
       const matchmakerProfit =
-        stateChange[matchmaker.address.toLowerCase()].tokenBalanceState[
+        stateChange[matchmaker.address.toLowerCase()]?.tokenBalanceState[
           `${isEth ? "native" : "erc20"}:${token}`
-        ];
+        ] ?? "0";
       const matchmakerProfitInEth = bn(matchmakerProfit)
         .mul(parseEther("1"))
         .div(await getEthConversion(token));
@@ -321,7 +321,8 @@ export const process = async (
           JSON.stringify({
             msg,
             intentHash,
-            txsToSimulate,
+            matchmakerProfitInEth: matchmakerProfitInEth.toString(),
+            matchmakerGasFee: matchmakerGasFee.toString(),
           })
         );
 
@@ -332,23 +333,25 @@ export const process = async (
       }
 
       // Save the solution
+      const solution: Solution = {
+        intent,
+        fillAmountToCheck: intent.amount,
+        executeAmountToCheck: amountReceived,
+        userTxs: txs.slice(0, txs.length - 1),
+        txs,
+        solver,
+      };
       await redis.zadd(
         solutionKey,
         Number(formatEther(amountReceived)),
-        JSON.stringify({
-          intent,
-          fillAmountToCheck: intent.amount,
-          executeAmountToCheck: amountReceived,
-          userTxs: txs.slice(0, txs.length - 1),
-          txs,
-        } as Solution)
+        JSON.stringify(solution)
       );
     }
 
     // Put a delayed job to relay the winning solution
     await jobs.submissionERC20.addToQueue(
       solutionKey,
-      targetBlockTimestamp - now()
+      submissionDeadline - now()
     );
 
     const perfTime8 = performance.now();

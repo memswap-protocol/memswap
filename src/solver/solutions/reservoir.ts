@@ -9,7 +9,7 @@ import axios from "axios";
 import { MEMETH, SOLUTION_PROXY } from "../../common/addresses";
 import { getEthConversion, getReservoirBaseUrl } from "../../common/reservoir";
 import { IntentERC721, TxData } from "../../common/types";
-import { bn } from "../../common/utils";
+import { APPROVAL_FOR_ALL_GAS, bn } from "../../common/utils";
 import { config } from "../config";
 import { Call, SolutionDetailsERC721 } from "../types";
 
@@ -142,7 +142,7 @@ export const solve = async (
           SOLUTION_PROXY[config.chainId],
           true,
         ]),
-        gasLimit: 100000,
+        gasLimit: APPROVAL_FOR_ALL_GAS,
       };
     }
 

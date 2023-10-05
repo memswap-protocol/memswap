@@ -11,6 +11,9 @@ import { Authorization, IntentERC20, IntentERC721, Protocol } from "./types";
 export const AVERAGE_BLOCK_TIME = 12;
 export const PESSIMISTIC_BLOCK_TIME = 15;
 
+export const MATCHMAKER_AUTHORIZATION_GAS = 100000;
+export const APPROVAL_FOR_ALL_GAS = 100000;
+
 export const bn = (value: BigNumberish) => BigNumber.from(value);
 
 export const now = () => Math.floor(Date.now() / 1000);

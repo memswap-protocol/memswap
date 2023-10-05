@@ -7,18 +7,21 @@ import { randomUUID } from "crypto";
 
 import { MEMSWAP_ERC721 } from "../../common/addresses";
 import { logger } from "../../common/logger";
+import { getFlashbotsProvider, relayViaBloxroute } from "../../common/tx";
+import {
+  MATCHMAKER_AUTHORIZATION_GAS,
+  getIntentHash,
+} from "../../common/utils";
 import { config } from "../config";
 import { redis } from "../redis";
 import { Solution } from "../types";
-import { getFlashbotsProvider, relayViaBloxroute } from "../../common/tx";
-import { getIntentHash } from "../../common/utils";
 
-const COMPONENT = "signature-release-erc721";
+const COMPONENT = "submission-erc721";
 
 export const queue = new Queue(COMPONENT, {
   connection: redis.duplicate(),
   defaultJobOptions: {
-    attempts: 1,
+    attempts: 5,
     removeOnComplete: 10000,
     removeOnFail: 10000,
   },
@@ -108,7 +111,7 @@ const worker = new Worker(
         type: 2,
         nonce: await provider.getTransactionCount(matchmaker.address),
         chainId: config.chainId,
-        gasLimit: 60000,
+        gasLimit: MATCHMAKER_AUTHORIZATION_GAS,
         maxFeePerGas: estimatedBaseFee.add(maxPriorityFeePerGas).toString(),
         maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
       });

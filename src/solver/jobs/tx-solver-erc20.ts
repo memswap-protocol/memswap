@@ -24,6 +24,7 @@ import {
 } from "../../common/tx";
 import { IntentERC20, SolutionERC20 } from "../../common/types";
 import {
+  MATCHMAKER_AUTHORIZATION_GAS,
   PESSIMISTIC_BLOCK_TIME,
   bn,
   getIncentivizationTip,
@@ -91,7 +92,6 @@ const worker = new Worker(
       // Approximations for gas used by memswap logic, swap logic and matchmaker authorization logic
       const memswapGas = 150000;
       const defaultGas = 200000;
-      const matchmakerGas = 60000;
 
       if (
         (intent.sellToken === MEMETH[config.chainId] &&
@@ -321,18 +321,12 @@ const worker = new Worker(
       const latestBaseFee = await provider
         .getBlock("pending")
         .then((b) => b!.baseFeePerGas!);
-      const gasFee = latestBaseFee
-        .add(maxPriorityFeePerGas)
-        .mul(solution.gasConsumed);
-      const netProfitInEth = bn(solution.grossProfitInEth)
-        .sub(gasFee)
-        .sub(solution.value);
 
-      // Compute the amount to pay the matchmaker for covering their gas fees
-      const matchmakerGasFeeInEth = bn(matchmakerGas).mul(
+      // Compute the amount to pay the matchmaker for covering the on-chain authorization gas cost
+      const matchmakerGasFee = bn(MATCHMAKER_AUTHORIZATION_GAS).mul(
         latestBaseFee.add(maxPriorityFeePerGas)
       );
-      let matchmakerGasFeeInToken = matchmakerGasFeeInEth
+      let matchmakerGasFeeInToken = matchmakerGasFee
         .mul(
           parseUnits(
             solution.executeTokenToEthRate,
@@ -340,10 +334,20 @@ const worker = new Worker(
           )
         )
         .div(parseEther("1"));
-      // Adjust by 3% for safety
+      // Adjust up by 3% for safety
       matchmakerGasFeeInToken = matchmakerGasFeeInToken.add(
         matchmakerGasFeeInToken.mul(300).div(10000)
       );
+
+      const solverGasFee = latestBaseFee
+        .add(maxPriorityFeePerGas)
+        .mul(solution.gasConsumed);
+
+      const isMatchmakerIntent = intent.solver === MATCHMAKER[config.chainId];
+      const netProfitInEth = bn(solution.grossProfitInEth)
+        .sub(solverGasFee)
+        .sub(isMatchmakerIntent ? matchmakerGasFee : 0)
+        .sub(solution.value);
 
       logger.info(
         COMPONENT,
@@ -351,7 +355,10 @@ const worker = new Worker(
           msg: "Profit breakdown",
           solution,
           netProfitInEth: netProfitInEth.toString(),
-          gasFee: gasFee.toString(),
+          solverGasFee: solverGasFee.toString(),
+          matchmakerGasFee: isMatchmakerIntent
+            ? matchmakerGasFee.toString()
+            : undefined,
         })
       );
 
@@ -470,14 +477,14 @@ const worker = new Worker(
 
       const getFillerTx = async (intent: IntentERC20) => {
         let method: string;
-        if (intent.solver === MATCHMAKER[config.chainId]) {
+        if (isMatchmakerIntent) {
           // For matchmaker submission
           method = "solveWithOnChainAuthorizationCheckERC20";
 
           // Make sure to cover the matchmaker's gas
           const token = intent.isBuy ? intent.sellToken : intent.buyToken;
           solution.calls.push({
-            to: MATCHMAKER[config.chainId],
+            to: token === AddressZero ? MATCHMAKER[config.chainId] : token,
             data:
               token === AddressZero
                 ? "0x"
@@ -568,7 +575,7 @@ const worker = new Worker(
       const fillerTx = await getFillerTx(intent);
       const txs = includeApprovalTx ? [approvalTx!, fillerTx] : [fillerTx];
 
-      if (intent.solver !== MATCHMAKER[config.chainId]) {
+      if (!isMatchmakerIntent) {
         // Solve directly
 
         // If specified and the conditions allow it, use direct transactions rather than bundles
