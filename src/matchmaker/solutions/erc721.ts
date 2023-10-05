@@ -248,6 +248,7 @@ export const process = async (
         JSON.stringify({
           msg,
           intentHash,
+          error: solveTrace.error,
           txsToSimulate,
         })
       );

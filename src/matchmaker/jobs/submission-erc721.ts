@@ -82,6 +82,8 @@ const worker = new Worker(
                 bool isPartiallyFillable,
                 bool isSmartOrder,
                 bool isIncentivized,
+                bool isCriteriaOrder,
+                uint256 tokenIdOrCriteria,
                 uint128 amount,
                 uint128 endAmount,
                 uint16 startAmountBps,

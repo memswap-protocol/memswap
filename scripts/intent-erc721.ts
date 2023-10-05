@@ -23,6 +23,7 @@ import { IntentERC721, Protocol } from "../src/common/types";
 // Required env variables:
 // - JSON_URL: url for the http provider
 // - MAKER_PK: private key of the maker
+// - MATCHMAKER_BASE_URL: base url of the matchmaker
 
 const main = async () => {
   const provider = new JsonRpcProvider(process.env.JSON_URL!);
@@ -36,7 +37,7 @@ const main = async () => {
     USDC: USDC[chainId],
   };
 
-  const buyToken = "0x18c7a6ad9901b53cc65055a358172f104f044fc0";
+  const buyToken = "0x2143ee9e2c8ab2bca8e89e15ca1c80b2dc6f7e00";
   const sellToken = CURRENCIES.ETH_IN;
 
   // Create intent
@@ -45,7 +46,7 @@ const main = async () => {
     buyToken,
     sellToken,
     maker: maker.address,
-    solver: AddressZero,
+    solver: MATCHMAKER[chainId],
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,
@@ -59,8 +60,8 @@ const main = async () => {
     isIncentivized: false,
     isCriteriaOrder: true,
     tokenIdOrCriteria: "0",
-    amount: "3",
-    endAmount: parseUnits("0.4", 18).toString(),
+    amount: "1",
+    endAmount: parseUnits("0.01", 18).toString(),
     startAmountBps: 0,
     expectedAmountBps: 0,
     // Mock value to pass type checks
@@ -150,33 +151,36 @@ const main = async () => {
   const nextBaseFee = currentBaseFee.add(currentBaseFee.mul(3000).div(10000));
   const maxPriorityFeePerGas = parseUnits("0.02", "gwei");
 
-  const tx = await maker.connect(provider).sendTransaction({
-    to: sellToken,
-    data,
-    value: approveMethod === "depositAndApprove" ? amountToApprove : 0,
-    maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
-    maxPriorityFeePerGas: maxPriorityFeePerGas,
-  });
-
-  console.log(`Approval transaction relayed: ${tx.hash}`);
-
-  // const tx = await maker.connect(provider).signTransaction({
-  //   from: maker.address,
+  // const tx = await maker.connect(provider).sendTransaction({
   //   to: sellToken,
   //   data,
   //   value: approveMethod === "depositAndApprove" ? amountToApprove : 0,
   //   maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
   //   maxPriorityFeePerGas: maxPriorityFeePerGas,
-  //   type: 2,
-  //   nonce: await provider.getTransactionCount(maker.address),
-  //   gasLimit: 100000,
-  //   chainId,
   // });
 
-  // await axios.post(`${process.env.MATCHMAKER_BASE_URL}/intents/private`, {
-  //   intent,
-  //   approvalTxOrTxHash: tx,
-  // });
+  // console.log(`Approval transaction relayed: ${tx.hash}`);
+
+  const tx = await maker.connect(provider).signTransaction({
+    from: maker.address,
+    to: sellToken,
+    data,
+    value: approveMethod === "depositAndApprove" ? amountToApprove : 0,
+    maxFeePerGas: nextBaseFee.add(maxPriorityFeePerGas),
+    maxPriorityFeePerGas: maxPriorityFeePerGas,
+    type: 2,
+    nonce: await provider.getTransactionCount(maker.address),
+    gasLimit: 100000,
+    chainId,
+  });
+
+  await axios.post(
+    `${process.env.MATCHMAKER_BASE_URL}/erc721/intents/private`,
+    {
+      intent,
+      approvalTxOrTxHash: tx,
+    }
+  );
 };
 
 main();

@@ -88,6 +88,18 @@ const worker = new Worker(
       const memswapGas = 150000;
       const defaultGas = 200000;
 
+      if (intent.sellToken === AddressZero) {
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            msg: "Unsupported sell token",
+            intentHash,
+            approvalTxOrTxHash,
+          })
+        );
+        return;
+      }
+
       if (!intent.isBuy) {
         logger.info(
           COMPONENT,
