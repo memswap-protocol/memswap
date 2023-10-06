@@ -29,6 +29,7 @@ import {
   bn,
   getIncentivizationTip,
   getIntentHash,
+  getToken,
   isIntentFilled,
   isTxIncluded,
   now,
@@ -221,9 +222,9 @@ const worker = new Worker(
           return;
         }
 
-        const buyTokenDecimals = await solutions.uniswap
-          .getToken(intent.buyToken, provider)
-          .then((t) => t.decimals);
+        const buyTokenDecimals = await getToken(intent.buyToken, provider).then(
+          (t) => t.decimals
+        );
         const grossProfitInBuyToken = bn(solutionDetails.minBuyAmount).sub(
           minAmountOut
         );
@@ -234,19 +235,12 @@ const worker = new Worker(
         solution = {
           fillAmount: intent.amount,
           executeAmount: minAmountOut.toString(),
+          expectedAmount: expectedAmount.toString(),
           calls: solutionDetails.calls,
           executeTokenToEthRate: solutionDetails.buyTokenToEthRate,
           executeTokenDecimals: buyTokenDecimals,
           grossProfitInEth: grossProfitInEth.toString(),
           gasConsumed,
-          value: intent.isIncentivized
-            ? getIncentivizationTip(
-                intent.isBuy,
-                expectedAmount,
-                intent.expectedAmountBps,
-                minAmountOut
-              ).toString()
-            : "0",
         };
       } else {
         const endAmount = bn(intent.endAmount);
@@ -299,9 +293,10 @@ const worker = new Worker(
           return;
         }
 
-        const sellTokenDecimals = await solutions.uniswap
-          .getToken(intent.sellToken, provider)
-          .then((t) => t.decimals);
+        const sellTokenDecimals = await getToken(
+          intent.sellToken,
+          provider
+        ).then((t) => t.decimals);
         const grossProfitInSellToken = maxAmountIn.sub(
           solutionDetails.maxSellAmount
         );
@@ -314,19 +309,12 @@ const worker = new Worker(
         solution = {
           fillAmount: intent.amount,
           executeAmount: maxAmountIn.toString(),
+          expectedAmount: expectedAmount.toString(),
           calls: solutionDetails.calls,
           executeTokenToEthRate: solutionDetails.sellTokenToEthRate,
           executeTokenDecimals: sellTokenDecimals,
           grossProfitInEth: grossProfitInEth.toString(),
           gasConsumed,
-          value: intent.isIncentivized
-            ? getIncentivizationTip(
-                intent.isBuy,
-                expectedAmount,
-                intent.expectedAmountBps,
-                maxAmountIn
-              ).toString()
-            : "0",
         };
       }
 
@@ -351,15 +339,39 @@ const worker = new Worker(
         matchmakerGasFeeInToken.mul(300).div(10000)
       );
 
+      // If needed, adjust the executed amount given the incentivization tip
+      const isMatchmakerIntent = intent.solver === MATCHMAKER[config.chainId];
+      if (isMatchmakerIntent) {
+        if (intent.isBuy) {
+          solution.executeAmount = bn(solution.executeAmount)
+            .sub(matchmakerGasFeeInToken)
+            .toString();
+        } else {
+          solution.executeAmount = bn(solution.executeAmount)
+            .add(matchmakerGasFeeInToken)
+            .toString();
+        }
+      }
+
+      // Compute the incentiziation tip given the expected and executed amount
+      const incentivizationTip = intent.isIncentivized
+        ? getIncentivizationTip(
+            intent.isBuy,
+            solution.expectedAmount,
+            intent.expectedAmountBps,
+            solution.executeAmount
+          ).toString()
+        : "0";
+
       const solverGasFee = latestBaseFee
         .add(maxPriorityFeePerGas)
         .mul(solution.gasConsumed);
 
-      const isMatchmakerIntent = intent.solver === MATCHMAKER[config.chainId];
+      // Compute net profit
       const netProfitInEth = bn(solution.grossProfitInEth)
         .sub(solverGasFee)
         .sub(isMatchmakerIntent ? matchmakerGasFee : 0)
-        .sub(solution.value);
+        .sub(incentivizationTip);
 
       logger.info(
         COMPONENT,
@@ -501,9 +513,8 @@ const worker = new Worker(
               token === AddressZero
                 ? "0x"
                 : new Interface([
-                    "function transferFrom(address from, address to, uint256 amount)",
-                  ]).encodeFunctionData("transferFrom", [
-                    SOLUTION_PROXY[config.chainId],
+                    "function transfer(address to, uint256 amount)",
+                  ]).encodeFunctionData("transfer", [
                     MATCHMAKER[config.chainId],
                     matchmakerGasFeeInToken,
                   ]),
@@ -526,7 +537,7 @@ const worker = new Worker(
           signedTransaction: await solver.signTransaction({
             from: solver.address,
             to: SOLUTION_PROXY[config.chainId],
-            value: solution.value,
+            value: incentivizationTip,
             data: new Interface([
               `
                 function ${method}(
@@ -633,6 +644,18 @@ const worker = new Worker(
           intent,
           txs: txs.map((tx) => tx.signedTransaction),
         });
+
+        // Retry in ~4 blocks to cover any matchmaker failures
+        await queue.add(
+          randomUUID(),
+          {
+            intent,
+            approvalTxOrTxHash,
+          },
+          {
+            delay: PESSIMISTIC_BLOCK_TIME * 4 * 1000,
+          }
+        );
       }
 
       await jobs.inventoryManager.addToQueue(

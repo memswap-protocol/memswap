@@ -24,6 +24,7 @@ import {
   bn,
   getIncentivizationTip,
   getIntentHash,
+  getToken,
   isIntentFilled,
   isTxIncluded,
   now,
@@ -220,10 +221,7 @@ const worker = new Worker(
         .add(solutionDetails.gasUsed ?? defaultGas)
         .toString();
 
-      const sellToken = await solutions.uniswap.getToken(
-        intent.sellToken,
-        provider
-      );
+      const sellToken = await getToken(intent.sellToken, provider);
       const maxSellAmountInSellToken = bn(solutionDetails.maxSellAmountInEth)
         .mul(parseUnits(solutionDetails.sellTokenToEthRate, sellToken.decimals))
         .div(parseEther("1"));
@@ -242,9 +240,9 @@ const worker = new Worker(
         return;
       }
 
-      const sellTokenDecimals = await solutions.uniswap
-        .getToken(intent.sellToken, provider)
-        .then((t) => t.decimals);
+      const sellTokenDecimals = await getToken(intent.sellToken, provider).then(
+        (t) => t.decimals
+      );
       const grossProfitInSellToken = maxAmountIn.sub(maxSellAmountInSellToken);
       const grossProfitInEth = grossProfitInSellToken
         .mul(parseEther("1"))
@@ -257,18 +255,11 @@ const worker = new Worker(
           criteriaProof: [],
         })),
         executeAmount: maxAmountIn.toString(),
+        expectedAmount: expectedAmount.toString(),
         executeTokenToEthRate: solutionDetails.sellTokenToEthRate,
         executeTokenDecimals: sellTokenDecimals,
         grossProfitInEth: grossProfitInEth.toString(),
         gasConsumed,
-        value: intent.isIncentivized
-          ? getIncentivizationTip(
-              intent.isBuy,
-              expectedAmount,
-              intent.expectedAmountBps,
-              maxAmountIn
-            ).toString()
-          : "0",
         additionalTxs: solutionDetails.txs,
       };
 
@@ -293,15 +284,33 @@ const worker = new Worker(
         matchmakerGasFeeInToken.mul(300).div(10000)
       );
 
+      const isMatchmakerIntent = intent.solver === MATCHMAKER[config.chainId];
+      if (isMatchmakerIntent) {
+        // Take into account the matchmaker payment
+        solution.executeAmount = bn(solution.executeAmount)
+          .sub(matchmakerGasFeeInToken)
+          .toString();
+      }
+
+      // Compute the incentiziation tip given the expected and executed amount
+      const incentivizationTip = intent.isIncentivized
+        ? getIncentivizationTip(
+            intent.isBuy,
+            solution.expectedAmount,
+            intent.expectedAmountBps,
+            solution.executeAmount
+          ).toString()
+        : "0";
+
       const solverGasFee = latestBaseFee
         .add(maxPriorityFeePerGas)
         .mul(solution.gasConsumed);
 
-      const isMatchmakerIntent = intent.solver === MATCHMAKER[config.chainId];
+      // Compute net profit
       const netProfitInEth = bn(solution.grossProfitInEth)
         .sub(solverGasFee)
         .sub(isMatchmakerIntent ? matchmakerGasFee : 0)
-        .sub(solution.value);
+        .sub(incentivizationTip);
 
       logger.info(
         COMPONENT,
@@ -430,9 +439,8 @@ const worker = new Worker(
               token === AddressZero
                 ? "0x"
                 : new Interface([
-                    "function transferFrom(address from, address to, uint256 amount)",
-                  ]).encodeFunctionData("transferFrom", [
-                    SOLUTION_PROXY[config.chainId],
+                    "function transfer(address to, uint256 amount)",
+                  ]).encodeFunctionData("transfer", [
                     MATCHMAKER[config.chainId],
                     matchmakerGasFeeInToken,
                   ]),
@@ -457,7 +465,7 @@ const worker = new Worker(
           ...solution.additionalTxs,
           {
             to: SOLUTION_PROXY[config.chainId],
-            value: solution.value,
+            value: incentivizationTip,
             data: new Interface([
               `
                 function ${method}(
@@ -585,6 +593,18 @@ const worker = new Worker(
           intent,
           txs: txs.map((tx) => tx.signedTransaction),
         });
+
+        // Retry in ~4 blocks to cover any matchmaker failures
+        await queue.add(
+          randomUUID(),
+          {
+            intent,
+            approvalTxOrTxHash,
+          },
+          {
+            delay: PESSIMISTIC_BLOCK_TIME * 4 * 1000,
+          }
+        );
       }
 
       await jobs.inventoryManager.addToQueue(

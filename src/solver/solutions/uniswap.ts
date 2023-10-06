@@ -1,50 +1,15 @@
 import { Interface } from "@ethersproject/abi";
 import { Provider } from "@ethersproject/abstract-provider";
 import { AddressZero } from "@ethersproject/constants";
-import { Contract } from "@ethersproject/contracts";
 import { parseUnits } from "@ethersproject/units";
-import {
-  WETH9 as UniswapWETH9,
-  Currency,
-  CurrencyAmount,
-  Ether,
-  Percent,
-  Token,
-  TradeType,
-} from "@uniswap/sdk-core";
+import { CurrencyAmount, Percent, TradeType } from "@uniswap/sdk-core";
 import { AlphaRouter, SwapType } from "@uniswap/smart-order-router";
 
 import { PERMIT2, MEMETH, WETH9 } from "../../common/addresses";
 import { IntentERC20 } from "../../common/types";
-import { now } from "../../common/utils";
+import { getToken, now } from "../../common/utils";
 import { config } from "../config";
 import { Call, SolutionDetailsERC20 } from "../types";
-
-export const getToken = async (
-  address: string,
-  provider: Provider
-): Promise<Currency> => {
-  const contract = new Contract(
-    address,
-    new Interface(["function decimals() view returns (uint8)"]),
-    provider
-  );
-
-  // The core Uniswap SDK misses the WETH9 address for some chains (eg. Sepolia)
-  if (!UniswapWETH9[config.chainId]) {
-    UniswapWETH9[config.chainId] = new Token(
-      config.chainId,
-      WETH9[config.chainId],
-      await contract.decimals(),
-      "WETH",
-      "Wrapped Ether"
-    );
-  }
-
-  return [MEMETH[config.chainId], AddressZero].includes(address)
-    ? Ether.onChain(config.chainId)
-    : new Token(config.chainId, address, await contract.decimals());
-};
 
 export const solve = async (
   intent: IntentERC20,

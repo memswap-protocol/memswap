@@ -42,7 +42,7 @@ const main = async () => {
 
   // Create intent
   const intent: IntentERC20 = {
-    isBuy: true,
+    isBuy: false,
     buyToken,
     sellToken,
     maker: maker.address,
@@ -50,18 +50,18 @@ const main = async () => {
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,
-    startTime: now(),
+    startTime: now() - 15,
     endTime: await provider
       .getBlock("latest")
       .then((b) => b!.timestamp + 3600 * 24),
     nonce: "0",
     isPartiallyFillable: false,
     isSmartOrder: false,
-    isIncentivized: false,
-    amount: parseUnits("2", 6).toString(),
-    endAmount: parseUnits("0.01", 18).toString(),
-    startAmountBps: 0,
-    expectedAmountBps: 0,
+    isIncentivized: true,
+    amount: parseUnits("0.01", 18).toString(),
+    endAmount: parseUnits("5", 6).toString(),
+    startAmountBps: 200,
+    expectedAmountBps: 50,
     // Mock value to pass type checks
     signature: "0x",
   };
@@ -172,6 +172,8 @@ const main = async () => {
     intent,
     approvalTxOrTxHash: tx,
   });
+
+  console.log("Intent sent to matchmaker");
 };
 
 main();

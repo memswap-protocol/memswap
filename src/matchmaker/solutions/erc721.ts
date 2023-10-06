@@ -1,5 +1,5 @@
 import { Interface } from "@ethersproject/abi";
-import { AddressZero } from "@ethersproject/constants";
+import { hexValue } from "@ethersproject/bytes";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { parse } from "@ethersproject/transactions";
@@ -242,6 +242,32 @@ export const process = async (
     // Make sure the solution transaction didn't reverted
     const solveTrace = traces[traces.length - 1];
     if (solveTrace.error) {
+      // Simulate via Tenderly to help debugging
+      let tenderlySimulationResult: any;
+      if (config.tenderlyGatewayKey) {
+        const provider = new JsonRpcProvider(
+          `https://${
+            config.chainId === 1 ? "mainnet" : "goerli"
+          }.gateway.tenderly.co/${config.tenderlyGatewayKey}`
+        );
+
+        tenderlySimulationResult = await provider.send(
+          "tenderly_simulateBundle",
+          [
+            txsToSimulate.map((tx) => ({
+              ...tx,
+              value: hexValue(bn(tx.value).toHexString()),
+              gas: hexValue(bn(tx.gas).toHexString()),
+              maxFeePerGas: hexValue(bn(tx.maxFeePerGas).toHexString()),
+              maxPriorityFeePerGas: hexValue(
+                bn(tx.maxPriorityFeePerGas).toHexString()
+              ),
+            })),
+            "latest",
+          ]
+        );
+      }
+
       const msg = "Solution transaction reverted";
       logger.info(
         COMPONENT,
@@ -250,6 +276,7 @@ export const process = async (
           intentHash,
           error: solveTrace.error,
           txsToSimulate,
+          tenderlySimulationResult,
         })
       );
 
@@ -301,11 +328,17 @@ export const process = async (
           `erc20:${intent.sellToken.toLowerCase()}`
         ];
 
+      // Adjust by 0.1% to cover any non-determinism
+      let adjustedAmountPulled = bn(amountPulled).mul(-1);
+      adjustedAmountPulled = adjustedAmountPulled.add(
+        adjustedAmountPulled.div(100000)
+      );
+
       // Save the solution
       const solution: Solution = {
         intent,
         fillAmountToCheck: intent.amount,
-        executeAmountToCheck: bn(amountPulled).mul(-1).toString(),
+        executeAmountToCheck: adjustedAmountPulled.toString(),
         userTxs: txs.slice(0, txs.length - 1),
         txs,
         solver,

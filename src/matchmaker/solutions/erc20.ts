@@ -1,9 +1,10 @@
 import { Interface } from "@ethersproject/abi";
+import { hexValue } from "@ethersproject/bytes";
 import { AddressZero } from "@ethersproject/constants";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { parse } from "@ethersproject/transactions";
-import { formatEther, parseEther } from "@ethersproject/units";
+import { formatEther, parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import { getCallTraces, getStateChange } from "@georgeroman/evm-tx-simulator";
 
@@ -16,6 +17,7 @@ import {
   MATCHMAKER_AUTHORIZATION_GAS,
   bn,
   getEIP712TypesForIntent,
+  getToken,
   isIntentFilled,
   now,
 } from "../../common/utils";
@@ -224,6 +226,32 @@ export const process = async (
     // Make sure the solution transaction didn't reverted
     const solveTrace = traces[traces.length - 1];
     if (solveTrace.error) {
+      // Simulate via Tenderly to help debugging
+      let tenderlySimulationResult: any;
+      if (config.tenderlyGatewayKey) {
+        const provider = new JsonRpcProvider(
+          `https://${
+            config.chainId === 1 ? "mainnet" : "goerli"
+          }.gateway.tenderly.co/${config.tenderlyGatewayKey}`
+        );
+
+        tenderlySimulationResult = await provider.send(
+          "tenderly_simulateBundle",
+          [
+            txsToSimulate.map((tx) => ({
+              ...tx,
+              value: hexValue(bn(tx.value).toHexString()),
+              gas: hexValue(bn(tx.gas).toHexString()),
+              maxFeePerGas: hexValue(bn(tx.maxFeePerGas).toHexString()),
+              maxPriorityFeePerGas: hexValue(
+                bn(tx.maxPriorityFeePerGas).toHexString()
+              ),
+            })),
+            "latest",
+          ]
+        );
+      }
+
       const msg = "Solution transaction reverted";
       logger.info(
         COMPONENT,
@@ -232,6 +260,7 @@ export const process = async (
           intentHash,
           error: solveTrace.error,
           txsToSimulate,
+          tenderlySimulationResult,
         })
       );
 
@@ -264,7 +293,12 @@ export const process = async (
         ] ?? "0";
       const matchmakerProfitInEth = bn(matchmakerProfit)
         .mul(parseEther("1"))
-        .div(await getEthConversion(token));
+        .div(
+          parseUnits(
+            await getEthConversion(token),
+            await getToken(token, provider).then((t) => t.decimals)
+          )
+        );
       if (matchmakerProfitInEth.lt(matchmakerGasFee)) {
         const msg = "Matchmaker not profitable";
         logger.info(
@@ -283,11 +317,17 @@ export const process = async (
         };
       }
 
+      // Adjust by 0.1% to cover any non-determinism
+      let adjustedAmountPulled = bn(amountPulled).mul(-1);
+      adjustedAmountPulled = adjustedAmountPulled.add(
+        adjustedAmountPulled.div(100000)
+      );
+
       // Save the solution
       const solution: Solution = {
         intent,
         fillAmountToCheck: intent.amount,
-        executeAmountToCheck: bn(amountPulled).mul(-1).toString(),
+        executeAmountToCheck: adjustedAmountPulled.toString(),
         userTxs: txs.slice(0, txs.length - 1),
         txs,
         solver,
@@ -314,7 +354,12 @@ export const process = async (
         ] ?? "0";
       const matchmakerProfitInEth = bn(matchmakerProfit)
         .mul(parseEther("1"))
-        .div(await getEthConversion(token));
+        .div(
+          parseUnits(
+            await getEthConversion(token),
+            await getToken(token, provider).then((t) => t.decimals)
+          )
+        );
       if (matchmakerProfitInEth.lt(matchmakerGasFee)) {
         const msg = "Matchmaker not profitable";
         logger.info(
@@ -333,11 +378,17 @@ export const process = async (
         };
       }
 
+      // Adjust by 0.1% to cover any non-determinism
+      let adjustedAmountReceived = bn(amountReceived);
+      adjustedAmountReceived = adjustedAmountReceived.sub(
+        adjustedAmountReceived.div(100000)
+      );
+
       // Save the solution
       const solution: Solution = {
         intent,
         fillAmountToCheck: intent.amount,
-        executeAmountToCheck: amountReceived,
+        executeAmountToCheck: adjustedAmountReceived.toString(),
         userTxs: txs.slice(0, txs.length - 1),
         txs,
         solver,

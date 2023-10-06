@@ -52,8 +52,8 @@ export type SolutionERC20 = {
   calls: Call[];
   fillAmount: string;
   executeAmount: string;
-  value: string;
   // Data needed for off-chain purposes
+  expectedAmount: string;
   gasConsumed: string;
   executeTokenToEthRate: string;
   executeTokenDecimals: number;
@@ -77,8 +77,8 @@ export type SolutionERC721 = {
   calls: Call[];
   fillTokenDetails: TokenDetails[];
   executeAmount: string;
-  value: string;
   // Data needed for off-chain purposes
+  expectedAmount: string;
   gasConsumed: string;
   executeTokenToEthRate: string;
   executeTokenDecimals: number;

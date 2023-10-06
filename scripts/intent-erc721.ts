@@ -50,20 +50,20 @@ const main = async () => {
     source: AddressZero,
     feeBps: 0,
     surplusBps: 0,
-    startTime: now(),
+    startTime: now() - 15,
     endTime: await provider
       .getBlock("latest")
       .then((b) => b!.timestamp + 3600 * 24),
     nonce: "0",
     isPartiallyFillable: false,
     isSmartOrder: false,
-    isIncentivized: false,
+    isIncentivized: true,
     isCriteriaOrder: true,
     tokenIdOrCriteria: "0",
     amount: "1",
     endAmount: parseUnits("0.01", 18).toString(),
-    startAmountBps: 0,
-    expectedAmountBps: 0,
+    startAmountBps: 200,
+    expectedAmountBps: 50,
     // Mock value to pass type checks
     signature: "0x",
   };
