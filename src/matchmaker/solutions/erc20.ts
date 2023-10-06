@@ -3,7 +3,7 @@ import { hexValue } from "@ethersproject/bytes";
 import { AddressZero } from "@ethersproject/constants";
 import { _TypedDataEncoder } from "@ethersproject/hash";
 import { JsonRpcProvider } from "@ethersproject/providers";
-import { parse } from "@ethersproject/transactions";
+import { parse, serialize } from "@ethersproject/transactions";
 import { formatEther, parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import { getCallTraces, getStateChange } from "@georgeroman/evm-tx-simulator";
@@ -328,7 +328,10 @@ export const process = async (
         intent,
         fillAmountToCheck: intent.amount,
         executeAmountToCheck: adjustedAmountPulled.toString(),
-        userTxs: txs.slice(0, txs.length - 1),
+        userTxs: txs
+          .map(parse)
+          .filter((tx) => tx.from === intent.maker)
+          .map((tx) => serialize(tx)),
         txs,
         solver,
       };
@@ -389,7 +392,10 @@ export const process = async (
         intent,
         fillAmountToCheck: intent.amount,
         executeAmountToCheck: adjustedAmountReceived.toString(),
-        userTxs: txs.slice(0, txs.length - 1),
+        userTxs: txs
+          .map(parse)
+          .filter((tx) => tx.from === intent.maker)
+          .map((tx) => serialize(tx)),
         txs,
         solver,
       };

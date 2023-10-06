@@ -125,7 +125,9 @@ const worker = new Worker(
         [authorizationTx, ...solution.txs].map((tx) => ({
           signedTransaction: tx,
         })),
-        [],
+        solution.userTxs.map((tx) => ({
+          signedTransaction: tx,
+        })),
         targetBlock,
         COMPONENT
       );

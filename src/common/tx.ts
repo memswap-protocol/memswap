@@ -108,7 +108,11 @@ export const relayViaFlashbots = async (
   const simulationResult: { error?: string; results: [{ error?: string }] } =
     (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
   if (simulationResult.error || simulationResult.results.some((r) => r.error)) {
-    if (JSON.stringify(simulationResult.error)?.includes("nonce too high")) {
+    if (
+      ["nonce too low", "nonce too high"].some((e) =>
+        JSON.stringify(simulationResult.error)?.includes(e)
+      )
+    ) {
       // Retry with all user transactions removed - assuming the
       // error is coming from their inclusion in previous blocks
       const mappedUserTxs = userTxs.map((tx) => tx.signedTransaction);
@@ -217,7 +221,11 @@ export const relayViaBloxroute = async (
   const simulationResult: { error?: string; results: [{ error?: string }] } =
     (await flashbotsProvider.simulate(signedBundle, targetBlock)) as any;
   if (simulationResult.error || simulationResult.results.some((r) => r.error)) {
-    if (JSON.stringify(simulationResult.error)?.includes("nonce too high")) {
+    if (
+      ["nonce too low", "nonce too high"].some((e) =>
+        JSON.stringify(simulationResult.error)?.includes(e)
+      )
+    ) {
       // Retry with all user transactions removed - assuming the
       // error is coming from their inclusion in previous blocks
       const mappedUserTxs = userTxs.map((tx) => tx.signedTransaction);
