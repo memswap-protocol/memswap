@@ -17,7 +17,7 @@ import { config } from "../config";
 import { redis } from "../redis";
 import { directSolve } from "../solutions/reservoir";
 
-const COMPONENT = "seaport-solver-erc721";
+const COMPONENT = "seaport-solver";
 
 export const updateStatus = async (
   hash: string,
