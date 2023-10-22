@@ -36,7 +36,7 @@ getFlashbotsProvider();
 // Relay methods
 
 export const relayViaTransaction = async (
-  intentHash: string,
+  hash: string,
   isIncentivized: boolean,
   provider: JsonRpcProvider,
   tx: string,
@@ -63,7 +63,7 @@ export const relayViaTransaction = async (
       logComponent,
       JSON.stringify({
         msg: "Simulation failed",
-        intentHash,
+        hash,
         parsedTx,
       })
     );
@@ -77,7 +77,7 @@ export const relayViaTransaction = async (
     logComponent,
     JSON.stringify({
       msg: "Relaying using regular transaction",
-      intentHash,
+      hash,
     })
   );
 
@@ -87,14 +87,14 @@ export const relayViaTransaction = async (
     logComponent,
     JSON.stringify({
       msg: "Transaction included",
-      intentHash,
+      hash,
       txHash: txResponse.transactionHash,
     })
   );
 };
 
 export const relayViaFlashbots = async (
-  intentHash: string,
+  hash: string,
   provider: JsonRpcProvider,
   flashbotsProvider: FlashbotsBundleProvider,
   txs: FlashbotsBundleRawTransaction[],
@@ -119,7 +119,7 @@ export const relayViaFlashbots = async (
       txs = txs.filter((tx) => !mappedUserTxs.includes(tx.signedTransaction));
 
       return relayViaFlashbots(
-        intentHash,
+        hash,
         provider,
         flashbotsProvider,
         txs,
@@ -132,7 +132,7 @@ export const relayViaFlashbots = async (
         logComponent,
         JSON.stringify({
           msg: "Bundle simulation failed",
-          intentHash,
+          hash,
           simulationResult,
           txs,
         })
@@ -146,15 +146,15 @@ export const relayViaFlashbots = async (
     signedBundle,
     targetBlock
   );
-  const hash = (receipt as any).bundleHash;
+  const bundleHash = (receipt as any).bundleHash;
 
   logger.info(
     logComponent,
     JSON.stringify({
       msg: "Bundle relayed using flashbots",
-      intentHash,
+      hash,
       targetBlock,
-      bundleHash: hash,
+      bundleHash,
     })
   );
 
@@ -173,7 +173,7 @@ export const relayViaFlashbots = async (
         logComponent,
         JSON.stringify({
           msg: "Bundle included",
-          intentHash,
+          hash,
           targetBlock,
           bundleHash: hash,
         })
@@ -183,7 +183,7 @@ export const relayViaFlashbots = async (
         logComponent,
         JSON.stringify({
           msg: "Bundle not included",
-          intentHash,
+          hash,
           targetBlock,
           bundleHash: hash,
         })
@@ -196,7 +196,7 @@ export const relayViaFlashbots = async (
       logComponent,
       JSON.stringify({
         msg: "Bundle not included",
-        intentHash,
+        hash,
         targetBlock,
         bundleHash: hash,
       })
@@ -207,7 +207,7 @@ export const relayViaFlashbots = async (
 };
 
 export const relayViaBloxroute = async (
-  intentHash: string,
+  hash: string,
   provider: JsonRpcProvider,
   flashbotsProvider: FlashbotsBundleProvider,
   txs: FlashbotsBundleRawTransaction[],
@@ -232,7 +232,7 @@ export const relayViaBloxroute = async (
       txs = txs.filter((tx) => !mappedUserTxs.includes(tx.signedTransaction));
 
       return relayViaBloxroute(
-        intentHash,
+        hash,
         provider,
         flashbotsProvider,
         txs,
@@ -245,7 +245,7 @@ export const relayViaBloxroute = async (
         logComponent,
         JSON.stringify({
           msg: "Bundle simulation failed",
-          intentHash,
+          hash,
           simulationResult,
           txs,
         })
@@ -291,7 +291,7 @@ export const relayViaBloxroute = async (
         logComponent,
         JSON.stringify({
           msg: "Bundle relayed using bloxroute",
-          intentHash,
+          hash,
           targetBlock,
           bundleHash: hash,
         })
@@ -317,7 +317,7 @@ export const relayViaBloxroute = async (
             logComponent,
             JSON.stringify({
               msg: "Bundle included",
-              intentHash,
+              hash,
               targetBlock,
               bundleHash: hash,
             })
@@ -327,7 +327,7 @@ export const relayViaBloxroute = async (
             logComponent,
             JSON.stringify({
               msg: "Bundle not included",
-              intentHash,
+              hash,
               targetBlock,
               bundleHash: hash,
             })
@@ -340,7 +340,7 @@ export const relayViaBloxroute = async (
           logComponent,
           JSON.stringify({
             msg: "Bundle not included",
-            intentHash,
+            hash,
             targetBlock,
             bundleHash: hash,
           })

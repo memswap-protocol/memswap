@@ -13,6 +13,76 @@ import { APPROVAL_FOR_ALL_GAS, bn } from "../../common/utils";
 import { config } from "../config";
 import { Call, SolutionDetailsERC721 } from "../types";
 
+export const directSolve = async (
+  token: string,
+  amount: string,
+  provider: Provider
+): Promise<{ saleTx: any; path: any[] }> => {
+  const solver = new Wallet(config.solverPk);
+  const quantity = Number(amount);
+
+  const result = await axios
+    .post(
+      `${getReservoirBaseUrl()}/execute/buy/v7`,
+      {
+        items: [
+          {
+            token,
+            quantity,
+            fillType: "trade",
+          },
+        ],
+        taker: solver.address,
+        currency: AddressZero,
+        skipBalanceCheck: true,
+      },
+      {
+        headers: {
+          "X-Api-Key": config.reservoirApiKey,
+        },
+      }
+    )
+    .then((r) => r.data);
+
+  // Handle the Blur auth step
+  const firstStep = result.steps[0];
+  if (firstStep.id === "auth") {
+    const item = firstStep.items[0];
+    if (item.status === "incomplete") {
+      const message = item.data.sign.message;
+      const messageSignature = await solver.signMessage(message);
+
+      await axios.post(
+        `${getReservoirBaseUrl()}${
+          item.data.post.endpoint
+        }?signature=${messageSignature}`,
+        item.data.post.body
+      );
+
+      return directSolve(token, amount, provider);
+    }
+  }
+
+  for (const step of result.steps.filter((s: any) => s.id !== "sale")) {
+    if (
+      step.items.length &&
+      step.items.some((item: any) => item.status === "incomplete")
+    ) {
+      throw new Error("Multi-step sales not supported");
+    }
+  }
+
+  const saleStep = result.steps.find((s: any) => s.id === "sale");
+  if (saleStep.items.length > 1) {
+    throw new Error("Multi-transaction sales not supported");
+  }
+
+  const saleTx = saleStep.items[0].data;
+  const path = result.path;
+
+  return { saleTx, path };
+};
+
 export const solve = async (
   intent: IntentERC721,
   fillAmount: string,
