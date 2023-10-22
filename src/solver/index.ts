@@ -92,7 +92,9 @@ app.post("/erc721/intents", async (req, res) => {
   return res.json({ message: "Success" });
 });
 
-app.post("/erc721/seaport", async (req, res) => {
+// Seaport
+
+app.post("/intents/seaport", async (req, res) => {
   const order = req.body.order as Sdk.SeaportBase.Types.OrderComponents;
 
   await jobs.seaportSolver.addToQueue(order);
@@ -100,7 +102,7 @@ app.post("/erc721/seaport", async (req, res) => {
   return res.json({ message: "Success" });
 });
 
-app.get("/erc721/seaport/status", async (req, res) => {
+app.get("/intents/seaport/status", async (req, res) => {
   const hash = req.query.hash as string;
 
   const status = await redis.get(`status:${hash}`);
