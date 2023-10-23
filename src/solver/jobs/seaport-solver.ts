@@ -1,7 +1,7 @@
 import { Interface } from "@ethersproject/abi";
 import { BigNumber } from "@ethersproject/bignumber";
 import { JsonRpcProvider } from "@ethersproject/providers";
-import { parseUnits } from "@ethersproject/units";
+import { parseEther, parseUnits } from "@ethersproject/units";
 import { Wallet } from "@ethersproject/wallet";
 import { FlashbotsBundleRawTransaction } from "@flashbots/ethers-provider-bundle";
 import * as Sdk from "@reservoir0x/sdk";
@@ -248,9 +248,27 @@ const worker = new Worker(
         .map((item: any) => bn(item.buyInRawQuote ?? item.rawQuote))
         .reduce((a: BigNumber, b: BigNumber) => a.add(b));
 
-      // Approximations for gas cost of fill and approve logic
-      const fillGasCost = 250000 + 250000;
+      const balance = await provider.getBalance(solver.address);
+      if (balance.lt(purchaseCost.add(parseEther("0.05")))) {
+        const msg = "Purchase cost too high";
+        logger.info(
+          COMPONENT,
+          JSON.stringify({
+            msg,
+            order: data.order,
+            orderHash,
+          })
+        );
+
+        await updateStatus(orderHash, "failure", msg);
+        return;
+      }
+
+      // Approximations for gas costs
+      const purchaseGasCost = 250000;
+      const matchGasCost = 250000;
       const approveGasCost = 50000;
+      const unwrapGasCost = 50000;
 
       const maxPriorityFeePerGas = parseUnits("1", "gwei");
       const latestBaseFee = await provider
@@ -259,7 +277,7 @@ const worker = new Worker(
 
       // Compute total cost of solving
       const totalCost = purchaseCost.add(
-        bn(fillGasCost + approveGasCost).mul(
+        bn(purchaseGasCost + matchGasCost + approveGasCost + unwrapGasCost).mul(
           latestBaseFee.add(maxPriorityFeePerGas)
         )
       );
@@ -389,6 +407,23 @@ const worker = new Worker(
               solver.address,
             ]
           ),
+          value: "0",
+          chainId: config.chainId,
+          type: 2,
+          maxFeePerGas: estimatedBaseFee.add(maxPriorityFeePerGas).toString(),
+          maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
+        }),
+      });
+
+      // Generate unwrap tx
+      txs.push({
+        signedTransaction: await solver.signTransaction({
+          to: Sdk.Common.Addresses.WNative[config.chainId],
+          nonce: nonce++,
+          gasLimit: 100000,
+          data: new Interface([
+            "function withdraw(uint256 amount)",
+          ]).encodeFunctionData("withdraw", [totalReceived]),
           value: "0",
           chainId: config.chainId,
           type: 2,
