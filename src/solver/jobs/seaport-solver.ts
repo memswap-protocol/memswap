@@ -19,6 +19,25 @@ import { directSolve } from "../solutions/reservoir";
 
 const COMPONENT = "seaport-solver";
 
+export const getGasCost = async (
+  provider: JsonRpcProvider,
+  maxPriorityFeePerGas = parseUnits("1", "gwei")
+) => {
+  // Approximations for gas costs
+  const purchaseGasCost = 250000;
+  const matchGasCost = 250000;
+  const approveGasCost = 50000;
+  const unwrapGasCost = 50000;
+
+  const latestBaseFee = await provider
+    .getBlock("pending")
+    .then((b) => b!.baseFeePerGas!);
+
+  return latestBaseFee
+    .add(maxPriorityFeePerGas)
+    .mul(purchaseGasCost + matchGasCost + approveGasCost + unwrapGasCost);
+};
+
 export const updateStatus = async (
   hash: string,
   status: "pending" | "success" | "failure",
@@ -264,22 +283,10 @@ const worker = new Worker(
         return;
       }
 
-      // Approximations for gas costs
-      const purchaseGasCost = 250000;
-      const matchGasCost = 250000;
-      const approveGasCost = 50000;
-      const unwrapGasCost = 50000;
-
-      const maxPriorityFeePerGas = parseUnits("1", "gwei");
-      const latestBaseFee = await provider
-        .getBlock("pending")
-        .then((b) => b!.baseFeePerGas!);
-
       // Compute total cost of solving
+      const maxPriorityFeePerGas = parseUnits("1", "gwei");
       const totalCost = purchaseCost.add(
-        bn(purchaseGasCost + matchGasCost + approveGasCost + unwrapGasCost).mul(
-          latestBaseFee.add(maxPriorityFeePerGas)
-        )
+        await getGasCost(provider, maxPriorityFeePerGas)
       );
 
       // Compute total amount received by solving

@@ -11,6 +11,7 @@ import { IntentERC20, IntentERC721 } from "../common/types";
 import { config } from "./config";
 import * as jobs from "./jobs";
 import { redis } from "./redis";
+import { getGasCost } from "./jobs/seaport-solver";
 
 // Log unhandled errors
 process.on("unhandledRejection", (error) => {
@@ -100,6 +101,13 @@ app.post("/intents/seaport", async (req, res) => {
   await jobs.seaportSolver.addToQueue(order);
 
   return res.json({ message: "Success" });
+});
+
+app.get("/intents/seaport/fee", async (req, res) => {
+  const provider = new JsonRpcProvider(config.jsonUrl);
+  const gasCost = await getGasCost(provider);
+
+  return res.json({ fee: gasCost.toString() });
 });
 
 app.get("/intents/seaport/status", async (req, res) => {

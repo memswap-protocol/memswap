@@ -60,7 +60,7 @@ const main = async () => {
   });
   await order.sign(maker);
 
-  await axios.post(`${process.env.SOLVER_BASE_URL}/erc721/seaport`, {
+  await axios.post(`${process.env.SOLVER_BASE_URL}/intents/seaport`, {
     order: order.params,
   });
 };
